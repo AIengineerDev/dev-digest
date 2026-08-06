@@ -38,6 +38,12 @@ pnpm test         # vitest + jsdom, fetch mocked — no API needed
 
 - Read `INSIGHTS.md` first for what was already tried here, and run the
   `engineering-insights` skill at the end of the task to add to it.
+- Read `specs/` before building a new screen — intent, states, and
+  done-criteria live there. Use the root `../specs/` instead when the screen
+  also needs a new endpoint, so both sides stay in one document.
+- Read `docs/` before changing something that already runs: the TanStack Query
+  cache/invalidation strategy, the app-shell and `g`-then-key shortcuts, the
+  `next-intl` message workflow, or diff-rendering internals.
 - Read `README.md` for the UI route map and which endpoints each page leans on.
 - Read `../server/README.md` when you need the exact shape of an endpoint.
 - Read `../e2e/README.md` when a change affects a seeded browser flow.

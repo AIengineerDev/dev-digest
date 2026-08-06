@@ -43,6 +43,16 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-06** — The cost feature is **present and shipped**, despite the
+  2026-08-01 entry below saying commit `d45ab0d` removed it. That commit does not
+  exist in this repo — `git log` here is two commits (`ea42c2a`, `02e2b6d`), so
+  `git show d45ab0d` fails and any archaeology based on it is a dead end. Verified
+  live: the column persists (`server/src/db/schema/runs.ts:26`), the executor
+  writes it (`run-executor.ts:248`), and all three surfaces render it. Migration
+  `0009` does drop `cost_usd` and `0010` re-adds it, so the removal was real but
+  is already undone in-tree. Before planning cost work, grep for `costUsd` rather
+  than trusting either entry. `server/src/db/migrations/0010_modern_professor_monster.sql:1`
+
 - **2026-08-01** — Per-run LLM cost is already computed end-to-end; the only
   thing ever missing is persistence. Every provider returns `costUsd` on its
   result, and for OpenRouter it is the REAL billed figure — the client asks for
@@ -57,7 +67,24 @@ _None yet._
 
 ## Tool & Library Notes
 
-_None yet._
+- **2026-08-06** — `DevDigest Design (standalone).html` (repo root, 1.8 MB) is a
+  self-unpacking bundle, not markup: line 170 is a JSON manifest of base64+gzip
+  assets keyed by UUID, line 178 is the JSON-encoded HTML template, and the
+  `<script src>` UUIDs are rewritten to blob URLs at runtime. Reading it directly
+  burns the context window for nothing. It is now extracted to
+  `design-mocks/` — read `design-mocks/INDEX.md` for the 28 named screen/module
+  sources and open `design-mocks/index.html` to view them.
+  `design-mocks/INDEX.md:1`
+
+- **2026-08-06** — The two vendored copies of `@devdigest/shared` are
+  independent snapshots and have already drifted: the server copy carries
+  `id: 'openai' | 'anthropic' | 'openrouter'`, `sessionId`, `CommitFilesPayload`,
+  `sync()` and `diffNameOnly()`; the client copy has none of them. There is no
+  sync script and nothing fails when you edit only one — the client typechecks
+  only the subset it imports — so a contract change means editing **each** copy
+  by hand and diffing them afterwards (`diff server/src/vendor/shared/adapters.ts
+  client/src/vendor/shared/adapters.ts`). Adding `costUsd: number | null` needed
+  both. `server/src/vendor/shared/adapters.ts:48`
 
 ## Recurring Errors & Fixes
 

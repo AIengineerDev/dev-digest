@@ -1,0 +1,21 @@
+# Dependencies — each package installs its own.
+node_modules/
+
+# Build output / caches
+.next/
+dist/
+*.tsbuildinfo
+
+# Secrets. Real keys live in ~/.devdigest/secrets.json (mode 0600), never here.
+.env
+.env.*
+!.env.example
+
+# Cloned user repos — see CLAUDE.md "Do not touch".
+server/clones/
+
+# Unpacked from "DevDigest Design (standalone).html" — regenerate rather than commit.
+design-mocks/
+
+# Local agent/session state
+.claude/
