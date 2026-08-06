@@ -13,8 +13,49 @@ import { toJsonSchema, parseWithRepair } from '../../platform/structured.js';
 import { estimateCost } from './pricing.js';
 import { ExternalServiceError } from '../../platform/errors.js';
 
-const DEFAULT_TIMEOUT = 60_000;
+/**
+ * 120s, not 60s: thinking is on by default from Opus 4.7 onward, so a review of
+ * a large diff routinely runs past a minute — an observed run spent 78k tokens
+ * and only just fit. Matches the OpenAI adapter and `JobRunner.timeoutMs`, so
+ * no adapter is the narrowest link in the chain. Keep this at or below the
+ * job-runner budget.
+ */
+const DEFAULT_TIMEOUT = 120_000;
 const DEFAULT_MAX_TOKENS = 4096;
+/**
+ * Models that removed sampling params think by default, and `max_tokens` caps
+ * thinking + response text together — 4096 truncates a review mid-answer.
+ */
+const REASONING_MAX_TOKENS = 16_384;
+
+/**
+ * Claude Opus 4.7 and later (Opus 4.7/4.8/5, Sonnet 5, Fable 5) REMOVED the
+ * sampling params: sending `temperature`, `top_p`, or `top_k` returns a 400
+ * `invalid_request_error` reading "`temperature` is deprecated for this model".
+ * Deprecated here means rejected, not ignored — the key must be absent, not 0.
+ *
+ * Mirrors `isReasoningModel` in the OpenAI adapter, which solves the same
+ * problem for gpt-5 and the o-series. Match on the model family rather than an
+ * exact id so a new point release doesn't silently start 400ing.
+ */
+function rejectsSampling(model: string): boolean {
+  return /claude-(opus-(4-7|4-8|5)|sonnet-5|fable-5|mythos-5)/.test(model);
+}
+
+/** Build the sampling + token-cap params appropriate for the given model. */
+export function tuningParams(
+  model: string,
+  temperature: number | undefined,
+  maxTokens: number | undefined,
+): { max_tokens: number; temperature?: number } {
+  if (rejectsSampling(model)) {
+    return { max_tokens: maxTokens ?? REASONING_MAX_TOKENS };
+  }
+  return {
+    max_tokens: maxTokens ?? DEFAULT_MAX_TOKENS,
+    temperature: temperature ?? 0,
+  };
+}
 
 /** Anthropic has no embeddings API; embeddings come from the OpenAI Embedder. */
 function splitSystem(messages: ChatMessage[]): {
@@ -68,8 +109,7 @@ export class AnthropicProvider implements LLMProvider {
       model: req.model,
       system: system || undefined,
       messages: rest,
-      max_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS,
-      temperature: req.temperature ?? 0.2,
+      ...tuningParams(req.model, req.temperature ?? 0.2, req.maxTokens),
     });
     const text = res.content
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
@@ -103,8 +143,7 @@ export class AnthropicProvider implements LLMProvider {
             model: req.model,
             system: system || undefined,
             messages,
-            max_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS,
-            temperature: req.temperature ?? 0,
+            ...tuningParams(req.model, req.temperature, req.maxTokens),
             tools: [
               {
                 name: toolName,

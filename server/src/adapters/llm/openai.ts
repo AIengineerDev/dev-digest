@@ -12,7 +12,14 @@ import { toJsonSchema, parseWithRepair } from '../../platform/structured.js';
 import { estimateCost } from './pricing.js';
 import { ExternalServiceError } from '../../platform/errors.js';
 
-const DEFAULT_TIMEOUT = 60_000;
+/**
+ * 120s, not 60s: reasoning models (gpt-5, o-series) routinely exceed a minute
+ * on a large diff, and 60s made this adapter the narrowest link in the chain —
+ * reviewer-core allows 90s and the job runner 120s, so the review died here
+ * first with "Operation timed out after 60000ms" rather than at either of the
+ * boundaries that own the budget. Keep this at or below `JobRunner.timeoutMs`.
+ */
+const DEFAULT_TIMEOUT = 120_000;
 const EMBED_MODEL = 'text-embedding-3-small';
 
 /**
