@@ -51,6 +51,28 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-06** — The UI token map and the findings contract disagree on how
+  many severities exist, and the map is the wrong one to trust: `SEV` in
+  `src/vendor/ui/primitives/tokens.ts:6` has **four** entries (it adds `INFO`,
+  with its own colour and icon) while `Severity` in `@devdigest/shared` is a
+  three-value enum — `CRITICAL | WARNING | SUGGESTION` — and no finding is ever
+  `INFO`. So never build per-severity UI by iterating `SEV` or
+  `FindingsPanel/constants.ts`'s `SEVERITY_ORDER` (which also lists `INFO`): a
+  counter row, legend, or filter built that way renders a dead `0 INFO` control
+  that can never do anything. Iterate the local `SEVERITIES` list instead, and
+  keep reading colours/icons/labels from `SEV` by key. The same mismatch will
+  bite any future group-by-severity surface.
+  `src/app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/constants.ts:14`
+- **2026-08-06** — Counts shown next to a filter control must be computed from
+  the **unfiltered** collection. `countBySeverity` deliberately takes the raw
+  `findings` array, not `shown`: counting the filtered list makes a chip read
+  `0` the instant you switch it off, so the user can no longer see what they
+  would be switching back on. Related: any list with index-addressed keyboard
+  navigation must reset its focus index when the filter changes — `FindingsPanel`
+  resolves `j`/`k` and the `a`/`d` accept/dismiss shortcuts against `shown[i]`,
+  so a stale index after filtering fires the action on a different finding than
+  the one the user sees marked.
+  `src/app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/helpers.ts:24`
 - **2026-08-05** — `null` cost and `0` cost are different statements and must
   render differently: `null` = "we have no figure for this run" → `—`; `0` = the
   run genuinely was free (the price book lists free models at `0`) → `$0.00`.
