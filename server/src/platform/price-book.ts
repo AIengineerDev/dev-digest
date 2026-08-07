@@ -13,6 +13,14 @@ const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
  * (non-blocking) on a TTL; until it is warm — and for non-OpenRouter models,
  * whose APIs don't expose prices — we fall back to the static table.
  *
+ * NOTE: the live cache is keyed by OpenRouter's own model ids, which carry a
+ * provider prefix (`openai/gpt-5.6-luna`). Runs that go straight to OpenAI or
+ * Anthropic record the bare id (`gpt-5.6-luna`), so they never hit the live map
+ * and always fall through to the static table — which is why that table still
+ * has to list the models the agents actually use. Stripping the prefix to match
+ * them would be wrong by default: OpenRouter's price is its resale price, not
+ * the direct-provider one.
+ *
  * `estimate` is SYNCHRONOUS by design: it is injected into the OpenRouter
  * provider's per-call cost hook, which cannot await. The first call after a
  * cold start (or expiry) returns the fallback while a refresh runs in the

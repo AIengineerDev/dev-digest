@@ -7,11 +7,22 @@ import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, CircularScore } from "@devdigest/ui";
 import type { PrMeta } from "@/lib/types";
 import { RunCostBadge } from "@/components/run-cost-badge";
+import { FindingsCount } from "../FindingsCount";
 import { SIZE_COLOR, STATUS_META } from "../../constants";
 import { relativeTime, sizeOf } from "../../helpers";
 import { s } from "../../styles";
 
-export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
+export function PRRow({
+  pr,
+  repoId,
+  /* Rows in the bottom half flip their findings tooltip upwards so it does not
+     open off the end of the list. */
+  tooltipPlacement = "down",
+}: {
+  pr: PrMeta;
+  repoId: string;
+  tooltipPlacement?: "up" | "down";
+}) {
   const t = useTranslations("prReview");
   const router = useRouter();
   const [h, setH] = React.useState(false);
@@ -53,6 +64,9 @@ export function PRRow({ pr, repoId }: { pr: PrMeta; repoId: string }) {
         ) : (
           <span style={s.muted}>—</span>
         )}
+      </div>
+      <div>
+        <FindingsCount counts={pr.findings} prId={pr.id} placement={tooltipPlacement} />
       </div>
       <div>
         <Badge dot color={st.c} bg="transparent">

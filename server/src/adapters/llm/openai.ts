@@ -12,7 +12,21 @@ import { toJsonSchema, parseWithRepair } from '../../platform/structured.js';
 import { estimateCost } from './pricing.js';
 import { ExternalServiceError } from '../../platform/errors.js';
 
-const DEFAULT_TIMEOUT = 60_000;
+/**
+ * 240s. A single-pass review of a large PR sends the whole diff in one call —
+ * an observed run pushed ~129k input tokens — and the frontier tier (gpt-5.6-sol)
+ * does not finish that inside two minutes, while the cheaper tiers (terra, luna)
+ * just barely did. 60s, then 120s, both cut it off mid-generation.
+ *
+ * Keep this STRICTLY BELOW `JobRunner.timeoutMs` (300s). Equal values race: the
+ * job is killed at the same moment the adapter would have failed, so the run
+ * reports a generic job timeout instead of this adapter's error.
+ *
+ * Raising it further is not the answer if reviews still time out — the fix there
+ * is chunking (`strategy: 'auto'` → map-reduce in reviewer-core), not a longer
+ * wait on one enormous request.
+ */
+export const DEFAULT_TIMEOUT = 240_000;
 const EMBED_MODEL = 'text-embedding-3-small';
 
 /**

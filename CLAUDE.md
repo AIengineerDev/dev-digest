@@ -83,6 +83,11 @@ Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 
 ## Read when
 
+- Read `specs/` before building a feature that spans more than one package —
+  intent and done-criteria live there. Single-package work goes in that
+  package's `specs/` instead.
+- Read `docs/` for how the system works today across packages, before changing
+  anything that already runs.
 - Read `TESTING.md` when adding a test or touching CI.
 - Read `docs/agent-prompts/` when changing a built-in agent's system prompt or
   choosing a model.

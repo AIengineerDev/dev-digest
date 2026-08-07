@@ -37,6 +37,8 @@ npm run typecheck  # tsc --noEmit — this IS the build; the package emits no JS
 
 - Read `INSIGHTS.md` first for what was already tried here, and run the
   `engineering-insights` skill at the end of the task to add to it.
+- Read `specs/` before changing the public API or adding a prompt slot — intent,
+  grounding impact, and the determinism requirement live there.
 - Read `README.md` for the pipeline diagram and the full public API.
 - Read `docs/` before changing prompt assembly or the grounding heuristics.
 - Read `../docs/agent-prompts/` when the task concerns a built-in agent's system

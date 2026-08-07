@@ -13,6 +13,8 @@ import { withTimeout, withRetry } from './resilience.js';
  * the handler on the queue, and updates status/attempts/error as it runs.
  */
 
+export const DEFAULT_JOB_TIMEOUT = 300_000;
+
 export type JobHandler = (payload: unknown, ctx: { jobId: string }) => Promise<void>;
 
 export interface JobRunnerOptions {
@@ -38,7 +40,12 @@ export class JobRunner {
     opts: JobRunnerOptions = {},
   ) {
     this.queue = new PQueue({ concurrency: opts.concurrency ?? 3 });
-    this.timeoutMs = opts.timeoutMs ?? 120_000;
+    // Must stay STRICTLY ABOVE the LLM adapters' own timeout (currently 240s in
+    // openai.ts / anthropic.ts). When the two are equal they race, and the job
+    // is killed at the same instant the adapter would have failed — so the run
+    // dies with a generic job timeout instead of the adapter's error, and any
+    // per-provider handling never gets to run.
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_JOB_TIMEOUT;
     this.retries = opts.retries ?? 2;
   }
 

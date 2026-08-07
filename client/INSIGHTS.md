@@ -34,7 +34,16 @@ abandoned — that is exactly what this file is for._
 
 ## What Works
 
-_None yet._
+- **2026-08-06** — The `null` vs `0` cost rule is pinned in exactly two files:
+  `src/lib/format.test.ts` asserts both directions (`null`/`undefined`/`NaN` →
+  `—`, `0` → `$0.00`, and `0.00002` → `<$0.0001` so a real cost never renders as
+  free), and `src/components/run-cost-badge/RunCostBadge.test.tsx` asserts both
+  layouts (`compact` prints `—`, `withTokens` drops the segment and must not
+  contain `—`). The consuming surfaces do **not** re-assert it — `RunHistory` and
+  `RunTraceDrawer` tests only carry `cost_usd` in fixtures — so a surface that
+  coalesces `null` to `0` before handing it to the badge would pass the whole
+  suite. Add the assertion at the surface when you touch one.
+  `src/components/run-cost-badge/RunCostBadge.test.tsx:29`
 
 ## What Doesn't Work
 
@@ -42,7 +51,50 @@ _None yet._
 
 ## Codebase Patterns
 
-_None yet._
+- **2026-08-06** — The UI token map and the findings contract disagree on how
+  many severities exist, and the map is the wrong one to trust: `SEV` in
+  `src/vendor/ui/primitives/tokens.ts:6` has **four** entries (it adds `INFO`,
+  with its own colour and icon) while `Severity` in `@devdigest/shared` is a
+  three-value enum — `CRITICAL | WARNING | SUGGESTION` — and no finding is ever
+  `INFO`. So never build per-severity UI by iterating `SEV` or
+  `FindingsPanel/constants.ts`'s `SEVERITY_ORDER` (which also lists `INFO`): a
+  counter row, legend, or filter built that way renders a dead `0 INFO` control
+  that can never do anything. Iterate the local `SEVERITIES` list instead, and
+  keep reading colours/icons/labels from `SEV` by key. The same mismatch will
+  bite any future group-by-severity surface.
+  `src/app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/constants.ts:14`
+- **2026-08-06** — Counts shown next to a filter control must be computed from
+  the **unfiltered** collection. `countBySeverity` deliberately takes the raw
+  `findings` array, not `shown`: counting the filtered list makes a chip read
+  `0` the instant you switch it off, so the user can no longer see what they
+  would be switching back on. Related: any list with index-addressed keyboard
+  navigation must reset its focus index when the filter changes — `FindingsPanel`
+  resolves `j`/`k` and the `a`/`d` accept/dismiss shortcuts against `shown[i]`,
+  so a stale index after filtering fires the action on a different finding than
+  the one the user sees marked.
+  `src/app/repos/[repoId]/pulls/[number]/_components/FindingsPanel/helpers.ts:24`
+- **2026-08-05** — `null` cost and `0` cost are different statements and must
+  render differently: `null` = "we have no figure for this run" → `—`; `0` = the
+  run genuinely was free (the price book lists free models at `0`) → `$0.00`.
+  Never coalesce one into the other on the way to the UI. Density decides how
+  `null` degrades: the compact PR-list column prints `—`, while the
+  `withTokens` timeline variant drops the cost segment entirely rather than
+  printing `9 119 tok · —` on every unpriced row.
+  `src/components/run-cost-badge/RunCostBadge.tsx:1`, `src/lib/format.ts:20`
+- **2026-08-05** — One run cost is shown on three surfaces, but only **two** go
+  through `RunCostBadge` with a `variant` prop: the PR-list column
+  (`compact`, `PRRow.tsx:62`) and the PR-detail timeline (`withTokens`,
+  `RunHistory.tsx:202`). The run trace drawer calls `formatCostUsd` directly
+  (`RunTraceDrawer/_components/TraceBody/TraceBody.tsx:67`) because it renders a
+  row of four identical `Stat` tiles (DURATION / TOKENS / COST / FINDINGS) that
+  the badge's own markup does not fit. What is shared is the **formatter**, not
+  the component — so a change to the `null`/`$0.00` rule belongs in
+  `format.ts`, and a change to badge markup will silently miss the drawer. Run costs span three orders of
+  magnitude (~$0.001 flash to ~$0.10 frontier), so `formatCostUsd` prints 4dp
+  with trailing zeros trimmed to a 2dp floor and `<$0.0001` below resolution —
+  a fixed precision is lossy at one end or noisy at the other, and rounding to
+  `$0.0000` reads as free. `src/lib/format.ts:20`
+
 
 ## Tool & Library Notes
 
