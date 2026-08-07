@@ -14,13 +14,15 @@ import { estimateCost } from './pricing.js';
 import { ExternalServiceError } from '../../platform/errors.js';
 
 /**
- * 120s, not 60s: thinking is on by default from Opus 4.7 onward, so a review of
- * a large diff routinely runs past a minute — an observed run spent 78k tokens
- * and only just fit. Matches the OpenAI adapter and `JobRunner.timeoutMs`, so
- * no adapter is the narrowest link in the chain. Keep this at or below the
- * job-runner budget.
+ * 240s, matching the OpenAI adapter. Thinking is on by default from Opus 4.7
+ * onward and a single-pass review sends the whole diff in one call, so a large
+ * PR runs well past a minute — an observed run spent 78k tokens and only just
+ * fit inside 120s.
+ *
+ * Keep this STRICTLY BELOW `JobRunner.timeoutMs` (300s); equal values race and
+ * the job is killed at the same instant this would have failed.
  */
-const DEFAULT_TIMEOUT = 120_000;
+export const DEFAULT_TIMEOUT = 240_000;
 const DEFAULT_MAX_TOKENS = 4096;
 /**
  * Models that removed sampling params think by default, and `max_tokens` caps

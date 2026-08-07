@@ -13,13 +13,20 @@ import { estimateCost } from './pricing.js';
 import { ExternalServiceError } from '../../platform/errors.js';
 
 /**
- * 120s, not 60s: reasoning models (gpt-5, o-series) routinely exceed a minute
- * on a large diff, and 60s made this adapter the narrowest link in the chain —
- * reviewer-core allows 90s and the job runner 120s, so the review died here
- * first with "Operation timed out after 60000ms" rather than at either of the
- * boundaries that own the budget. Keep this at or below `JobRunner.timeoutMs`.
+ * 240s. A single-pass review of a large PR sends the whole diff in one call —
+ * an observed run pushed ~129k input tokens — and the frontier tier (gpt-5.6-sol)
+ * does not finish that inside two minutes, while the cheaper tiers (terra, luna)
+ * just barely did. 60s, then 120s, both cut it off mid-generation.
+ *
+ * Keep this STRICTLY BELOW `JobRunner.timeoutMs` (300s). Equal values race: the
+ * job is killed at the same moment the adapter would have failed, so the run
+ * reports a generic job timeout instead of this adapter's error.
+ *
+ * Raising it further is not the answer if reviews still time out — the fix there
+ * is chunking (`strategy: 'auto'` → map-reduce in reviewer-core), not a longer
+ * wait on one enormous request.
  */
-const DEFAULT_TIMEOUT = 120_000;
+export const DEFAULT_TIMEOUT = 240_000;
 const EMBED_MODEL = 'text-embedding-3-small';
 
 /**
