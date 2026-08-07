@@ -127,7 +127,14 @@ export default function PullsPage() {
             }
           />
         ) : (
-          filtered.map((pr) => <PRRow key={pr.number} pr={pr} repoId={repoId} />)
+          filtered.map((pr, i) => (
+            <PRRow
+              key={pr.number}
+              pr={pr}
+              repoId={repoId}
+              tooltipPlacement={i >= Math.ceil(filtered.length / 2) ? "up" : "down"}
+            />
+          ))
         )}
       </div>
     </AppShell>

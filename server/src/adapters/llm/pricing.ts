@@ -9,6 +9,16 @@ interface Price {
 
 const PRICING: Record<string, Price> = {
   // OpenAI (approximate public list prices, USD / 1M tokens)
+  //
+  // ⚠️ gpt-5.6-* are the models the built-in reviewer agents actually run on
+  // (Settings → Agents), and these three figures are PLACEHOLDERS carried over
+  // from the gpt-5.5 tier — they have not been checked against the published
+  // price list. A wrong number here shows up as a confident dollar figure in the
+  // PR list's COST column, which is worse than the "—" an unpriced model gets.
+  // Confirm and correct before treating these costs as real.
+  'gpt-5.6-sol': { in: 5.0, out: 30.0 },
+  'gpt-5.6-terra': { in: 5.0, out: 30.0 },
+  'gpt-5.6-luna': { in: 5.0, out: 30.0 },
   'gpt-5.5': { in: 5.0, out: 30.0 },
   'gpt-5.4': { in: 2.5, out: 15.0 },
   'gpt-5.4-mini': { in: 0.75, out: 4.5 },
