@@ -173,6 +173,17 @@ export const PrMeta = z.object({
   // USD cost of the LATEST COMPLETED run (list endpoint only). Deliberately not
   // a sum across runs. Null until a run completes, or when the model is unpriced.
   cost_usd: z.number().nullish(),
+  // Per-severity finding counts of the LATEST review (list endpoint only), for
+  // the list's FINDINGS column. Same latest-not-sum rule as `score` above: a
+  // re-review replaces the breakdown rather than adding to it. Null until the
+  // PR has been reviewed; all-zero once it has been reviewed and came back clean.
+  findings: z
+    .object({
+      CRITICAL: z.number().int(),
+      WARNING: z.number().int(),
+      SUGGESTION: z.number().int(),
+    })
+    .nullish(),
 });
 export type PrMeta = z.infer<typeof PrMeta>;
 

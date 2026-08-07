@@ -113,19 +113,50 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
 
     // Latest-review SCORE per PR for the list's score ring. Computed on read
     // from reviews (no FK denorm); the list is small, so one IN-query + JS
-    // grouping is cheap. (The per-severity FINDINGS breakdown is intentionally
-    // not surfaced on the list — findings live on the PR detail page.)
+    // grouping is cheap.
     const prIds = rows.map((r) => r.id);
-    const latestReviewByPr = new Map<string, { score: number | null }>();
+    const latestReviewByPr = new Map<string, { id: string; score: number | null }>();
     if (prIds.length > 0) {
       const reviewRows = await container.db
-        .select({ prId: t.reviews.prId, score: t.reviews.score })
+        .select({ id: t.reviews.id, prId: t.reviews.prId, score: t.reviews.score })
         .from(t.reviews)
         .where(and(inArray(t.reviews.prId, prIds), eq(t.reviews.kind, 'review')))
         .orderBy(desc(t.reviews.createdAt));
       // Rows are newest-first → first seen per PR is the latest review.
       for (const rv of reviewRows) {
-        if (!latestReviewByPr.has(rv.prId)) latestReviewByPr.set(rv.prId, { score: rv.score });
+        if (!latestReviewByPr.has(rv.prId))
+          latestReviewByPr.set(rv.prId, { id: rv.id, score: rv.score });
+      }
+    }
+
+    // Per-severity FINDINGS breakdown for the list's FINDINGS column. Scoped to
+    // the SAME review the score ring shows, not to every review the PR ever had —
+    // otherwise the column and the ring would describe different runs, and a
+    // re-review would add to the counts instead of replacing them.
+    //
+    // Dismissed findings are counted: the column mirrors what the PR detail page
+    // lists, and that page shows dismissed findings (struck through) rather than
+    // hiding them. Excluding them here is what makes the two disagree.
+    const findingsByPr = new Map<string, { CRITICAL: number; WARNING: number; SUGGESTION: number }>();
+    const latestReviewIds = [...latestReviewByPr.values()].map((rv) => rv.id);
+    if (latestReviewIds.length > 0) {
+      const reviewIdToPr = new Map([...latestReviewByPr].map(([prId, rv]) => [rv.id, prId]));
+      const findingRows = await container.db
+        .select({ reviewId: t.findings.reviewId, severity: t.findings.severity })
+        .from(t.findings)
+        .where(inArray(t.findings.reviewId, latestReviewIds));
+      for (const f of findingRows) {
+        const prId = reviewIdToPr.get(f.reviewId);
+        if (!prId) continue;
+        // Seeded so a reviewed-and-clean PR reports zeros rather than null —
+        // "reviewed, nothing found" and "never reviewed" are different states.
+        const counts =
+          findingsByPr.get(prId) ?? findingsByPr.set(prId, { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 }).get(prId)!;
+        if (f.severity in counts) counts[f.severity as keyof typeof counts] += 1;
+      }
+      for (const prId of latestReviewByPr.keys()) {
+        if (!findingsByPr.has(prId))
+          findingsByPr.set(prId, { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 });
       }
     }
 
@@ -172,6 +203,7 @@ export default async function pullsRoutes(appBase: FastifyInstance) {
         updated_at: r.updatedAt?.toISOString() ?? null,
         score: review ? review.score : null,
         cost_usd: latestCostByPr.get(r.id) ?? null,
+        findings: findingsByPr.get(r.id) ?? null,
       };
     });
   });
