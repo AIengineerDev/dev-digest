@@ -25,6 +25,8 @@ import { PriceBook } from './price-book.js';
 import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
+import { SkillAssembler } from '../modules/skills/assembler.js';
+import { SkillsWriter } from '../modules/skills/writer.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
 import { type DepGraph, DepCruiseGraph } from '../adapters/depgraph/index.js';
@@ -72,6 +74,8 @@ export class Container {
   // `container.agentsRepo` instead of reaching into another module's folder.
   private _agentsRepo?: AgentsRepository;
   private _reviewRepo?: ReviewRepository;
+  private _skills?: SkillAssembler;
+  private _skillsWriter?: SkillsWriter;
   private _repoIntel?: RepoIntel;
   private _depgraph?: DepGraph;
   private _tokenizer?: Tokenizer;
@@ -98,6 +102,25 @@ export class Container {
 
   get reviewRepo(): ReviewRepository {
     return (this._reviewRepo ??= new ReviewRepository(this.db));
+  }
+
+  /**
+   * Resolves an agent's linked skills into prompt blocks (enabled filter,
+   * pinned-version replay, assembly budget). Constructed here so the run
+   * executor reaches it through the container instead of importing across
+   * modules.
+   */
+  get skills(): SkillAssembler {
+    return (this._skills ??= new SkillAssembler(this.db));
+  }
+
+  /**
+   * Creates a skill (v1 row + first snapshot, one transaction). Here rather than
+   * imported directly so the conventions module can promote accepted candidates
+   * into a skill without importing across module folders.
+   */
+  get skillsWriter(): SkillsWriter {
+    return (this._skillsWriter ??= new SkillsWriter(this.db));
   }
 
   get codeIndex(): CodeIndex {

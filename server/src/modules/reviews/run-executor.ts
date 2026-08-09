@@ -1,5 +1,5 @@
 import type { Container } from '../../platform/container.js';
-import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
+import type { Provider, Review, RunTrace, SkillRef, UnifiedDiff } from '@devdigest/shared';
 import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
@@ -7,7 +7,7 @@ import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
-import { loadDiff } from './diff-loader.js';
+import { loadDiff, type LoadedDiff } from './diff-loader.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -27,6 +27,16 @@ export type Logger = {
 
 // A reduced "Review per file" — same schema as Review (the model returns a small
 // Review per file; we merge findings + take the worst verdict / mean score).
+/**
+ * One queued run: an agent and the `agent_runs` row it writes into.
+ *
+ * `pinnedSkills` makes the run a REPLAY of an agent version: the skill set,
+ * order and bodies come from that version's `agent_versions` snapshot instead of
+ * the agent's current links. Absent (the live path) = current links, current
+ * bodies.
+ */
+export type RunJob = { agent: AgentRow; runId: string; pinnedSkills?: SkillRef[] };
+
 export type RunOutcome = {
   review: ReviewRow;
   findings: FindingRow[];
@@ -56,7 +66,7 @@ export class ReviewRunExecutor {
     workspaceId: string,
     pull: PullRow,
     repo: typeof schema.repos.$inferSelect,
-    jobs: { agent: AgentRow; runId: string }[],
+    jobs: RunJob[],
     logger?: Logger,
   ): Promise<void> {
     // ONE logger fanned out over every queued run: shared pre-work (diff +
@@ -92,9 +102,9 @@ export class ReviewRunExecutor {
       }
     };
 
-    let diff: UnifiedDiff;
+    let loaded: LoadedDiff;
     try {
-      diff = await runLog.step('Loading PR diff', () => loadDiff(this.container, this.repo, workspaceId, pull, repo), {
+      loaded = await runLog.step('Loading PR diff', () => loadDiff(this.container, this.repo, workspaceId, pull, repo), {
         kind: 'tool',
       });
     } catch (err) {
@@ -102,16 +112,33 @@ export class ReviewRunExecutor {
       await failAll(`Failed to load PR diff: ${(err as Error).message}`);
       return;
     }
-    runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
+    const diff = loaded.diff;
+    if (loaded.source === 'pr_files') {
+      runLog.info(
+        `Diff assembled from stored GitHub patches (pr_files) — the clone could not serve it: ${loaded.gitError ?? 'unknown reason'}`,
+      );
+    }
+    runLog.info(
+      `Diff ready at ${pull.headSha.slice(0, 7)} via ${loaded.source} — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`,
+    );
 
-    for (const { agent, runId } of jobs) {
+    for (const { agent, runId, pinnedSkills } of jobs) {
       const agentStart = Date.now();
       logger?.info(
         { runId, agent: agent.name, provider: agent.provider, model: agent.model, prId: pull.id },
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(
+          workspaceId,
+          pull,
+          repo,
+          diff,
+          agent,
+          runId,
+          runLog,
+          pinnedSkills,
+        );
         logger?.info(
           {
             runId,
@@ -143,8 +170,12 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
+    pinnedSkills?: SkillRef[],
   ): Promise<RunOutcome> {
     const start = Date.now();
+    // Assembled here (not inside the try) so a failure trace can still show the
+    // skills block the run was about to use.
+    let skillsBlock: string | null = null;
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
     // events are already in this run's buffer, so the persisted trace below
     // (built from the buffer) includes them too.
@@ -183,6 +214,14 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
+      // Skills — the agent's ordered, globally-enabled linked skill bodies
+      // (pinned snapshots when this run replays an agent version). Every
+      // exclusion (disabled, budget-dropped, unresolved pin) is written to the
+      // log, so what did NOT reach the prompt is visible in the Run Trace.
+      const skills = await this.resolveSkills(workspaceId, agent.id, pinnedSkills);
+      for (const note of skills.notes) runLog.info(note);
+      skillsBlock = skills.blocks.length > 0 ? skills.blocks.join('\n\n') : null;
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -195,6 +234,10 @@ export class ReviewRunExecutor {
         // Per-agent review strategy (configured in the Agent editor); falls back
         // to the studio default. single-pass = whole diff in one call.
         strategy: agent.strategy ?? REVIEW_STRATEGY,
+        // Linked skills, in `agent_skills.order`. Omitted when the agent has
+        // none enabled, so assemblePrompt leaves out `## Skills / rules`
+        // entirely rather than emitting an empty section.
+        ...(skills.blocks.length > 0 ? { skills: skills.blocks } : {}),
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),
@@ -220,6 +263,7 @@ export class ReviewRunExecutor {
         prId: pull.id,
         agentId: agent.id,
         runId,
+        headSha: pull.headSha,
         kind: 'review',
         verdict: outcome.review.verdict,
         summary: outcome.review.summary,
@@ -308,11 +352,42 @@ export class ReviewRunExecutor {
         })
         .catch(() => undefined);
       await this.repo
-        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start))
+        .saveRunTrace(
+          runId,
+          this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start, skillsBlock),
+        )
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
     }
+  }
+
+  /**
+   * Resolve the agent's linked skills into prompt blocks.
+   *
+   * Two owners, one call: the agents repository owns `agent_skills`, so the
+   * ordered links come from there; the skills assembler (via the container)
+   * owns the `enabled` kill-switch, pinned-version resolution and the assembly
+   * budget. The executor only carries values between them.
+   */
+  private async resolveSkills(
+    workspaceId: string,
+    agentId: string,
+    pinnedSkills?: SkillRef[],
+  ) {
+    const links = await this.agents.linkedSkills(agentId);
+    return this.container.skills.assemble(
+      workspaceId,
+      links.map((l) => ({
+        id: l.skill.id,
+        name: l.skill.name,
+        body: l.skill.body,
+        enabled: l.skill.enabled,
+        version: l.skill.version,
+        source: l.skill.source,
+      })),
+      pinnedSkills,
+    );
   }
 
   /**
@@ -413,6 +488,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     grounding: string,
     durationMs = 0,
+    skills: string | null = null,
   ): RunTrace {
     return {
       config: {
@@ -424,7 +500,11 @@ export class ReviewRunExecutor {
         source: 'local',
       },
       stats: { duration_ms: durationMs, tokens_in: 0, tokens_out: 0, cost_usd: null, findings: 0, grounding },
-      prompt_assembly: { system: agent.systemPrompt, skills: null, memory: null, specs: null, user: '' },
+      // `skills` is the block this run had already assembled when it failed
+      // (null when it failed before that, or the agent has none) — the same
+      // slot a successful run reports, so a failed run does not silently look
+      // like an agent with no rules.
+      prompt_assembly: { system: agent.systemPrompt, skills, memory: null, specs: null, user: '' },
       tool_calls: [],
       raw_output: '',
       memory_pulled: [],

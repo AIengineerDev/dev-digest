@@ -131,6 +131,77 @@ export const Skill = z.object({
 });
 export type Skill = z.infer<typeof Skill>;
 
+/**
+ * A pinned reference to a skill: which skill, and which snapshot of its body.
+ *
+ * `version: null` means a legacy row where the skill version was not recorded —
+ * an `agent_versions` snapshot written before pinning existed. Null is honest
+ * ("we do not know which skill text this ran with"); it is never backfilled,
+ * because inventing a version would invent history.
+ */
+export const SkillRef = z.object({
+  id: z.string(),
+  version: z.number().int().nullable(),
+});
+export type SkillRef = z.infer<typeof SkillRef>;
+
+/**
+ * Read-tolerant form of `SkillRef`. Accepts the legacy bare-string id as well as
+ * the object form, and normalises both to `SkillRef`: `"s1"` → `{ id: "s1",
+ * version: null }`. New writes always use the object form.
+ */
+export const SkillRefTolerant = z
+  .union([z.string(), SkillRef])
+  .transform((value): SkillRef =>
+    typeof value === 'string' ? { id: value, version: null } : value,
+  );
+
+/** Write shape for creating a skill. `source` is always 'manual' in v1. */
+export const CreateSkillInput = z.object({
+  name: z.string().min(1),
+  description: z.string(),
+  type: SkillType,
+  body: z.string(),
+  enabled: z.boolean().default(true),
+});
+export type CreateSkillInput = z.infer<typeof CreateSkillInput>;
+
+/** Partial patch of a skill — every field optional. */
+export const UpdateSkillInput = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  type: SkillType.optional(),
+  body: z.string().optional(),
+  enabled: z.boolean().optional(),
+});
+export type UpdateSkillInput = z.infer<typeof UpdateSkillInput>;
+
+/**
+ * Import a skill body from a URL.
+ *
+ * The imported text is **untrusted data**, not author-written instruction: it
+ * arrives from outside the workspace, so it is wrapped like every other external
+ * block when it reaches a prompt (`specs/02-skills.md`, *Security*). Name,
+ * description and type may be supplied; anything omitted is derived from the
+ * fetched document.
+ */
+export const ImportSkillInput = z.object({
+  url: z.string().url(),
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  type: SkillType.optional(),
+});
+export type ImportSkillInput = z.infer<typeof ImportSkillInput>;
+
+/** An immutable snapshot of a skill body, appended on every body change. */
+export const SkillVersion = z.object({
+  skill_id: z.string(),
+  version: z.number().int(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type SkillVersion = z.infer<typeof SkillVersion>;
+
 export const CommunitySkill = z.object({
   name: z.string(),
   repo: z.string(),
@@ -141,15 +212,99 @@ export const CommunitySkill = z.object({
 export type CommunitySkill = z.infer<typeof CommunitySkill>;
 
 // ---- Conventions ----
-export const ConventionCandidate = z.object({
+
+/**
+ * What kind of rule a convention states. A closed list on purpose: it is what
+ * the extraction prompt asks the model to choose from, so an open string would
+ * produce a new category per run and nothing could be grouped.
+ */
+export const ConventionCategory = z.enum([
+  'naming',
+  'structure',
+  'error-handling',
+  'testing',
+  'typing',
+  'api',
+  'async',
+  'logging',
+  'imports',
+  'security',
+]);
+export type ConventionCategory = z.infer<typeof ConventionCategory>;
+
+/**
+ * Review state of a candidate.
+ *
+ * `pending` (nobody has looked) and `rejected` (somebody looked and said no) are
+ * deliberately different: a re-scan discards the first and preserves the second,
+ * so a rule you rejected does not come back every time you press Re-scan.
+ */
+export const ConventionStatus = z.enum(['pending', 'accepted', 'rejected']);
+export type ConventionStatus = z.infer<typeof ConventionStatus>;
+
+/**
+ * One extracted house rule, with the evidence that survived verification.
+ *
+ * `evidence_line` is 1-based and always points at a line where
+ * `evidence_snippet` really occurs — the server corrects the model's number
+ * rather than trusting it. `head_sha` is the commit the clone was on when the
+ * scan ran, which is what makes the GitHub permalink honest: it points at the
+ * code the claim was made about, not at whatever that file says now.
+ */
+export const Convention = z.object({
   id: z.string(),
+  repo_id: z.string().nullable(),
+  category: ConventionCategory,
   rule: z.string(),
+  rationale: z.string().nullable(),
   evidence_path: z.string(),
+  evidence_line: z.number().int().positive(),
   evidence_snippet: z.string(),
   confidence: z.number().min(0).max(1),
-  accepted: z.boolean(),
+  status: ConventionStatus,
+  head_sha: z.string().nullable(),
+  created_at: z.string(),
 });
-export type ConventionCandidate = z.infer<typeof ConventionCandidate>;
+export type Convention = z.infer<typeof Convention>;
+
+/**
+ * The result of one scan. The three counts are the point: `proposed` is what the
+ * model claimed, `verified` is what survived the code-side evidence gate, and
+ * `dropped` is the difference — the extraction's own precision, visible instead
+ * of folded into the list.
+ */
+export const ExtractConventionsResult = z.object({
+  sampled_files: z.array(z.string()),
+  proposed: z.number().int(),
+  verified: z.number().int(),
+  dropped: z.number().int(),
+  conventions: z.array(Convention),
+});
+export type ExtractConventionsResult = z.infer<typeof ExtractConventionsResult>;
+
+/** Patch a candidate: sharpen the rule, re-categorise it, accept or reject it. */
+export const UpdateConventionInput = z.object({
+  rule: z.string().min(1).optional(),
+  category: ConventionCategory.optional(),
+  status: ConventionStatus.optional(),
+});
+export type UpdateConventionInput = z.infer<typeof UpdateConventionInput>;
+
+/**
+ * Promote the accepted candidates of a repo into one skill.
+ *
+ * `body` is optional because the server composes a default from the accepted
+ * set; when the user edited it in the modal, theirs wins. `convention_ids`
+ * narrows the set — omitted means "every accepted candidate for this repo".
+ */
+export const CreateSkillFromConventionsInput = z.object({
+  name: z.string().min(1),
+  description: z.string(),
+  type: SkillType.default('convention'),
+  body: z.string().optional(),
+  convention_ids: z.array(z.string()).optional(),
+});
+export type CreateSkillFromConventionsInput = z.infer<typeof CreateSkillFromConventionsInput>;
 
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a
@@ -211,7 +366,10 @@ export const AgentVersionConfig = z.object({
   strategy: ReviewStrategy,
   ci_fail_on: CiFailOn,
   repo_intel: z.boolean(),
-  skills: z.array(z.string()),
+  // Tolerant on read: existing rows hold bare skill ids, new snapshots hold
+  // `{ id, version }`. Both normalise to SkillRef[]; legacy rows keep parsing
+  // with `version: null` and are deliberately never rewritten.
+  skills: z.array(SkillRefTolerant),
 });
 export type AgentVersionConfig = z.infer<typeof AgentVersionConfig>;
 
