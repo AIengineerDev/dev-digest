@@ -37,7 +37,9 @@
     "running": "Running…",
     "runReview": "Run Review",
     "mergedWarning": "Already merged — review is informational",
-    "mergedTooltip": "This PR is already merged; running a review won’t affect the merged code."
+    "mergedTooltip": "This PR is already merged; running a review won’t affect the merged code.",
+    "noAgents": "No agents yet — create one",
+    "agentsLoadError": "Could not load agents — retry"
   },
   "runStatus": {
     "elapsed": "Running · {count} agent(s)",
@@ -49,6 +51,15 @@
     "running": "running",
     "findings": "{count} finding(s)",
     "blockers": " · {count} blockers"
+  },
+  "staleness": {
+    "badge": "stale",
+    "runTooltip": "Ran against {sha}; the PR head is now {head}. These findings describe code that has changed since.",
+    "reviewBadge": "ran against {sha}",
+    "onlyCurrent": "Only current head",
+    "onlyCurrentHint": "Hide review runs produced against an older commit ({count} hidden)",
+    "allHiddenTitle": "No review of the current head yet",
+    "allHiddenBody": "Every stored review ran against an older commit. Run a review to check the code as it stands, or switch off “Only current head” to read the older ones."
   },
   "smartDiff": {
     "coreLabel": "Core",

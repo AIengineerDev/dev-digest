@@ -16,6 +16,46 @@ move it into `docs/` and delete it here.
 
 ## Decisions
 
+### 2026-08-09 — Legacy rows are read tolerantly, never migrated
+
+**What:** `AgentVersionConfig.skills` accepts both the legacy bare id (`"s1"`)
+and the pinned `{ id, version }` form, and normalises both to `SkillRef[]` via
+`.transform()`; a legacy row yields `version: null`.
+`server/src/vendor/shared/contracts/knowledge.ts:153`
+**Why:** the snapshots in `agent_versions` are immutable history. Null means "we
+do not know which skill text this ran with", which is true; a backfill would have
+to invent a version number and would make a replay claim reproducibility it does
+not have.
+**Rejected:** a data migration rewriting existing `config_json.skills`. The catch
+is that a `.transform()` on a Zod object field splits input from output type, so
+nothing on the *write* side is forced to change — `snapshotVersion` still writes
+bare ids into an untyped `jsonb` column and typechecks
+(`server/src/modules/agents/repository.ts:192`). The union is therefore the whole
+migration story and the only thing standing between an existing workspace and a
+runtime parse failure; it is pinned by `server/test/skills-contracts.test.ts`,
+which fails on 4 of 9 cases if the union is reverted to `z.array(z.string())`.
+
+### 2026-08-07 — Runs and reviews are stamped with the head they reviewed
+
+**What:** `agent_runs.head_sha` and `reviews.head_sha` (migration `0011`, both
+nullable) are written from `pull.headSha` when the run is created, exposed as
+`head_sha` on `RunSummary` and `ReviewRecord`, and used by the PR detail page to
+mark stale runs and to hide non-current review runs by default.
+**Why:** findings outlive the code they describe. A PR reviewed over many pushes
+accumulated runs whose findings pointed at files that had since been deleted,
+displayed identically to findings about the current code — the symptom that read
+as "DevDigest doesn't see the latest changes". Nothing recorded which revision a
+run had seen: `pull_requests.last_reviewed_sha` is a single value, overwritten by
+each run and used only to derive the list's `needs_review` status
+(`server/src/modules/pulls/status.ts:51`).
+**Rejected:** (a) deleting or auto-hiding old reviews when the head moves —
+findings on a rewritten file are still evidence about the PR's history, and
+deletion is unrecoverable; (b) inferring staleness from timestamps against
+`pr_commits` — a run started before a push can legitimately be reviewing the new
+head, and the ordering is wrong precisely in the interesting cases. **A null sha
+never means stale**: rows written before `0011` carry null, and treating unknown
+as stale would flag a repo's entire history. `client/src/app/repos/[repoId]/pulls/[number]/_components/staleness.ts:16`
+
 ### 2026-07-31 — Standalone packages instead of a workspace
 
 **What:** four packages, each with its own `package.json` and lockfile; sharing
@@ -67,6 +107,13 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-09** — The "edit each vendored copy by hand" advice below stopped
+  holding: `./scripts/check-shared.sh` now diffs the two `@devdigest/shared`
+  trees, and `--fix` rsyncs server → client (`--delete`, so the client copy is a
+  mirror and any client-only edit is destroyed, which is the intent). Edit the
+  **server** copy, then run `--fix`, then the bare form as the gate. Do not hand-
+  edit the client copy or diff the trees manually. `scripts/check-shared.sh:29`
+
 - **2026-08-06** — `DevDigest Design (standalone).html` (repo root, 1.8 MB) is a
   self-unpacking bundle, not markup: line 170 is a JSON manifest of base64+gzip
   assets keyed by UUID, line 178 is the JSON-encoded HTML template, and the
@@ -82,9 +129,16 @@ _None yet._
   `sync()` and `diffNameOnly()`; the client copy has none of them. There is no
   sync script and nothing fails when you edit only one — the client typechecks
   only the subset it imports — so a contract change means editing **each** copy
-  by hand and diffing them afterwards (`diff server/src/vendor/shared/adapters.ts
-  client/src/vendor/shared/adapters.ts`). Adding `costUsd: number | null` needed
-  both. `server/src/vendor/shared/adapters.ts:48`
+  by hand and diffing them afterwards. Use `diff -rq client/src/vendor/shared
+  server/src/vendor/shared` for the whole tree, not one file at a time. Adding
+  `costUsd: number | null` needed both. Re-measured 2026-08-09: **five** files
+  now differ, and the drift is no longer only additive. `contracts/productionize.ts`
+  declares `provider: z.enum(['openai','anthropic'])` on the client against
+  `z.enum(['openai','anthropic','openrouter'])` on the server — the same Zod
+  schema is supposed to drive validation on both sides, so a legitimate
+  `openrouter` response is rejected by the client's own parser. When a bug looks
+  like "the server sent something the client refuses to accept", diff the trees
+  before debugging either side. `server/src/vendor/shared/adapters.ts:48`
 
 ## Recurring Errors & Fixes
 

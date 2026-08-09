@@ -21,6 +21,8 @@ export interface ReviewDto {
   agent_id: string | null;
   run_id: string | null;
   agent_name?: string | null;
+  /** PR head this review ran against; null on rows written before the column. */
+  head_sha: string | null;
   kind: 'summary' | 'review';
   verdict: string | null;
   summary: string | null;
@@ -63,6 +65,7 @@ export function reviewToDto(
     agent_id: review.agentId,
     run_id: review.runId,
     agent_name: agentName ?? null,
+    head_sha: review.headSha,
     kind: review.kind as 'summary' | 'review',
     verdict: review.verdict,
     summary: review.summary,

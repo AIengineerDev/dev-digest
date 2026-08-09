@@ -26,6 +26,8 @@ export const ReviewRecord = z.object({
   agent_id: z.string().nullable(),
   run_id: z.string().nullable(),
   agent_name: z.string().nullish(),
+  /** PR head this review ran against; see `RunSummary.head_sha`. */
+  head_sha: z.string().nullable(),
   kind: z.enum(['summary', 'review']),
   verdict: Verdict.nullable(),
   summary: z.string().nullable(),

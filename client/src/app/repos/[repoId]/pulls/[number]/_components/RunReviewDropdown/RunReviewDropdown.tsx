@@ -33,7 +33,7 @@ export function RunReviewDropdown({
 }) {
   const t = useTranslations("prReview");
   const router = useRouter();
-  const { data: agents } = useAgents();
+  const { data: agents, isError: agentsFailed, refetch: refetchAgents } = useAgents();
   const run = useRunReview();
   const all = agents ?? [];
   const hasEnabled = all.some((a) => a.enabled);
@@ -51,14 +51,32 @@ export function RunReviewDropdown({
   // List EVERY agent (not just enabled) so they're always visible; a specific
   // agent can be run regardless of its enabled flag. "Run all" still targets
   // only enabled agents.
-  const agentItems: DropdownItemDef[] = all.length
-    ? all.map((a) => ({
-        label: a.name,
-        icon: "Cpu" as const,
-        hint: a.enabled ? a.model : `${a.model} · disabled`,
-        onClick: () => kick({ agentId: a.id }),
-      }))
-    : [{ label: "No agents yet — create one", icon: "Plus", muted: true, onClick: () => router.push("/agents") }];
+  //
+  // A failed load must NOT fall through to the empty case: "No agents yet"
+  // would send someone to create a duplicate of an agent they already have.
+  const agentItems: DropdownItemDef[] = agentsFailed
+    ? [
+        {
+          label: t("runReview.agentsLoadError"),
+          icon: "AlertTriangle" as const,
+          onClick: () => void refetchAgents(),
+        },
+      ]
+    : all.length
+      ? all.map((a) => ({
+          label: a.name,
+          icon: "Cpu" as const,
+          hint: a.enabled ? a.model : `${a.model} · disabled`,
+          onClick: () => kick({ agentId: a.id }),
+        }))
+      : [
+          {
+            label: t("runReview.noAgents"),
+            icon: "Plus" as const,
+            muted: true,
+            onClick: () => router.push("/agents"),
+          },
+        ];
 
   const items: DropdownItemDef[] = [
     // Merged/closed PRs can still be reviewed (informational only); lead with a

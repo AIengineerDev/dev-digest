@@ -45,4 +45,18 @@ export const s = {
     display: "flex",
     gap: 8,
   } satisfies CSSProperties,
+  runsToolbar: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 14,
+  } satisfies CSSProperties,
+  onlyCurrentHead: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    fontSize: 12,
+    color: "var(--text-secondary)",
+    cursor: "pointer",
+    userSelect: "none",
+  } satisfies CSSProperties,
 } as const;

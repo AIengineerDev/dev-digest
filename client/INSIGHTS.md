@@ -29,8 +29,23 @@ them here.
 
 ## Decisions
 
-_None yet. Add the first one the next time a UI approach is tried and
-abandoned — that is exactly what this file is for._
+### 2026-08-07 — Per-run severity breakdown is derived client-side, not added to `RunSummary`
+
+**What:** The Agent Runs timeline shows its severity icons by deriving
+`run_id → {CRITICAL, WARNING, SUGGESTION}` from the reviews the PR detail page
+has already loaded (`severityCountsByRun`), instead of the run row carrying the
+breakdown. `RunSummary` still exposes only the flat `findings_count`.
+**Why:** The detail page holds every review with its findings in the TanStack
+cache before the timeline renders, so the breakdown costs one `useMemo` — no
+request, no `@devdigest/shared` change, no migration, and no second source of
+truth to drift from the findings themselves.
+**Rejected:** Widening the `RunSummary` contract with three count columns
+denormalized onto `agent_runs` (the way `blockers`/`score` already are). It is
+the right shape only for a surface that has no reviews loaded — the PR **list**,
+which is why the list's counts do come from the server. Doing it for the
+timeline would mean a contract change plus a backfill for rows written before it,
+to display data already sitting in memory.
+`src/app/repos/[repoId]/pulls/[number]/_components/RunHistory/helpers.ts:16`
 
 ## What Works
 
@@ -51,6 +66,42 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-09** — A new top-level route cannot get a sidebar entry from
+  `src/components/app-shell`: the shell reads its **static** nav list from
+  `NAV` in `src/vendor/ui/nav.ts`, which is vendored and off-limits, and that
+  list still holds only Pull Requests + Agents. The surrounding wiring is
+  already there and misleading — `activeKeyFor` returns `"skills"` for
+  `/skills` (`components/app-shell/helpers.ts:33`) and `messages/en/shell.json`
+  has `nav.skills`, `nav.eval`, `nav.memory` and more — so a route looks nav-ready
+  while nothing renders a link to it. `/skills` therefore ships reachable only by
+  URL, command palette (`useShellCommands` also iterates `NAV`, so no entry
+  there either) and links from other screens. Adding the entry is a deliberate
+  vendor change, not something to slip into a feature branch.
+  `src/vendor/ui/nav.ts:21`
+- **2026-08-09** — The "do not mirror server state into `useState`" rule has one
+  legitimate exception — a **reorderable** list — and it comes with a trap.
+  The Agent Editor Skills tab holds the drag order locally because the order only
+  becomes server state once a write lands. Seeding that state from the query with
+  `useEffect(..., [data])` looks right and is wrong: TanStack refetches on window
+  focus, and the refetched array is a **new object with identical contents**, so
+  the effect re-fires and throws away a reorder the user just made (or, worse,
+  reverts one whose mutation is still in flight). Key the seeding effect on a
+  **content signature string** built from the ids and their order, not on the
+  array identity, so an idempotent refetch is a no-op. The same applies to any
+  future surface with local ordering or a dirty-until-saved editor.
+  `src/app/agents/[id]/_components/AgentEditor/_components/SkillsTab/SkillsTab.tsx:48`
+- **2026-08-07** — `FindingsCount` looks presentational (it takes a `counts`
+  prop) but is **not**: it always calls `usePrReviews` for its hover preview,
+  passing `null` when unhovered to keep the query disabled. So every component
+  that renders it — and every test of that component — needs a
+  `QueryClientProvider`, even when nothing hovers and `prId` is undefined;
+  `RunHistory.test.tsx` had to grow one purely to reuse the cell. Two
+  consequences when reusing it on a new surface: an em dash is its only
+  zero-state (the timeline therefore keeps the plain "0 finding(s)" text for a
+  clean run, since "—" would lose that the run happened and found nothing), and
+  it must stay under a query provider. Split out a presentational core before
+  reusing it anywhere that has no provider.
+  `src/app/repos/[repoId]/pulls/_components/FindingsCount/FindingsCount.tsx:36`
 - **2026-08-06** — The UI token map and the findings contract disagree on how
   many severities exist, and the map is the wrong one to trust: `SEV` in
   `src/vendor/ui/primitives/tokens.ts:6` has **four** entries (it adds `INFO`,
@@ -98,10 +149,32 @@ _None yet._
 
 ## Tool & Library Notes
 
-_None yet._
+- **2026-08-09** — In a `next-intl` message, a bare `{count}` placeholder is
+  **string interpolation, not number formatting**: passing `8000` renders
+  `8000`, never `8,000`. Only the explicit `{count, number}` form goes through
+  `Intl.NumberFormat`. This bit a Skills Lab test that asserted
+  `MAX_SKILL_BODY_CHARS.toLocaleString("en-US")` against the rendered character
+  counter and failed with `expected "8,000" … received "8000"`. Assert the raw
+  value, or opt the message into `, number` if grouping is wanted — and expect
+  the same trap in any counter/limit/price string.
+  `messages/en/skills.json` (`editor.count`, `editor.overLimit`)
 
 ## Recurring Errors & Fixes
 
+- **2026-08-09** — A component with no `isError` branch is **not** failing
+  silently: `lib/providers.tsx:35-43` installs a `QueryCache.onError` that toasts
+  network/5xx query failures (expected 4xx stay quiet on purpose, for inline
+  empty states) and a `MutationCache.onError` that toasts **every** failed
+  mutation. So do not "fix" a component by adding a toast — it will fire twice.
+  The gap worth hunting is different and quieter: a component that renders a
+  loading state, gets an error, and then falls through to its **empty** branch.
+  `RunReviewDropdown` did exactly this — a failed `useAgents()` left `data`
+  undefined, `agents ?? []` made it look like zero agents, and the menu invited
+  the user to create a duplicate of an agent they already had. When a component
+  has both an empty state and a query, check that `isError` is handled *before*
+  `length === 0`, and pin it with a test that renders the hook as
+  `{ data: undefined, isError: true }` — the happy-path test cannot catch it.
+  `src/app/repos/[repoId]/pulls/[number]/_components/RunReviewDropdown/RunReviewDropdown.tsx:54`
 - **2026-08-01** — A vitest failure whose two sides look identical —
   `expected '9 119 tok' to be '9 119 tok'` — is a look-alike Unicode space, not
   an environment difference. `formatTokenCount` had a literal THIN SPACE

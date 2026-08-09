@@ -15,6 +15,7 @@ export async function insertReview(
     prId: string;
     agentId: string | null;
     runId: string | null;
+    headSha: string | null;
     kind: 'summary' | 'review';
     verdict: string | null;
     summary: string | null;

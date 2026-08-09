@@ -17,6 +17,8 @@ export const reviews = pgTable('reviews', {
   agentId: uuid('agent_id'),
   /** The agent_run that produced this review (links the timeline run ↔ review). */
   runId: uuid('run_id'),
+  /** PR head this review was produced against. See `agent_runs.head_sha`. */
+  headSha: text('head_sha'),
   kind: text('kind', { enum: ['summary', 'review'] }).notNull(),
   verdict: text('verdict'),
   summary: text('summary'),

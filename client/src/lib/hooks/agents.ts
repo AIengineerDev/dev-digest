@@ -3,7 +3,13 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { Agent, ModelInfo, Provider, ReviewStrategy } from "@devdigest/shared";
+import type {
+  Agent,
+  AgentSkillLink,
+  ModelInfo,
+  Provider,
+  ReviewStrategy,
+} from "@devdigest/shared";
 
 export function useAgents() {
   return useQuery({
@@ -76,6 +82,43 @@ export function useDeleteAgent() {
     onSuccess: (_d, id) => {
       qc.invalidateQueries({ queryKey: ["agents"] });
       qc.removeQueries({ queryKey: ["agent", id] });
+    },
+  });
+}
+
+/* ---- agent ↔ skill links (Agent Editor → Skills tab) --------------------
+   The agents module owns the agent side of `agent_skills`, so the link lives
+   under /agents/:id/skills, not under /skills. Order in `skill_ids` IS the
+   prompt order — the server assigns `order = index`. */
+
+/** Ordered skill links for one agent (`AgentSkillLink[]`, order ascending). */
+export function useAgentSkills(agentId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["agent-skills", agentId],
+    queryFn: () => api.get<AgentSkillLink[]>(`/agents/${agentId}/skills`),
+    enabled: !!agentId,
+  });
+}
+
+export interface SetAgentSkillsInput {
+  agentId: string;
+  /** The full ordered set — anything omitted is unlinked. */
+  skillIds: string[];
+}
+
+/** Replace + reorder an agent's linked skills in one write. */
+export function useSetAgentSkills() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, skillIds }: SetAgentSkillsInput) =>
+      api.post<AgentSkillLink[]>(`/agents/${agentId}/skills`, { skill_ids: skillIds }),
+    onSuccess: (data, { agentId }) => {
+      // Write through so the tab keeps the order the server actually stored
+      // rather than the optimistic one it sent.
+      qc.setQueryData(["agent-skills", agentId], data);
+      // The agent card shows a skill count, and a link change bumps nothing on
+      // the agent row itself — invalidate the list so the count stays honest.
+      qc.invalidateQueries({ queryKey: ["agents"] });
     },
   });
 }

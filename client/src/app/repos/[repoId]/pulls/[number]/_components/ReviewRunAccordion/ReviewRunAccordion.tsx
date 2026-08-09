@@ -6,11 +6,13 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Icon, Badge } from "@devdigest/ui";
 import type { ReviewRecord, Verdict } from "@devdigest/shared";
 import { FindingsPanel } from "../FindingsPanel";
 import { VerdictBanner } from "../VerdictBanner";
 import { useDeleteReview } from "../../../../../../../lib/hooks/reviews";
+import { isStaleRun, shortSha } from "../staleness";
 
 const VERDICT_COLOR: Record<string, string> = {
   request_changes: "var(--crit)",
@@ -51,8 +53,12 @@ export function ReviewRunAccordion({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetRunId, targetNonce, review.run_id]);
+  const t = useTranslations("prReview");
   const del = useDeleteReview(prId);
   const findings = review.findings;
+  // Stale = produced against a head that is no longer the PR's. Its findings may
+  // point at lines, or whole files, that no longer exist.
+  const stale = isStaleRun(review.head_sha, headSha);
   const blockers = findings.filter((f) => f.severity === "CRITICAL" && !f.dismissed_at).length;
   const verdictColor = review.verdict ? VERDICT_COLOR[review.verdict] ?? "var(--text-muted)" : "var(--text-muted)";
 
@@ -91,6 +97,11 @@ export function ReviewRunAccordion({
         {review.verdict && (
           <Badge color={verdictColor} bg="transparent">
             {review.verdict.replace("_", " ")}
+          </Badge>
+        )}
+        {stale && (
+          <Badge color="var(--text-muted)" bg="var(--bg-hover)" icon="History">
+            {t("staleness.reviewBadge", { sha: shortSha(review.head_sha) })}
           </Badge>
         )}
         <span style={{ fontSize: 12.5, color: "var(--text-muted)" }}>

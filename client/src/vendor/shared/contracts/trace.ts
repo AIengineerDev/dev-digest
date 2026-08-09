@@ -43,7 +43,8 @@ export const PromptAssembly = z.object({
   specs: z.string().nullish(),
   /** Callers-of-changed-symbols digest (repo-intel); null when absent. */
   callers: z.string().nullish(),
-  /** Repo skeleton / map (repo-intel); null when absent. */
+  /** Repo skeleton / map (repo-intel); null when absent. Enables per-slot token
+      attribution in the run trace. */
   repo_map: z.string().nullish(),
   /** PR author's description/body (truncated); null when absent. */
   pr_description: z.string().nullish(),
@@ -117,5 +118,12 @@ export const RunSummary = z.object({
   // findings that trip the agent's gate. Null on failed/cancelled runs.
   score: z.number().int().nullable(),
   blockers: z.number().int().nullable(),
+  /**
+   * PR head this run reviewed, stamped when it started. Compare with the PR's
+   * current `head_sha` to tell a live run from one whose findings describe code
+   * that has since changed or been deleted. Null on runs that predate the
+   * column.
+   */
+  head_sha: z.string().nullable(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;

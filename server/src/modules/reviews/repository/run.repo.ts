@@ -65,6 +65,7 @@ export async function listRunsForPull(
     ran_at: run.ranAt ? run.ranAt.toISOString() : null,
     score: run.score,
     blockers: run.blockers,
+    head_sha: run.headSha,
   }));
 }
 
@@ -122,6 +123,8 @@ export async function createAgentRun(
     prId: string;
     provider: string | null;
     model: string | null;
+    /** PR head at start — what the run's findings describe. */
+    headSha: string | null;
   },
 ): Promise<string> {
   const [row] = await db
@@ -132,6 +135,7 @@ export async function createAgentRun(
       prId: values.prId,
       provider: values.provider,
       model: values.model,
+      headSha: values.headSha,
       status: 'running',
       source: 'local',
     })

@@ -46,6 +46,7 @@ export class ReviewRepository {
     prId: string;
     agentId: string | null;
     runId: string | null;
+    headSha: string | null;
     kind: 'summary' | 'review';
     verdict: string | null;
     summary: string | null;
@@ -144,6 +145,7 @@ export class ReviewRepository {
     prId: string;
     provider: string | null;
     model: string | null;
+    headSha: string | null;
   }): Promise<string> {
     return runRepo.createAgentRun(this.db, values);
   }
