@@ -20,7 +20,18 @@ const miniBtnStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-export function PromptBlock({ label, text, color }: { label: string; text: string; color: string }) {
+export function PromptBlock({
+  label,
+  text,
+  color,
+  note,
+}: {
+  label: string;
+  text: string;
+  color: string;
+  /** Short muted detail beside the label — e.g. what a concatenated block contains. */
+  note?: string;
+}) {
   const t = useTranslations("runs");
   const [open, setOpen] = React.useState(false);
   const [full, setFull] = React.useState(false);
@@ -35,6 +46,7 @@ export function PromptBlock({ label, text, color }: { label: string; text: strin
       <div onClick={() => setOpen((o) => !o)} style={s.promptHead}>
         <span style={s.promptDot(color)} />
         <span style={s.promptLabel}>{label}</span>
+        {note && <span style={s.promptNote}>{note}</span>}
         <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <button
             type="button"

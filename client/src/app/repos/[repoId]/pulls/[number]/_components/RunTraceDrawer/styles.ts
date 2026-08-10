@@ -65,6 +65,16 @@ export const s = {
   promptHead: { display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", cursor: "pointer" } satisfies CSSProperties,
   promptDot: (color: string): CSSProperties => ({ width: 7, height: 7, borderRadius: 2, background: color }),
   promptLabel: { fontSize: 13, fontWeight: 600 } satisfies CSSProperties,
+  // Muted, truncating: the names are a scannable detail, not a second heading,
+  // and a long list must not push the copy/expand controls off the row.
+  promptNote: {
+    fontSize: 11.5,
+    color: "var(--text-muted)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    minWidth: 0,
+  } satisfies CSSProperties,
   promptToggle: { marginLeft: "auto", fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
   promptPre: {
     margin: 0,
