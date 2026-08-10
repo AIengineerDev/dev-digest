@@ -7,6 +7,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, EmptyState, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
+import type { AddSkillTab } from "../AddSkillModal";
 import { SkillListItem } from "./_components/SkillListItem";
 import { MENU_WIDTH, SKELETON_ROW_HEIGHT } from "./constants";
 import { s } from "./styles";
@@ -21,7 +22,8 @@ export interface SkillListProps {
   onSearch: (v: string) => void;
   onSelect: (id: string) => void;
   onToggle: (id: string, enabled: boolean) => void;
-  onCreate: () => void;
+  /** Opens the Add-skill modal on the tab the menu entry names. */
+  onCreate: (tab: AddSkillTab) => void;
 }
 
 export function SkillList({
@@ -38,9 +40,9 @@ export function SkillList({
 }: SkillListProps) {
   const t = useTranslations("skills");
 
-  // The three import entries stay in the menu so it matches the design and sets
-  // expectations, but they are inert in v1: importing a skill turns skill text
-  // into untrusted data, which needs the wrapping story from specs/02-skills.md.
+  // Only community search is still inert: it needs a registry. File and URL
+  // import shipped once the untrusted-source story from specs/02-skills.md was
+  // in place, and each opens the modal on its own tab.
   const comingSoon = t("lab.menu.comingSoon");
 
   return (
@@ -57,11 +59,15 @@ export function SkillList({
               </Button>
             }
             items={[
-              { label: t("lab.menu.fromFile"), icon: "Upload", muted: true, hint: comingSoon },
-              { label: t("lab.menu.fromUrl"), icon: "Link", muted: true, hint: comingSoon },
+              { label: t("lab.menu.fromFile"), icon: "Upload", onClick: () => onCreate("file") },
+              { label: t("lab.menu.fromUrl"), icon: "Link", onClick: () => onCreate("url") },
               { label: t("lab.menu.community"), icon: "Globe", muted: true, hint: comingSoon },
               { divider: true },
-              { label: t("lab.menu.createFromScratch"), icon: "Edit", onClick: onCreate },
+              {
+                label: t("lab.menu.createFromScratch"),
+                icon: "Edit",
+                onClick: () => onCreate("create"),
+              },
             ]}
           />
         </div>
@@ -96,7 +102,7 @@ export function SkillList({
             title={t("lab.emptyTitle")}
             body={t("lab.emptyBody")}
             cta={t("lab.emptyCta")}
-            onCta={onCreate}
+            onCta={() => onCreate("create")}
           />
         )}
         {!isLoading &&

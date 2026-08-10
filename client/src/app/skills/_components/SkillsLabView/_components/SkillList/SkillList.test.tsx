@@ -89,21 +89,28 @@ describe("SkillList", () => {
     expect(screen.queryByText("No matching skills")).not.toBeInTheDocument();
   });
 
-  it("keeps the three import entries in the Add Skill menu, disabled with a hint", () => {
+  it("opens the Add Skill modal on the tab the menu entry names", () => {
     const { props } = renderList();
+
     fireEvent.click(screen.getByText("Add Skill"));
-
-    expect(screen.getByText("Import from file")).toBeInTheDocument();
-    expect(screen.getByText("Import from URL")).toBeInTheDocument();
-    expect(screen.getByText("Search community skills…")).toBeInTheDocument();
-    expect(screen.getAllByText("coming soon")).toHaveLength(3);
-
-    // Only "Create from scratch" does anything in v1.
     fireEvent.click(screen.getByText("Import from file"));
-    expect(props.onCreate).not.toHaveBeenCalled();
+    expect(props.onCreate).toHaveBeenCalledWith("file");
+
+    fireEvent.click(screen.getByText("Add Skill"));
+    fireEvent.click(screen.getByText("Import from URL"));
+    expect(props.onCreate).toHaveBeenCalledWith("url");
 
     fireEvent.click(screen.getByText("Add Skill"));
     fireEvent.click(screen.getByText("Create from scratch"));
-    expect(props.onCreate).toHaveBeenCalledTimes(1);
+    expect(props.onCreate).toHaveBeenCalledWith("create");
+  });
+
+  it("leaves community search inert — it still needs a registry", () => {
+    const { props } = renderList();
+    fireEvent.click(screen.getByText("Add Skill"));
+
+    expect(screen.getAllByText("coming soon")).toHaveLength(1);
+    fireEvent.click(screen.getByText("Search community skills…"));
+    expect(props.onCreate).not.toHaveBeenCalled();
   });
 });

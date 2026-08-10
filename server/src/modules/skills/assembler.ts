@@ -165,14 +165,34 @@ export class SkillAssembler {
 }
 
 /**
- * The text that actually goes into the prompt for one skill: the body as
- * written, unless it came from outside the workspace, in which case it is
- * wrapped as untrusted data. The wrap counts against the assembly budget, which
- * is correct — it is part of what the model reads.
+ * The text that actually goes into the prompt for one skill: a label naming the
+ * skill and the exact body version, then the body as written — unless it came
+ * from outside the workspace, in which case the body is wrapped as untrusted
+ * data. Both the label and the wrap count against the assembly budget, which is
+ * correct: they are part of what the model reads.
+ *
+ * The label is not decoration. Without it the block is N bodies joined by blank
+ * lines, each opening with its own `#` heading, so neither the model nor a
+ * reader of the run trace can tell where one rule set ends and the next begins,
+ * or which skill a rule came from. `skills_used` in the trace names them, but
+ * only as a list beside the block — it cannot say which paragraph is whose.
  */
 function bodyFor(skill: LinkedSkillInput): string {
   const untrusted = UNTRUSTED_SKILL_SOURCES.includes(
     skill.source as (typeof UNTRUSTED_SKILL_SOURCES)[number],
   );
-  return untrusted ? wrapUntrustedSkillBody(skill.name, skill.body) : skill.body;
+  const body = untrusted ? wrapUntrustedSkillBody(skill.name, skill.body) : skill.body;
+  return `${skillLabel(skill)}\n\n${body}`;
+}
+
+/**
+ * One line, before every skill body.
+ *
+ * `---` first because a body may open at any heading level, so no heading can be
+ * relied on to outrank it; a rule works regardless of what follows. The version
+ * is included so a trace read months later says which snapshot ran, matching the
+ * `name@version` form used in `used` and in the run notes.
+ */
+function skillLabel(skill: LinkedSkillInput): string {
+  return `---\n**skill: ${skill.name}@${skill.version}**`;
 }

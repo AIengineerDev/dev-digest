@@ -38,6 +38,8 @@ export {
   useSkillVersions,
   useSkillVersion,
   useCreateSkill,
+  useImportSkillFromUrl,
+  useImportSkillFromFile,
   useUpdateSkill,
   useDeleteSkill,
 } from "./skills";
@@ -55,6 +57,8 @@ export {
   useRunReview,
   useFindingAction,
   useRunEvents,
+  usePrIntent,
+  useDeriveIntent,
 } from "./reviews";
 export type { ActiveRun, CreateCommentInput, RunReviewInput } from "./reviews";
 

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-/** Co-located styles for CreateSkillModal. */
+/** Co-located styles for AddSkillModal. */
 export const s = {
   body: { padding: "18px 22px 4px" } satisfies CSSProperties,
   footer: {
@@ -15,4 +15,15 @@ export const s = {
     fontWeight: over ? 600 : 400,
   }),
   error: { fontSize: 12, color: "var(--crit)", marginBottom: 12 } satisfies CSSProperties,
+  filePicker: { display: "flex", alignItems: "center", gap: 10 } satisfies CSSProperties,
+  // The native input is the only file picker available — the UI kit has none —
+  // so it is hidden and driven by a Button that matches the rest of the modal.
+  fileInput: { display: "none" } satisfies CSSProperties,
+  fileName: {
+    fontSize: 12,
+    color: "var(--text-muted)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
 } as const;

@@ -1,1 +1,2 @@
-export { CreateSkillModal } from "./CreateSkillModal";
+export { AddSkillModal } from "./AddSkillModal";
+export type { AddSkillTab } from "./helpers";

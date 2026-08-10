@@ -33,7 +33,8 @@
       "manual": "Manual",
       "extracted": "Extracted",
       "community": "Community",
-      "imported_url": "Imported"
+      "imported_url": "Imported (URL)",
+      "imported_file": "Imported (file)"
     }
   },
   "editor": {
@@ -65,6 +66,40 @@
       "type": "Type",
       "body": "Body (Markdown)",
       "bodyPlaceholder": "# Rule\nDescribe the rule in Markdown…"
+    }
+  },
+  "add": {
+    "title": "Add a skill",
+    "subtitle": "A skill is review guidance in Markdown. It is text only — it cannot run code or read files.",
+    "derivedName": "Optional — derived from the first heading if left blank.",
+    "tabs": {
+      "create": "Create",
+      "file": "From file",
+      "url": "Import from URL"
+    },
+    "create": {
+      "submit": "Create skill",
+      "submitting": "Creating…",
+      "error": "Could not create the skill."
+    },
+    "file": {
+      "field": "File (.md, .mdx or .txt)",
+      "hint": "The file is read in your browser and its text is sent — the file itself is not uploaded. Imported bodies are treated as untrusted.",
+      "choose": "Choose file…",
+      "none": "No file selected",
+      "wrongType": "Only {accept} files can be imported.",
+      "readError": "Could not read that file.",
+      "submit": "Import skill",
+      "submitting": "Importing…",
+      "error": "Could not import the file."
+    },
+    "url": {
+      "field": "URL",
+      "hint": "The server fetches the document. Imported bodies are treated as untrusted.",
+      "placeholder": "https://raw.githubusercontent.com/…/skill.md",
+      "submit": "Import skill",
+      "submitting": "Importing…",
+      "error": "Could not import from that URL."
     }
   }
 }
