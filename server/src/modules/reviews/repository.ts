@@ -1,6 +1,6 @@
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
-import type { Finding, Intent, RunSummary, RunTrace } from '@devdigest/shared';
+import type { DerivedIntent, Finding, RunSummary, RunTrace } from '@devdigest/shared';
 
 /**
  * A2 — review data-access. The ONLY layer touching the DB for the review
@@ -37,6 +37,10 @@ export class ReviewRepository {
 
   getPrFiles(prId: string): Promise<(typeof t.prFiles.$inferSelect)[]> {
     return pullRepo.getPrFiles(this.db, prId);
+  }
+
+  getPrCommits(prId: string): Promise<(typeof t.prCommits.$inferSelect)[]> {
+    return pullRepo.getPrCommits(this.db, prId);
   }
 
   // ---- reviews + findings -------------------------------------------------
@@ -128,11 +132,11 @@ export class ReviewRepository {
 
   // ---- intent -------------------------------------------------------------
 
-  upsertIntent(prId: string, intent: Intent): Promise<void> {
+  upsertIntent(prId: string, intent: DerivedIntent): Promise<void> {
     return pullRepo.upsertIntent(this.db, prId, intent);
   }
 
-  getIntent(prId: string): Promise<Intent | undefined> {
+  getIntent(prId: string): Promise<DerivedIntent | undefined> {
     return pullRepo.getIntent(this.db, prId);
   }
 

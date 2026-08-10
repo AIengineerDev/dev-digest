@@ -13,6 +13,60 @@ export const Intent = z.object({
 });
 export type Intent = z.infer<typeof Intent>;
 
+// ---- Derived intent (specs/04-intent-layer.md) ----
+export const IntentCategory = z.enum([
+  'feature',
+  'bugfix',
+  'refactor',
+  'performance',
+  'security',
+  'docs',
+  'test',
+  'chore',
+  'revert',
+  'unknown',
+]);
+export type IntentCategory = z.infer<typeof IntentCategory>;
+
+export const IntentConfidenceBand = z.enum(['high', 'medium', 'low']);
+export type IntentConfidenceBand = z.infer<typeof IntentConfidenceBand>;
+
+export const IntentSourceKind = z.enum([
+  'pr_body',
+  'linked_issue',
+  'referenced_doc',
+  'title',
+  'branch',
+  'commit_subjects',
+  'changed_paths',
+]);
+export type IntentSourceKind = z.infer<typeof IntentSourceKind>;
+
+export const IntentSource = z.object({
+  kind: IntentSourceKind,
+  ref: z.string().nullish(),
+  grade: z.enum(['documentation', 'indirect']),
+  used: z.boolean(),
+  note: z.string().nullish(),
+});
+export type IntentSource = z.infer<typeof IntentSource>;
+
+export const DerivedIntent = Intent.extend({
+  category: IntentCategory,
+  summary: z.string(),
+  confidence: z.number(),
+  band: IntentConfidenceBand,
+  sources: z.array(IntentSource),
+  provider: z.string().nullable(),
+  model: z.string().nullable(),
+  prompt_version: z.number().int(),
+  fingerprint: z.string(),
+  derived_at: z.string().nullable(),
+  degraded: z.boolean(),
+  error: z.string().nullish(),
+});
+export type DerivedIntent = z.infer<typeof DerivedIntent>;
+
 // ---- Blast radius ----
 export const ChangedSymbol = z.object({
   name: z.string(),

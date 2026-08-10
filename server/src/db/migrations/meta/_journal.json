@@ -99,6 +99,13 @@
       "when": 1786314060294,
       "tag": "0013_fancy_skin",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786329979497,
+      "tag": "0014_reflective_human_torch",
+      "breakpoints": true
     }
   ]
 }
