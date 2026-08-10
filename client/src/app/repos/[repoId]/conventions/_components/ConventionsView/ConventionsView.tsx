@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, EmptyState, ErrorState, Skeleton } from "@devdigest/ui";
 import type { ConventionCategory, ConventionStatus } from "@devdigest/shared";
 import { AppShell } from "@/components/app-shell";
+import { ApiError } from "@/lib/api";
 import { useActiveRepo } from "@/lib/repo-context";
 import {
   useConventions,
@@ -95,8 +96,14 @@ export function ConventionsView() {
         </div>
 
         {extract.isError && (
+          // Show what the server actually said. The generic line is a fallback
+          // for an error with no message (a network failure), not a guess to
+          // print over a real one: "needs a clone and an index" is wrong and
+          // misleading when the truth is a missing API key or an unknown model.
           <div role="alert" style={s.error}>
-            {t("page.extractionFailed")}
+            {extract.error instanceof ApiError && extract.error.message
+              ? t("page.extractionFailedWith", { message: extract.error.message })
+              : t("page.extractionFailed")}
           </div>
         )}
 

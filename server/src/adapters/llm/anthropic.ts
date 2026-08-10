@@ -179,9 +179,28 @@ export class AnthropicProvider implements LLMProvider {
         };
       }
       messages.push({ role: 'assistant', content: res.content });
+      // The reprompt MUST come back as a `tool_result` for the tool_use we just
+      // received. Anthropic rejects the next request outright when a `tool_use`
+      // block is not answered by a matching `tool_result` in the very next
+      // message ("`tool_use` ids were found without `tool_result` blocks
+      // immediately after"), so sending the validation error as plain user text
+      // turns a recoverable schema miss into a hard 400 on attempt two.
+      // `is_error` is what tells the model this is a failure to correct rather
+      // than data to keep reasoning from.
       messages.push({
         role: 'user',
-        content: parsed.repromptMessage,
+        content: toolUse
+          ? [
+              {
+                type: 'tool_result' as const,
+                tool_use_id: toolUse.id,
+                is_error: true,
+                content: parsed.repromptMessage,
+              },
+            ]
+          : // No tool_use block came back at all (the model answered in prose),
+            // so there is nothing to pair with and plain text is the valid shape.
+            parsed.repromptMessage,
       });
     }
 
