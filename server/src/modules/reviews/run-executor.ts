@@ -291,9 +291,11 @@ export class ReviewRunExecutor {
       // the assembly it describes.
       const correlationId = randomUUID().slice(0, 8);
       const verbose = this.container.config.promptLogVerbose;
-      const sections = describePromptSections(
-        outcome.assembly,
-        verbose ? (text) => this.container.tokenizer.count(text) : undefined,
+      // Tokenising every section runs unconditionally now — the Run Trace's
+      // `skills_tokens` slot needs a real count on every run, not just verbose
+      // ones. Only the per-section LOG LINES below stay gated by `verbose`.
+      const sections = describePromptSections(outcome.assembly, (text) =>
+        this.container.tokenizer.count(text),
       );
       const summary = summarisePromptAssembly(sections, {
         correlationId,
@@ -376,6 +378,10 @@ export class ReviewRunExecutor {
           // `used` is what the assembler already reports in the run log; the
           // trace kept only the concatenated bodies until now.
           skills_used: skills.used.length > 0 ? skills.used : null,
+          // Reuses the same per-section token count the run log's
+          // `prompt assembled` line reports (prompt-log.ts:describePromptSections) —
+          // never a second estimator. Null, not 0, when the run had no skills slot.
+          skills_tokens: sections.find((s) => s.section === 'skills')?.tokens ?? null,
           correlation_id: correlationId,
         },
         tool_calls: outcome.chunks.map((c) => ({

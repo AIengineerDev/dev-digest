@@ -1,0 +1,41 @@
+name: reviewer-core
+
+# npm, not pnpm — reviewer-core and e2e carry their own package-lock.json.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "reviewer-core/**"
+      - ".github/workflows/reviewer-core.yml"
+  pull_request:
+    paths:
+      - "reviewer-core/**"
+      - ".github/workflows/reviewer-core.yml"
+
+concurrency:
+  group: reviewer-core-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: reviewer-core
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: reviewer-core/package-lock.json
+
+      - run: npm ci
+
+      # `build` is a typecheck here — the engine is consumed as TypeScript
+      # source and never emits JS.
+      - run: npm run typecheck
+
+      - run: npm test

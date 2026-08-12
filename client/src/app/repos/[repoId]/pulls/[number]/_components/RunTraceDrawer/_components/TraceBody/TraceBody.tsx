@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { Badge } from "@devdigest/ui";
 import type { RunTrace, FindingRecord } from "@devdigest/shared";
 import { PROMPT_COLORS } from "../../constants";
-import { formatSeconds, formatTokens } from "../../helpers";
+import { formatSeconds, formatTokens, formatSlotTokens } from "../../helpers";
 import { formatCostUsd } from "@/lib/format";
 import { s } from "../../styles";
 import { TraceSection } from "../TraceSection";
@@ -97,10 +97,21 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
             trace.prompt_assembly.skills == null
               ? t("trace.prompt.skillsNone")
               : trace.prompt_assembly.skills_used?.length
-                ? t("trace.prompt.skillsUsed", {
-                    count: trace.prompt_assembly.skills_used.length,
-                    names: trace.prompt_assembly.skills_used.join(", "),
-                  })
+                ? // The token count is only known once `skills_tokens` is populated
+                  // (traces written before it existed leave it null) — fall back to
+                  // the plain count/names note rather than showing "undefined tok".
+                  t(
+                    trace.prompt_assembly.skills_tokens != null
+                      ? "trace.prompt.skillsUsedWithTokens"
+                      : "trace.prompt.skillsUsed",
+                    {
+                      count: trace.prompt_assembly.skills_used.length,
+                      names: trace.prompt_assembly.skills_used.join(", "),
+                      ...(trace.prompt_assembly.skills_tokens != null
+                        ? { tokens: formatSlotTokens(trace.prompt_assembly.skills_tokens) }
+                        : {}),
+                    },
+                  )
                 : undefined
           }
         />

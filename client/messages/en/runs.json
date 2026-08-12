@@ -60,6 +60,7 @@
       "search": "Search in this block…",
       "noMatches": "No matches for “{q}”.",
       "skillsUsed": "{count} · {names}",
+      "skillsUsedWithTokens": "{count} · {tokens} · {names}",
       "skillsNone": "none linked — attach skills in Agents → this agent → Skills"
     },
     "tools": {
