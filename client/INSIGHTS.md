@@ -66,6 +66,20 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-10** — The entry below stopped holding: `NAV` in
+  `src/vendor/ui/nav.ts` was edited deliberately and now carries a **SKILLS LAB**
+  group (Skills, Agents, Conventions) alongside WORKSPACE (Pull Requests), so
+  those three routes are reachable from the sidebar. The mechanism the old entry
+  describes is unchanged and still binds: `NAV` is the single static source, it
+  is vendored, and everything else derives from it — `useShellCommands` and the
+  `g`-then-key handler both iterate it (`hooks/useGlobalShortcuts.ts:45`), so a
+  new entry gets its command-palette row and shortcut for free, and a route
+  added *without* touching `NAV` is still unreachable. Two rules for the next
+  edit: `href` may use the `:repoId` token (`resolveHref` fills it), and only add
+  an item whose screen exists — the design lists Eval Dashboard, Memory and CI
+  Runs, and a nav row pointing at a 404 is worse than a missing one.
+  `src/vendor/ui/nav.ts:22`
+
 - **2026-08-09** — A new top-level route cannot get a sidebar entry from
   `src/components/app-shell`: the shell reads its **static** nav list from
   `NAV` in `src/vendor/ui/nav.ts`, which is vendored and off-limits, and that
@@ -160,6 +174,14 @@ _None yet._
   `messages/en/skills.json` (`editor.count`, `editor.overLimit`)
 
 ## Recurring Errors & Fixes
+
+- **2026-08-10** — React's "updating a style property during rerender when a
+  conflicting property is set" warning counts `borderColor` and `borderWidth` as
+  **shorthands**, not longhands — each sets all four sides. Dropping `border:` in
+  favour of `borderColor` + `borderLeftColor` does not fix the warning; only
+  per-side properties do (`borderTopColor`, `borderRightColor`,
+  `borderBottomColor`). It fires on rerender, so it survives any test that
+  renders once. `_components/FindingCard/styles.ts:5`
 
 - **2026-08-09** — A component with no `isError` branch is **not** failing
   silently: `lib/providers.tsx:35-43` installs a `QueryCache.onError` that toasts

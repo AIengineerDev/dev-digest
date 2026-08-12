@@ -10,6 +10,7 @@ import type { Container } from '../../platform/container.js';
 import type { Db } from '../../db/client.js';
 import { NotFoundError, ValidationError } from '../../platform/errors.js';
 import { resolveFeatureModel } from '../_shared/feature-models.js';
+import { withFeatureProviderContext } from '../_shared/provider-errors.js';
 import {
   CONFIG_SAMPLE_PATHS,
   CONVENTIONS_SKILL_TYPE,
@@ -184,7 +185,10 @@ export class ConventionsService {
     const sample = joinSamples(rendered, MAX_TOTAL_SAMPLE_CHARS);
 
     const choice = await resolveFeatureModel(this.container, workspaceId, 'conventions');
-    const llm = await this.container.llm(choice.provider);
+    const llm = await withFeatureProviderContext(
+      { id: 'conventions', label: 'Conventions', provider: choice.provider, model: choice.model },
+      () => this.container.llm(choice.provider),
+    );
 
     const result = await llm.completeStructured({
       model: choice.model,

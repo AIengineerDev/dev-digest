@@ -75,13 +75,33 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Works
 
-_None yet._
+- **2026-08-09** — When a spec's contract field list and its acceptance
+  criteria disagree, the acceptance criteria win, not the literal enumeration.
+  `specs/04-intent-layer.md` §4 spells `DerivedIntent` as `Intent.extend({
+  category, summary, confidence, band, sources, provider, model,
+  prompt_version, fingerprint, derived_at, degraded })` — no `error` — but §7
+  requires the UI to render `"Not derived — <error>"` for a degraded row, and
+  §3's schema lists `error` as a real column. Added `error: z.string().nullish()`
+  to `DerivedIntent` despite the omission; a strictly-literal reading would have
+  shipped a degraded card with no error text. Cross-check a contract's `.extend`
+  list against every acceptance criterion that reads the type before treating
+  the list as exhaustive. `server/src/vendor/shared/contracts/brief.ts` (`DerivedIntent`).
 
 ## What Doesn't Work
 
 _None yet._
 
 ## Codebase Patterns
+
+- **2026-08-09** — `PromptAssembly` has **no diff slot**: `assemblePrompt` folds
+  the diff into `user` along with every `## Heading` and `<untrusted>` wrapper,
+  so anything doing per-section accounting cannot report a diff size — only
+  `user.length` minus the named slots. `prompt-log.ts` calls that row
+  `remainder` and deliberately leaves it untokenised, because it is a difference
+  of lengths and not a string that exists anywhere. Do not "fix" this by adding a
+  `diff` field to the contract: the trace already persists `user`, so a second
+  copy would double the largest thing in the document.
+  `reviewer-core/src/prompt.ts:186` · `server/src/modules/reviews/prompt-log.ts:70`
 
 - **2026-08-06** — The cost feature is **present and shipped**, despite the
   2026-08-01 entry below saying commit `d45ab0d` removed it. That commit does not

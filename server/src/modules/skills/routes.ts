@@ -1,7 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { CreateSkillInput, ImportSkillInput, SkillType, UpdateSkillInput } from '@devdigest/shared';
+import {
+  CreateSkillInput,
+  ImportSkillFileInput,
+  ImportSkillInput,
+  SkillType,
+  UpdateSkillInput,
+} from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
@@ -12,6 +18,7 @@ import { SkillsService } from './service.js';
  *   GET    /skills                        → list (workspace-scoped; ?type= ?enabled= ?q=)
  *   POST   /skills                        → create (v1 + first snapshot)
  *   POST   /skills/import                 → fetch a body from a URL (untrusted)
+ *   POST   /skills/import-file            → store a client-read file (untrusted)
  *   GET    /skills/:id                    → one skill
  *   PUT    /skills/:id                    → update; a body change bumps the version
  *   DELETE /skills/:id                    → hard delete (versions + links cascade)
@@ -64,6 +71,15 @@ export default async function skillsRoutes(appBase: FastifyInstance) {
   app.post('/skills/import', { schema: { body: ImportSkillInput } }, async (req, reply) => {
     const { workspaceId } = await getContext(app.container, req);
     const skill = await service.importFromUrl(workspaceId, req.body);
+    reply.status(201);
+    return skill;
+  });
+
+  // JSON, not multipart: the browser reads the file and posts its text, so the
+  // server needs no upload parser and stores no artefact — the body IS the file.
+  app.post('/skills/import-file', { schema: { body: ImportSkillFileInput } }, async (req, reply) => {
+    const { workspaceId } = await getContext(app.container, req);
+    const skill = await service.importFromFile(workspaceId, req.body);
     reply.status(201);
     return skill;
   });

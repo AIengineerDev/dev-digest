@@ -75,7 +75,7 @@ flowchart TB
     agents["agents<br/>/agents · /agents/:id"]
   end
   subgraph Knowledge["Skills & conventions"]
-    skills["skills<br/>/skills · /skills/:id · /skills/:id/versions<br/>/skills/import (URL → source: imported_url)"]
+    skills["skills<br/>/skills · /skills/:id · /skills/:id/versions<br/>/skills/import (URL) · /skills/import-file (client-read text)"]
     conventions["conventions<br/>/repos/:id/conventions · /conventions/extract<br/>PATCH /conventions/:id · /repos/:id/conventions/skill"]
   end
   subgraph Intel["Repo intelligence"]

@@ -9,7 +9,7 @@ import { useTranslations } from "next-intl";
 import { EmptyState, Skeleton } from "@devdigest/ui";
 import { AppShell } from "../../../../components/app-shell";
 import { useSkills, useUpdateSkill } from "../../../../lib/hooks/skills";
-import { CreateSkillModal } from "./_components/CreateSkillModal";
+import { AddSkillModal, type AddSkillTab } from "./_components/AddSkillModal";
 import { SkillEditor } from "./_components/SkillEditor";
 import { SkillList } from "./_components/SkillList";
 import { SELECTED_PARAM } from "./constants";
@@ -23,7 +23,9 @@ export function SkillsLabView() {
   const { data: skills, isLoading, isError, refetch } = useSkills();
   const update = useUpdateSkill();
   const [search, setSearch] = React.useState("");
-  const [creating, setCreating] = React.useState(false);
+  // Which tab the Add-skill modal opens on, or null when it is closed — the menu
+  // entry that opened it decides, so "Import from URL" does not land on Create.
+  const [addTab, setAddTab] = React.useState<AddSkillTab | null>(null);
 
   const list = filterSkills(skills ?? [], search);
   const selectedId = resolveSelectedId(list, params?.get(SELECTED_PARAM) ?? null);
@@ -36,8 +38,12 @@ export function SkillsLabView() {
 
   return (
     <AppShell crumb={[{ label: t("lab.crumbLab") }, { label: t("lab.crumbSkills") }]}>
-      {creating && (
-        <CreateSkillModal onClose={() => setCreating(false)} onCreated={(id) => select(id)} />
+      {addTab && (
+        <AddSkillModal
+          initialTab={addTab}
+          onClose={() => setAddTab(null)}
+          onCreated={(id) => select(id)}
+        />
       )}
       <div style={s.panes}>
         <SkillList
@@ -50,7 +56,7 @@ export function SkillsLabView() {
           onSearch={setSearch}
           onSelect={select}
           onToggle={(id, enabled) => update.mutate({ id, patch: { enabled } })}
-          onCreate={() => setCreating(true)}
+          onCreate={setAddTab}
         />
         <div style={s.centre}>
           {isLoading && (

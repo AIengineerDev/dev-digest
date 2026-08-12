@@ -2,6 +2,7 @@ import type { Container } from '../../platform/container.js';
 import type { Db } from '../../db/client.js';
 import type {
   CreateSkillInput,
+  ImportSkillFileInput,
   ImportSkillInput,
   Skill,
   SkillVersion,
@@ -70,6 +71,15 @@ export class SkillsService {
    */
   async importFromUrl(workspaceId: string, input: ImportSkillInput): Promise<Skill> {
     return this.importer.importFromUrl(workspaceId, input);
+  }
+
+  /**
+   * Store a file the client read from the user's disk as `source:
+   * 'imported_file'` — untrusted for the same reason a URL import is, since
+   * selecting a document is not the same as having written it.
+   */
+  async importFromFile(workspaceId: string, input: ImportSkillFileInput): Promise<Skill> {
+    return this.importer.importFromFile(workspaceId, input);
   }
 
   /**

@@ -1,0 +1,100 @@
+"use client";
+
+import React from "react";
+import { useTranslations } from "next-intl";
+import { SectionLabel, Badge, Button } from "@devdigest/ui";
+import type { PrIntentRecord } from "@devdigest/shared";
+import { useDeriveIntent } from "../../../../../../../lib/hooks";
+import { commitSubjectCount, unusedSources, usedDocumentationSources } from "./helpers";
+import { s } from "./styles";
+
+const BAND_COLOR: Record<PrIntentRecord["band"], string> = {
+  high: "var(--ok)",
+  medium: "var(--warn)",
+  low: "var(--text-muted)",
+};
+
+/**
+ * PR Overview → Intent card (specs/04-intent-layer.md §7). Renders ABOVE the
+ * Description section: the derived summary is read first, the raw claim
+ * second — same ordering the reviewer prompt uses.
+ *
+ * Three states: not yet derived (nothing rendered — `usePrIntent` returning
+ * `null` is a normal state, not an error), degraded (never an empty card —
+ * "Not derived — <error>" + Re-derive), and derived (band badge + honest
+ * "why" sentence, never a bare confidence number).
+ */
+export function IntentCard({ prId, intent }: { prId: string; intent: PrIntentRecord | null | undefined }) {
+  const t = useTranslations("prReview.intent");
+  const deriveIntent = useDeriveIntent(prId);
+
+  if (!intent) return null;
+
+  if (intent.degraded) {
+    return (
+      <section>
+        <SectionLabel icon="Info">{t("title")}</SectionLabel>
+        <div style={s.wrap(true)}>
+          <div style={s.degradedRow}>
+            <p style={s.degradedText}>{t("notDerived", { error: intent.error ?? "" })}</p>
+            <Button
+              kind="secondary"
+              size="sm"
+              icon="RefreshCw"
+              loading={deriveIntent.isPending}
+              onClick={() => deriveIntent.mutate(true)}
+            >
+              {t("reDerive")}
+            </Button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const isLow = intent.band === "low";
+  const used = usedDocumentationSources(intent.sources);
+  const unused = unusedSources(intent.sources);
+
+  const why =
+    used.length > 0
+      ? t("whyDocumentation", {
+          sources: used
+            .map((src) =>
+              t(`source.${src.kind}` as "source.pr_body", { ref: src.ref ?? "" }),
+            )
+            .join(", "),
+        })
+      : t("whyIndirect", { count: commitSubjectCount(intent.sources) });
+
+  return (
+    <section>
+      <SectionLabel icon={isLow ? "Info" : "Target"}>
+        {isLow ? t("inferredTitle") : t("title")}
+      </SectionLabel>
+      <div style={s.wrap(isLow)}>
+        <div style={s.headRow}>
+          <Badge color={BAND_COLOR[intent.band]} dot>
+            {t(`band.${intent.band}`)}
+          </Badge>
+          <Badge>{t(`category.${intent.category}`)}</Badge>
+        </div>
+        {intent.summary && <p style={s.summary}>{intent.summary}</p>}
+        <p style={s.why}>{why}</p>
+        {unused.length > 0 && (
+          <details>
+            <summary style={s.why}>{t("failedSourcesTitle")}</summary>
+            <ul style={s.unusedList}>
+              {unused.map((src, i) => (
+                <li key={i}>
+                  {t(`source.${src.kind}` as "source.pr_body", { ref: src.ref ?? "" })}
+                  {src.note ? ` — ${src.note}` : ""}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </section>
+  );
+}

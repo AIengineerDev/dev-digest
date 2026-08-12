@@ -115,7 +115,13 @@ export type MemoryItem = z.infer<typeof MemoryItem>;
 export const SkillType = z.enum(['rubric', 'convention', 'security', 'custom']);
 export type SkillType = z.infer<typeof SkillType>;
 
-export const SkillSource = z.enum(['manual', 'imported_url', 'extracted', 'community']);
+export const SkillSource = z.enum([
+  'manual',
+  'imported_url',
+  'imported_file',
+  'extracted',
+  'community',
+]);
 export type SkillSource = z.infer<typeof SkillSource>;
 
 export const Skill = z.object({
@@ -192,6 +198,27 @@ export const ImportSkillInput = z.object({
   type: SkillType.optional(),
 });
 export type ImportSkillInput = z.infer<typeof ImportSkillInput>;
+
+/**
+ * Import a skill body from a file the user picked on their own machine.
+ *
+ * The client reads the file and posts its text, so there is no multipart parser
+ * and no upload to store — the body IS the payload. `filename` is carried only
+ * to validate the extension and to derive a name when none is given.
+ *
+ * Like a URL import, the result is stored as an imported source and wrapped as
+ * untrusted when it reaches a prompt: choosing a file is not the same as having
+ * written it, and a skill downloaded from a gist and saved to disk is exactly as
+ * external as one fetched over HTTP.
+ */
+export const ImportSkillFileInput = z.object({
+  filename: z.string().min(1),
+  body: z.string().min(1),
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  type: SkillType.optional(),
+});
+export type ImportSkillFileInput = z.infer<typeof ImportSkillFileInput>;
 
 /** An immutable snapshot of a skill body, appended on every body change. */
 export const SkillVersion = z.object({

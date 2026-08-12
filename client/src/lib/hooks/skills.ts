@@ -9,6 +9,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type {
   CreateSkillInput,
+  ImportSkillFileInput,
+  ImportSkillInput,
   Skill,
   SkillType,
   SkillVersion,
@@ -73,6 +75,32 @@ export function useCreateSkill() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateSkillInput) => api.post<Skill>("/skills", input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
+/**
+ * Import a skill from a URL the server fetches. The result comes back with
+ * `source: 'imported_url'`, which is what marks its body untrusted downstream —
+ * the client never sets that field and must not pretend it can.
+ */
+export function useImportSkillFromUrl() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ImportSkillInput) => api.post<Skill>("/skills/import", input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
+  });
+}
+
+/**
+ * Import a skill from a file the browser has already read into text. The file
+ * itself never leaves the page as a file — only its contents, as JSON — so
+ * there is no upload endpoint and nothing stored server-side but the skill.
+ */
+export function useImportSkillFromFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ImportSkillFileInput) => api.post<Skill>("/skills/import-file", input),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["skills"] }),
   });
 }

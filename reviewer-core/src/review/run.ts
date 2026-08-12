@@ -1,5 +1,6 @@
 import type {
   Finding,
+  IntentConfidenceBand,
   LLMProvider,
   PromptAssembly,
   Review,
@@ -71,6 +72,10 @@ export interface ReviewInput {
   /** PR author's description/body (untrusted; truncated + delimiter-wrapped in
       the prompt). Empty/undefined → section omitted. */
   prDescription?: string;
+  /** Derived PR intent (specs/04-intent-layer.md). `text` is untrusted
+      (delimiter-wrapped); `band` selects the trusted preamble. Empty/undefined
+      → section omitted (no behavior change). */
+  intent?: { band: IntentConfidenceBand; text: string };
   /** Task framing line, e.g. "Review PR #482 …". */
   task?: string;
   /** Override the structured-output retry budget. */
@@ -135,6 +140,7 @@ export async function reviewPullRequest(input: ReviewInput): Promise<ReviewOutco
     callers: input.callers,
     repoMap: input.repoMap,
     prDescription: input.prDescription,
+    intent: input.intent,
     task: input.task,
   };
 

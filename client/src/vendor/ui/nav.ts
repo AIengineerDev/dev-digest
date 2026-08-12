@@ -23,7 +23,21 @@ export const NAV: NavGroup[] = [
     section: "WORKSPACE",
     items: [
       { key: "pulls", label: "Pull Requests", icon: "GitPullRequest", href: "/repos/:repoId/pulls", gKey: "p" },
+    ],
+  },
+  // Skills Lab — authoring surfaces. Agents lives here rather than under
+  // WORKSPACE because that is what the app already tells the user: the Agents
+  // page renders the breadcrumb "Skills Lab › Agents".
+  //
+  // Only routes that exist are listed. The design has more entries here (Eval
+  // Dashboard, Memory, CI Runs); adding one before its screen exists produces a
+  // nav item that leads to a 404, which is worse than a missing item.
+  {
+    section: "SKILLS LAB",
+    items: [
+      { key: "skills", label: "Skills", icon: "Sparkles", href: "/skills", gKey: "s" },
       { key: "agents", label: "Agents", icon: "Cpu", href: "/agents", gKey: "a" },
+      { key: "conventions", label: "Conventions", icon: "ListChecks", href: "/repos/:repoId/conventions", gKey: "c" },
     ],
   },
 ];
@@ -53,6 +67,8 @@ export const SHORTCUTS: ShortcutDef[] = [
   { keys: "?", label: "Show keyboard shortcuts", group: "Global" },
   { keys: "g p", label: "Go to Pull Requests", group: "Navigation" },
   { keys: "g a", label: "Go to Agents", group: "Navigation" },
+  { keys: "g s", label: "Go to Skills", group: "Navigation" },
+  { keys: "g c", label: "Go to Conventions", group: "Navigation" },
   { keys: "j / k", label: "Next / previous finding", group: "Findings" },
   { keys: "a", label: "Accept finding", group: "Findings" },
   { keys: "d", label: "Dismiss finding", group: "Findings" },

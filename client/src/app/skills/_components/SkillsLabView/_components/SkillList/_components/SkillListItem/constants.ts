@@ -18,12 +18,17 @@ export const SKILL_TYPE_COLOR: Record<SkillType, string> = {
 /** Alpha suffix that turns a badge colour into its 10%-opacity background. */
 export const BADGE_BG_ALPHA = "1a";
 
-/** Source badge icons, from the mock's SKILL_SOURCE map. v1 only ever writes 'manual'. */
+/**
+ * Source badge icons, from the mock's SKILL_SOURCE map. The two imported sources
+ * get distinct icons on purpose: they are the ones whose bodies are wrapped as
+ * untrusted, and the row is the only place a reader sees that before opening it.
+ */
 export const SKILL_SOURCE_ICON: Record<SkillSource, IconName> = {
   manual: "Edit",
   extracted: "Wrench",
   community: "Globe",
   imported_url: "Link",
+  imported_file: "Upload",
 };
 
 /** Opacity applied to a globally disabled row (mock: 0.55). */

@@ -52,8 +52,10 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
     id: 'review_intent',
     label: 'PR Review · Intent',
     description: 'Derives a PR’s intent and scope before review.',
-    defaultProvider: 'openai',
-    defaultModel: 'gpt-4.1',
+    // Cheap pre-pass by design (specs/04-intent-layer.md §7) — $1/$5 per 1M,
+    // 200K context. `openai/gpt-4.1` predated the pricing work.
+    defaultProvider: 'anthropic',
+    defaultModel: 'claude-haiku-4-5',
   },
   {
     id: 'risk_brief',

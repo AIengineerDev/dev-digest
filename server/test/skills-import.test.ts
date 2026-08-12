@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SkillImporter, type FetchLike } from '../src/modules/skills/importer.js';
 import type { SkillsWriter } from '../src/modules/skills/writer.js';
-import { deriveSkillMeta, wrapUntrustedSkillBody } from '../src/modules/skills/helpers.js';
+import { basenameWithoutExtension, deriveSkillMeta, wrapUntrustedSkillBody } from '../src/modules/skills/helpers.js';
 import { IMPORT_MAX_BYTES, MAX_SKILL_BODY_CHARS } from '../src/modules/skills/constants.js';
 
 /**
@@ -127,9 +127,77 @@ describe('SkillImporter', () => {
 });
 
 describe('deriveSkillMeta', () => {
-  it('falls back to the URL basename when the document has no heading', () => {
-    const meta = deriveSkillMeta('just some text\n', 'https://example.com/a/semver-discipline.md');
+  it('falls back to the caller-supplied name when the document has no heading', () => {
+    const meta = deriveSkillMeta('just some text\n', {
+      fallbackName: 'semver-discipline',
+      label: 'https://example.com/a/semver-discipline.md',
+    });
     expect(meta.name).toBe('semver-discipline');
+  });
+});
+
+describe('deriveSkillMeta with frontmatter', () => {
+  const FRONTMATTER = [
+    '---',
+    'name: internal-comms',
+    'description: Write internal communications in our house formats.',
+    'license: Complete terms in LICENSE.txt',
+    '---',
+    '',
+    '## When to use this skill',
+    'To write internal communications…',
+    '',
+  ].join('\n');
+
+  it("prefers the author's own name and description over the first heading", () => {
+    // Every file in anthropics/skills failed here before: the description came
+    // out as the literal '---' and the name as a section heading.
+    const meta = deriveSkillMeta(FRONTMATTER, { fallbackName: 'SKILL', label: 'x' });
+    expect(meta).toEqual({
+      name: 'internal-comms',
+      description: 'Write internal communications in our house formats.',
+    });
+  });
+
+  it('falls back to the heading when frontmatter carries neither key', () => {
+    const body = ['---', 'license: MIT', '---', '', '# Real title', 'Prose.'].join('\n');
+    expect(deriveSkillMeta(body, { fallbackName: 'SKILL', label: 'x' })).toEqual({
+      name: 'Real title',
+      description: 'Prose.',
+    });
+  });
+
+  it('treats an unterminated leading --- as content, not frontmatter', () => {
+    const body = ['---', '# Title', 'Prose.'].join('\n');
+    expect(deriveSkillMeta(body, { fallbackName: 'SKILL', label: 'x' }).name).toBe('Title');
+  });
+});
+
+describe('basenameWithoutExtension', () => {
+  it('strips directories and a text extension from a URL path or a filename', () => {
+    expect(basenameWithoutExtension('/a/b/semver-discipline.md')).toBe('semver-discipline');
+    expect(basenameWithoutExtension('semver-discipline.MDX')).toBe('semver-discipline');
+    expect(basenameWithoutExtension('/')).toBeUndefined();
+  });
+});
+
+describe('SkillImporter.importFromFile', () => {
+  it('stores the posted text as imported_file, deriving the name from the heading', async () => {
+    const { writer, created } = makeWriter();
+    // No fetch seam is passed: the file path must not perform any I/O at all.
+    const importer = new SkillImporter(writer);
+    await importer.importFromFile('ws1', { filename: 'rules.md', body: '# API rules\nBe kind.\n' });
+    expect(created[0]).toMatchObject({
+      opts: { source: 'imported_file' },
+      input: { name: 'API rules' },
+    });
+  });
+
+  it('refuses a file whose extension is not a text format', async () => {
+    const { writer } = makeWriter();
+    await expect(
+      new SkillImporter(writer).importFromFile('ws1', { filename: 'skill.zip', body: 'PK...' }),
+    ).rejects.toThrow(/can be imported/);
   });
 });
 

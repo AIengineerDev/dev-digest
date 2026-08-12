@@ -74,27 +74,89 @@ export function isBodyChange(
 }
 
 /**
+ * Strip the directory and a known text extension off a path or URL pathname.
+ *
+ * Used only to name an import that has no heading, so `undefined` for an input
+ * that is all separators is the honest answer — the caller decides the fallback.
+ */
+export function basenameWithoutExtension(path: string): string | undefined {
+  const last = path.split(/[/\\]/).filter(Boolean).pop();
+  return last?.replace(/\.(md|mdx|markdown|txt)$/i, '') || undefined;
+}
+
+/**
+ * Read the leading YAML frontmatter block, if there is one.
+ *
+ * Not a YAML parser, and not trying to be: it reads flat `key: value` pairs on
+ * single lines, which is the only shape the two keys we care about take in a
+ * skill file. Anything nested, quoted oddly, or folded is ignored rather than
+ * half-understood — a wrong name is worse than a derived one.
+ *
+ * Returns the parsed keys and the body with the block removed, so the caller
+ * can scan the real content for a heading without tripping over the `---`
+ * delimiters.
+ */
+export function splitFrontmatter(body: string): {
+  meta: Record<string, string>;
+  rest: string;
+} {
+  const lines = body.split('\n');
+  if (lines[0]?.trim() !== '---') return { meta: {}, rest: body };
+  const end = lines.findIndex((l, i) => i > 0 && l.trim() === '---');
+  if (end === -1) return { meta: {}, rest: body };
+
+  const meta: Record<string, string> = {};
+  for (const line of lines.slice(1, end)) {
+    const at = line.indexOf(':');
+    if (at <= 0) continue;
+    const key = line.slice(0, at).trim();
+    const value = line
+      .slice(at + 1)
+      .trim()
+      .replace(/^["']|["']$/g, '');
+    if (key && value) meta[key] = value;
+  }
+  return { meta, rest: lines.slice(end + 1).join('\n') };
+}
+
+/**
  * Name and description for an imported document, when the caller did not supply
- * them: the first markdown heading is the name, the first prose paragraph the
- * description. Falls back to the URL's basename, because a skill with no name is
- * unusable in the list and inventing one from the body's contents is worse.
+ * them.
+ *
+ * Frontmatter wins where it exists. A skill published on the web is a
+ * `SKILL.md` whose `name` and `description` are the author's own answer to this
+ * question, and guessing past them produced visibly wrong results: every file in
+ * `anthropics/skills` derived the description `"---"` (the frontmatter delimiter
+ * was the first non-heading line) and `internal-comms` was named *"When to use
+ * this skill"*, its first section heading, because its real name is in the
+ * frontmatter and nowhere else.
+ *
+ * Without frontmatter it falls back to the first markdown heading and the first
+ * prose paragraph. The origin is passed in rather than parsed here, because the
+ * two import paths carry different things — a URL and a filename — and neither is
+ * derivable from the body. `fallbackName` is used when the document has neither,
+ * because a skill with no name is unusable in the list and inventing one from
+ * the body's contents is worse; `label` only ends up in the description.
  */
 export function deriveSkillMeta(
   body: string,
-  url: string,
+  origin: { fallbackName: string; label: string },
 ): { name: string; description: string } {
-  const lines = body.split('\n').map((l) => l.trim());
-  const heading = lines.find((l) => /^#{1,3}\s+\S/.test(l));
-  const name = heading
-    ? heading.replace(/^#{1,3}\s+/, '').slice(0, 80)
-    : (new URL(url).pathname.split('/').filter(Boolean).pop() ?? 'imported-skill').replace(
-        /\.(md|markdown|txt)$/i,
-        '',
-      );
+  const { meta, rest } = splitFrontmatter(body);
+  const lines = rest.split('\n').map((l) => l.trim());
 
-  const description =
-    lines.find((l) => l !== '' && !l.startsWith('#') && !l.startsWith('```'))?.slice(0, 200) ??
-    `Imported from ${url}`;
+  const heading = lines.find((l) => /^#{1,3}\s+\S/.test(l));
+  const name = (
+    meta.name ??
+    (heading ? heading.replace(/^#{1,3}\s+/, '') : undefined) ??
+    origin.fallbackName
+  ).slice(0, 80);
+
+  const description = (
+    meta.description ??
+    lines.find((l) => l !== '' && !l.startsWith('#') && !l.startsWith('```')) ??
+    `Imported from ${origin.label}`
+  ).slice(0, 200);
 
   return { name, description };
 }

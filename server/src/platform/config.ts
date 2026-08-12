@@ -26,6 +26,11 @@ const EnvSchema = z.object({
   // Note: even when on, sections only populate once the repo is indexed; an
   // unindexed repo degrades gracefully. Per-agent override: agents.repo_intel.
   REPO_INTEL_ENABLED: z.string().optional(),
+  // Per-section prompt-assembly logging. Metadata only — section name, source,
+  // size, model, correlation id; never prompt text. Honoured ONLY outside
+  // production (see `promptLogVerbose`), because verbose observability is a
+  // local debugging affordance, not a deployment toggle.
+  PROMPT_LOG_VERBOSE: z.string().optional(),
   API_PORT: z.coerce.number().int().default(3001),
   WEB_PORT: z.coerce.number().int().default(3000),
   DEVDIGEST_CLONE_DIR: z.string().optional(),
@@ -59,6 +64,16 @@ export type AppConfig = {
    * EXACTLY like the ripgrep-only baseline.
    */
   repoIntelEnabled: boolean;
+  /**
+   * Per-section prompt-assembly logging (metadata only, never content).
+   *
+   * True requires BOTH `PROMPT_LOG_VERBOSE=true` AND a non-production
+   * `NODE_ENV`. The environment gate is deliberate: the summary line is always
+   * emitted, so production loses nothing it needs, while the per-section detail
+   * — which is a debugging tool and grows the log by one line per section per
+   * run — cannot be switched on remotely by setting one variable.
+   */
+  promptLogVerbose: boolean;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -77,5 +92,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     webOrigin: `http://localhost:${parsed.WEB_PORT}`,
     embeddingsEnabled: parsed.EMBEDDINGS_ENABLED === 'true',
     repoIntelEnabled: parsed.REPO_INTEL_ENABLED !== 'false',
+    promptLogVerbose:
+      parsed.PROMPT_LOG_VERBOSE === 'true' && parsed.NODE_ENV !== 'production',
   };
 }

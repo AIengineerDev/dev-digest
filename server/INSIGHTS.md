@@ -108,6 +108,13 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-09** — A `RunLogger` fanned over an EMPTY `runIds` array is a valid,
+  reusable "best-effort logger with no run" — `event()`/`info()`/`step()` just
+  iterate zero SSE targets and skip straight to the stdout mirror. `POST
+  /pulls/:id/intent` uses `new RunLogger(container.runBus, [], req.log, {...})`
+  to get the same logging surface `IntentService.derive()` uses when fanned over
+  active runs from `run-executor.ts`, without a bespoke logger interface for the
+  standalone-call case. `src/modules/reviews/routes.ts` (POST /pulls/:id/intent).
 - **2026-08-09** — A helper that every feature needs but one module happened to
   own belongs in `modules/_shared/`, not where it was written. `resolveFeatureModel`
   lived in `modules/settings/` and the second consumer (conventions) tripped
@@ -217,6 +224,15 @@ _None yet._
 
 
 ## Tool & Library Notes
+
+- **2026-08-10** — `text('col', { enum: [...] })` in Drizzle is a **TypeScript-only**
+  union over a plain Postgres `text` column — `\d skills` shows no check
+  constraint and no PG enum type. Adding a value (`'imported_file'` to
+  `source`) therefore needs **no migration**: edit the array, edit the matching
+  `z.enum` in `@devdigest/shared`, and `drizzle-kit generate` correctly reports
+  "No schema changes". Nothing enforces that the two lists agree, so widening
+  only one silently produces rows the API cannot serialize.
+  `src/db/schema/skills.ts:13`
 
 - **2026-08-05** — The `cost_usd` backfill in migration `0010` embeds a verbatim
   price snapshot copied out of `src/adapters/llm/pricing.ts`, and that

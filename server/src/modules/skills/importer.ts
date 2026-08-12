@@ -1,16 +1,18 @@
-import type { ImportSkillInput, Skill } from '@devdigest/shared';
+import type { ImportSkillFileInput, ImportSkillInput, Skill } from '@devdigest/shared';
 import { ValidationError } from '../../platform/errors.js';
 import {
+  IMPORT_ALLOWED_EXTENSIONS,
   IMPORT_ALLOWED_PROTOCOLS,
   IMPORT_MAX_BYTES,
   IMPORT_TIMEOUT_MS,
   MAX_SKILL_BODY_CHARS,
 } from './constants.js';
-import { deriveSkillMeta } from './helpers.js';
+import { basenameWithoutExtension, deriveSkillMeta } from './helpers.js';
 import type { SkillsWriter } from './writer.js';
 
 /**
- * Import a skill body from a URL.
+ * Import a skill body — from a URL the server fetches, or from a file the client
+ * read off disk and posted as text.
  *
  * Three things are deliberate here, and each is the reason import was held out
  * of `specs/02-skills.md` v1:
@@ -24,6 +26,10 @@ import type { SkillsWriter } from './writer.js';
  * - **The result is stored as `source: 'imported_url'`,** which is what makes the
  *   assembler wrap it as untrusted. That flag is the whole security story; do not
  *   let an import path write `'manual'`.
+ *
+ * The file path shares the last of those three and none of the first two: it has
+ * nothing to fetch, so it has no seam and no network limits — only the same body
+ * cap and the same untrusted source flag.
  *
  * SSRF: only http/https, and hosts that are obviously internal are refused. This
  * is a literal check, not a resolver — enough to stop a pasted
@@ -54,7 +60,10 @@ export class SkillImporter {
       );
     }
 
-    const derived = deriveSkillMeta(text, url);
+    const derived = deriveSkillMeta(text, {
+      fallbackName: basenameWithoutExtension(new URL(url).pathname) ?? 'imported-skill',
+      label: url,
+    });
 
     return this.writer.create(
       workspaceId,
@@ -66,6 +75,57 @@ export class SkillImporter {
         enabled: true,
       },
       { source: 'imported_url' },
+    );
+  }
+
+  /**
+   * Store a body the client read off the user's disk.
+   *
+   * There is no I/O here on purpose: the browser already has the text, so it
+   * posts it and the server never touches a filesystem or a multipart parser.
+   * `filename` is validated and used for naming, never for a path — nothing on
+   * this path opens, joins or writes it, so a `../` in it is inert.
+   *
+   * `source: 'imported_file'`, not `'manual'`: picking a file is not authoring
+   * one. A skill downloaded from a gist and saved to disk is exactly as external
+   * as one fetched over HTTP, and the assembler must wrap both.
+   */
+  async importFromFile(workspaceId: string, input: ImportSkillFileInput): Promise<Skill> {
+    const filename = input.filename.trim();
+    const extension = filename.slice(filename.lastIndexOf('.')).toLowerCase();
+    if (!IMPORT_ALLOWED_EXTENSIONS.includes(extension as (typeof IMPORT_ALLOWED_EXTENSIONS)[number])) {
+      throw new ValidationError(
+        `Only ${IMPORT_ALLOWED_EXTENSIONS.join(', ')} files can be imported.`,
+        { filename, allowed: IMPORT_ALLOWED_EXTENSIONS },
+      );
+    }
+
+    const text = input.body;
+    if (text.trim() === '') {
+      throw new ValidationError('The selected file is empty.', { filename });
+    }
+    if (text.length > MAX_SKILL_BODY_CHARS) {
+      throw new ValidationError(
+        `File body is ${text.length} characters; the limit is ${MAX_SKILL_BODY_CHARS}.`,
+        { limit: MAX_SKILL_BODY_CHARS, actual: text.length },
+      );
+    }
+
+    const derived = deriveSkillMeta(text, {
+      fallbackName: basenameWithoutExtension(filename) ?? 'imported-skill',
+      label: filename,
+    });
+
+    return this.writer.create(
+      workspaceId,
+      {
+        name: input.name ?? derived.name,
+        description: input.description ?? derived.description,
+        type: input.type ?? 'custom',
+        body: text,
+        enabled: true,
+      },
+      { source: 'imported_file' },
     );
   }
 

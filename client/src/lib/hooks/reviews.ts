@@ -8,6 +8,7 @@ import { api, API_BASE } from "../api";
 import { notify } from "../toast";
 import type {
   FindingActionKind,
+  PrIntentRecord,
   PrReviewComment,
   ReviewRecord,
   ReviewRunResponse,
@@ -213,4 +214,25 @@ export function useRunEvents(runIds: string[]) {
   }, [key]);
 
   return { events, running };
+}
+
+// ---- Derived intent (specs/04-intent-layer.md) ----
+/** The PR's derived intent — `null` is a state ("not yet derived"), not absence
+   of data, so it renders like any other successful, empty query result. */
+export function usePrIntent(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["pr-intent", prId],
+    queryFn: () => api.get<PrIntentRecord | null>(`/pulls/${prId}/intent`),
+    enabled: !!prId,
+  });
+}
+
+/** (Re-)derive a PR's intent. `force:true` bypasses the fingerprint cache. */
+export function useDeriveIntent(prId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (force?: boolean) =>
+      api.post<PrIntentRecord | null>(`/pulls/${prId}/intent`, force ? { force } : undefined),
+    onSuccess: (data) => qc.setQueryData(["pr-intent", prId], data),
+  });
 }

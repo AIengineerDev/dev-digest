@@ -55,7 +55,13 @@ for version pinning, and reconnecting one line in the run executor.
   (`POST /skills/import`), on the terms this spec set: the body is stored as
   `source: 'imported_url'` and the assembler wraps it in `<untrusted>` before it
   reaches a prompt (`modules/skills/importer.ts`, `helpers.ts:wrapUntrustedSkillBody`).
-  Community search and file upload are still out.
+  **Update 2026-08-10:** import *from file* shipped on the same terms
+  (`POST /skills/import-file`, `source: 'imported_file'`, also wrapped). It is
+  not an upload: the browser reads the file and posts its text, so the server
+  runs no multipart parser and stores no artefact. `.zip` bundles stay out —
+  a skill is one `body` string, so a multi-file bundle has nowhere to live, and
+  unpacking one would add zip-bomb and entry-path handling to a path whose whole
+  safety argument is that it performs no file I/O. Community search is still out.
 - Convention extraction (`source: 'extracted'`, `evidence_files`) — the columns
   stay, nothing writes them in v1. **Shipped separately** in
   `specs/03-conventions.md`.
@@ -185,6 +191,15 @@ Two limits, both in `constants.ts`:
 
 Starting numbers are a judgement call — propose 8 000 characters per skill and
 24 000 for the block, then tune against the trace once real skills exist.
+
+**Update 2026-08-10:** every body is preceded in the block by a
+`---` rule and a `**skill: <name>@<version>**` label
+(`modules/skills/assembler.ts:skillLabel`). Bodies open at whatever heading level
+their author chose, so without a delimiter the block is N documents run together
+and neither the model nor a reader of the trace can attribute a rule to a skill —
+`skills_used` lists the names beside the block but cannot say which paragraph is
+whose. The label counts against the assembly budget, because it is part of what
+the model reads.
 
 ## Client
 

@@ -239,10 +239,13 @@ d('skills → prompt assembly (Testcontainers pg)', () => {
   it('an over-budget assembly drops the tail and says so in the trace', async () => {
     const app = await appWith();
     const { pr } = await setupRepoAndPr();
-    // 4 × 8 000 characters = 32 000 > the 24 000-character block budget, so the
-    // first three fit exactly and the fourth is dropped whole.
+    // 4 × 7 000 characters = 28 000 > the 24 000-character block budget, so the
+    // first three fit and the fourth is dropped whole. The bodies are not sized
+    // to fill the budget exactly on purpose: each block also carries its
+    // `**skill: name@version**` label, which counts against the budget, so an
+    // exact fit would make this test a measurement of the label's length.
     const bodies = ['ONE', 'TWO', 'THREE', 'TAIL'].map(
-      (tag) => `RULE ${tag}: ` + 'x'.repeat(8000 - `RULE ${tag}: `.length),
+      (tag) => `RULE ${tag}: ` + 'x'.repeat(7000 - `RULE ${tag}: `.length),
     );
     const skills = [];
     for (const [i, body] of bodies.entries()) skills.push(await createSkill(app, `big-${i}`, body));
@@ -256,6 +259,10 @@ d('skills → prompt assembly (Testcontainers pg)', () => {
     expect(block).toContain('RULE THREE:');
     expect(block).not.toContain('RULE TAIL:');
     expect(block.length).toBeLessThanOrEqual(24000 + 2 * 2); // + the "\n\n" joins
+    // Each surviving body is attributable to the skill it came from.
+    for (const skill of skills.slice(0, 3)) {
+      expect(block).toContain(`**skill: ${skill.name}@1**`);
+    }
     // The loss is recorded, not silent.
     const dropNote = trace.log.find((l) => l.msg.includes('dropped from the end of the order'));
     expect(dropNote).toBeDefined();

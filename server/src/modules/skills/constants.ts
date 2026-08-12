@@ -21,6 +21,9 @@ export const MAX_SKILL_BODY_CHARS = 8000;
 /** Max characters for the whole assembled `## Skills / rules` block. */
 export const MAX_SKILLS_BLOCK_CHARS = 24000;
 
+/** File import: extensions we accept. A skill body is text and nothing else. */
+export const IMPORT_ALLOWED_EXTENSIONS = ['.md', '.mdx', '.txt'] as const;
+
 /** Import: only these schemes are fetchable. */
 export const IMPORT_ALLOWED_PROTOCOLS = ['http:', 'https:'] as const;
 
@@ -39,4 +42,4 @@ export const IMPORT_TIMEOUT_MS = 10_000;
  * becomes a skill — and wrapping them would tell the model to treat its own
  * instructions as data. See `specs/02-skills.md`, *Security*.
  */
-export const UNTRUSTED_SKILL_SOURCES = ['imported_url', 'community'] as const;
+export const UNTRUSTED_SKILL_SOURCES = ['imported_url', 'imported_file', 'community'] as const;
