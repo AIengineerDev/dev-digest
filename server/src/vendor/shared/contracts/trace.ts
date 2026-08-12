@@ -59,6 +59,14 @@ export const PromptAssembly = z.object({
    */
   skills_used: z.array(z.string()).nullish(),
   /**
+   * Token count of the `skills` slot alone, from the same tokenizer the run
+   * log's per-section stats use (`prompt-log.ts:describePromptSections`).
+   * Null when the run has no skills slot, or on traces written before this
+   * field existed — never 0, so the Run Trace UI can tell "no skills" from
+   * "skills present, count unknown".
+   */
+  skills_tokens: z.number().int().nullish(),
+  /**
    * Ties this assembly to its `prompt assembled` log lines. The run log carries
    * only metadata (section, source, size, model), so this id is what lets an
    * operator go from a size anomaly in the log to the actual assembly stored

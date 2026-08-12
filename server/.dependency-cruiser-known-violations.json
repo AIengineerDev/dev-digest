@@ -230,20 +230,6 @@
   },
   {
     "type": "dependency",
-    "from": "src/modules/pulls/routes.ts",
-    "to": "src/db/schema.ts",
-    "unresolvedTo": "../../db/schema.js",
-    "dependencyTypes": [
-      "local",
-      "import"
-    ],
-    "rule": {
-      "severity": "error",
-      "name": "routes-no-db"
-    }
-  },
-  {
-    "type": "dependency",
     "from": "src/modules/settings/routes.ts",
     "to": "src/db/schema.ts",
     "unresolvedTo": "../../db/schema.js",
