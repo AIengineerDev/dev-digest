@@ -1,0 +1,153 @@
+import * as z from 'zod/v4';
+import type { McpServer } from '@modelcontextprotocol/server';
+import type { RunSummary } from '@devdigest/shared';
+import { ApiError } from '../api.js';
+import { formatRun } from '../format.js';
+import { guard, text, type Deps } from './shared.js';
+
+/** Findings per run in the inline render — same cap as `get_findings`. */
+const FINDINGS_CAP = 20;
+
+/**
+ * Resolves after `ms`, or immediately if `signal` is already aborted or fires
+ * while waiting. Never rejects: the poll loop below decides what "aborted"
+ * means, this just stops blocking it.
+ */
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
+  });
+}
+
+export function registerRunAgent(server: McpServer, { api, resolver, timing }: Deps): void {
+  server.registerTool(
+    'run_agent_on_pull_request',
+    {
+      title: 'Run a review agent on a pull request',
+      description:
+        'Review a pull request and return its findings. Waits up to 2 min; on timeout returns finished runs plus run ids for get_findings.',
+      inputSchema: z.object({
+        repo: z.string().describe('owner/name, e.g. acme/payments-api'),
+        pr: z.number().int().positive().describe('Pull request number'),
+        agent: z.string().optional().describe('Agent name from list_agents; omit to run every enabled agent'),
+      }),
+      // Not read-only: it spends money on an LLM call and writes a run + review.
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ repo, pr, agent }, ctx) =>
+      guard(async () => {
+        const { prId } = await resolver.prId(repo, pr);
+
+        let target: { agentId: string } | { all: true } = { all: true };
+        if (agent !== undefined) {
+          const agents = await api.listAgents();
+          const match = agents.find((a) => a.name.toLowerCase() === agent.toLowerCase());
+          if (!match) {
+            throw new ApiError(
+              `No agent named "${agent}". Available: ${agents.map((a) => a.name).join(', ') || '(none)'}`,
+            );
+          }
+          if (!match.enabled) {
+            throw new ApiError(`Agent "${match.name}" is disabled — enable it in DevDigest first.`);
+          }
+          target = { agentId: match.id };
+        }
+
+        const started = await api.startReview(prId, target);
+        if (started.length === 0) {
+          throw new ApiError('No enabled agent to run — enable one in DevDigest, or pass `agent`.');
+        }
+
+        // The server has already committed to these runs (`agent_runs` rows
+        // exist) the moment startReview returns — blocking below is purely
+        // this tool polling for them to finish, never a retry of the start.
+        const startedIds = new Set(started.map((r) => r.run_id));
+        const total = startedIds.size;
+        const signal = ctx.mcpReq.signal;
+        const progressToken = ctx.mcpReq._meta?.progressToken;
+
+        const deadline = Date.now() + timing.waitMs;
+        let finished = new Map<string, RunSummary>();
+        let lastNotifiedCount = -1;
+
+        while (true) {
+          if (signal.aborted) {
+            // The SDK discards the result once a request is cancelled — the
+            // point of stopping here is to stop hammering the API, not to
+            // produce a meaningful return value.
+            return text('');
+          }
+
+          const runs = await api.listRuns(prId, signal);
+          finished = new Map(
+            runs.filter((r) => startedIds.has(r.run_id) && r.status !== 'running').map((r) => [r.run_id, r]),
+          );
+
+          if (progressToken !== undefined && finished.size !== lastNotifiedCount) {
+            lastNotifiedCount = finished.size;
+            await ctx.mcpReq.notify({
+              method: 'notifications/progress',
+              params: {
+                progressToken,
+                progress: finished.size,
+                total,
+                message: `${finished.size} of ${total} reviewers finished`,
+              },
+            });
+          }
+
+          if (finished.size === total) break;
+          if (Date.now() >= deadline) break;
+          if (signal.aborted) return text('');
+
+          await sleep(timing.pollMs, signal);
+        }
+
+        if (signal.aborted) return text('');
+
+        const anyFinished = finished.size > 0;
+        const reviews = anyFinished ? await api.listReviews(prId, signal) : [];
+
+        const blocks = started
+          .filter((r) => finished.has(r.run_id))
+          .map((r) => {
+            const run = finished.get(r.run_id)!;
+            const review = reviews.find((rv) => rv.run_id === r.run_id);
+            const allFindings = review?.findings ?? [];
+            return formatRun(run, review, allFindings.slice(0, FINDINGS_CAP), {
+              total: allFindings.length,
+              detail: 'compact',
+            });
+          });
+
+        if (finished.size === total) {
+          return text(blocks.join('\n\n'));
+        }
+
+        // The wait wall was reached with runs still in flight. This is a
+        // partial result, not a failure: the review keeps running on the
+        // server regardless of whether this tool call is still attached to
+        // it — say so, and point at how to collect the rest.
+        const stillRunning = started.filter((r) => !finished.has(r.run_id)).map((r) => r.run_id);
+        return text(
+          [
+            ...blocks,
+            `Still running after ${timing.waitMs}ms: ${stillRunning.join(', ')}. ` +
+              `The review is continuing in the background — collect these with get_findings.`,
+          ].join('\n\n'),
+        );
+      }),
+  );
+}

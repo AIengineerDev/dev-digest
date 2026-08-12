@@ -1,0 +1,580 @@
+/**
+ * The whole server, driven through a real MCP `Client` in-process — the SDK's
+ * own testing shape (docs/testing.md). Nothing is mocked except `DevDigestApi`,
+ * so schema validation, argument parsing and the `isError` envelope are all the
+ * real thing.
+ */
+import { beforeEach, describe, expect, it } from 'vitest';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { createMcpHandler } from '@modelcontextprotocol/server';
+import type { Agent, Convention, PrMeta, Repo, ReviewRecord, RunSummary } from '@devdigest/shared';
+import type { DevDigestApi, RunTarget } from '../src/api.js';
+import type { Timing } from '../src/constants.js';
+import { buildServer } from '../src/server.js';
+
+// Every test drives the run_agent_on_pull_request poll loop through this
+// timing, not the production defaults (120s wait / 2s poll) — fast enough
+// that no test needs fake timers around it.
+const FAST_TIMING: Timing = { waitMs: 200, pollMs: 5 };
+
+// ---- fixtures -------------------------------------------------------------
+
+const REPO = { id: 'repo-1', full_name: 'acme/payments-api', name: 'payments-api' } as Repo;
+const PULL = { id: 'pr-1', number: 482 } as PrMeta;
+
+const agent = (over: Partial<Agent>): Agent =>
+  ({
+    id: 'a1',
+    name: 'General',
+    description: '',
+    provider: 'anthropic',
+    model: 'claude-opus-5',
+    system_prompt: 'SECRET_PROMPT_MARKER — pretend this is several kilobytes.',
+    enabled: true,
+    version: 1,
+    strategy: 'single-pass',
+    ci_fail_on: 'critical',
+    repo_intel: true,
+    ...over,
+  }) as Agent;
+
+const run = (over: Partial<RunSummary>): RunSummary =>
+  ({
+    run_id: 'run-1',
+    agent_id: 'a1',
+    agent_name: 'General',
+    provider: 'anthropic',
+    model: 'claude-opus-5',
+    status: 'done',
+    error: null,
+    duration_ms: 1000,
+    tokens_in: 1,
+    tokens_out: 1,
+    cost_usd: 0.01,
+    findings_count: 0,
+    grounding: null,
+    ran_at: '2026-08-11T00:00:00Z',
+    score: 80,
+    blockers: 0,
+    head_sha: 'sha-new',
+    ...over,
+  }) as RunSummary;
+
+const finding = (i: number, severity = 'WARNING') => ({
+  id: `f${i}`,
+  review_id: 'rev-1',
+  severity,
+  category: 'bug',
+  title: `Problem ${i}`,
+  file: 'src/a.ts',
+  start_line: i,
+  end_line: i,
+  rationale: `Because of reason ${i}`,
+  suggestion: null,
+  confidence: 0.9,
+  accepted_at: null,
+  dismissed_at: null,
+});
+
+const review = (over: Partial<ReviewRecord>): ReviewRecord =>
+  ({
+    id: 'rev-1',
+    pr_id: 'pr-1',
+    agent_id: 'a1',
+    run_id: 'run-1',
+    agent_name: 'General',
+    head_sha: 'sha-new',
+    kind: 'review',
+    verdict: 'request_changes',
+    summary: 'Two issues.',
+    score: 80,
+    model: 'claude-opus-5',
+    created_at: '2026-08-11T00:00:00Z',
+    findings: [],
+    ...over,
+  }) as ReviewRecord;
+
+const convention = (over: Partial<Convention>): Convention =>
+  ({
+    id: 'c1',
+    repo_id: 'repo-1',
+    category: 'naming',
+    rule: 'Services end in Service',
+    rationale: 'Consistency',
+    evidence_path: 'src/x.ts',
+    evidence_line: 3,
+    evidence_snippet: 'class FooService {}',
+    confidence: 0.9,
+    status: 'accepted',
+    head_sha: null,
+    created_at: '2026-08-11T00:00:00Z',
+    ...over,
+  }) as Convention;
+
+// ---- harness --------------------------------------------------------------
+
+interface Stub extends DevDigestApi {
+  started: { prId: string; target: { agentId: string } | { all: true } }[];
+}
+
+function stubApi(over: Partial<DevDigestApi> = {}): Stub {
+  const started: Stub['started'] = [];
+  return {
+    started,
+    listRepos: async () => [REPO],
+    listPulls: async () => [PULL],
+    listAgents: async () => [agent({})],
+    startReview: async (prId, target) => {
+      started.push({ prId, target });
+      return [{ run_id: 'run-1', agent_id: 'a1', agent_name: 'General' }] as RunTarget[];
+    },
+    listRuns: async () => [],
+    listReviews: async () => [],
+    listConventions: async () => [],
+    ...over,
+  } as Stub;
+}
+
+async function connect(api: DevDigestApi, timing: Timing = FAST_TIMING): Promise<Client> {
+  const handler = createMcpHandler(() => buildServer(api, timing));
+  const transport = new StreamableHTTPClientTransport(new URL('http://test.local/mcp'), {
+    fetch: (url, init) => handler.fetch(new Request(url, init)),
+  });
+  const client = new Client({ name: 'test', version: '0' }, { versionNegotiation: { mode: 'auto' } });
+  await client.connect(transport);
+  return client;
+}
+
+const textOf = (result: { content: unknown }): string =>
+  (result.content as { type: string; text?: string }[])
+    .map((c) => c.text ?? '')
+    .join('\n');
+
+// ---- tests ----------------------------------------------------------------
+
+describe('tool surface', () => {
+  let client: Client;
+  beforeEach(async () => {
+    client = await connect(stubApi());
+  });
+
+  it('advertises exactly the five tools', async () => {
+    const { tools } = await client.listTools();
+    expect(tools.map((t) => t.name).sort()).toEqual(
+      ['get_blast_radius', 'get_conventions', 'get_findings', 'list_agents', 'run_agent_on_pull_request'].sort(),
+    );
+  });
+
+  /**
+   * The session-start budget. Everything advertised here is pasted into the
+   * context window of every new chat before the user types a word, so this is
+   * the one number that has to stay small as tools are added. ~4 chars/token,
+   * so 4000 chars ≈ the 900-token target in specs/06-mcp-server.md.
+   */
+  it('keeps the whole tools/list payload under the token budget', async () => {
+    const listed = await client.listTools();
+    const len = JSON.stringify(listed).length;
+    expect(len, `tools/list = ${len}`).toBeLessThan(4000);
+  });
+
+  it('marks the four read tools read-only and the run tool not', async () => {
+    const { tools } = await client.listTools();
+    const readOnly = Object.fromEntries(tools.map((t) => [t.name, t.annotations?.readOnlyHint]));
+    expect(readOnly).toEqual({
+      list_agents: true,
+      get_findings: true,
+      get_conventions: true,
+      get_blast_radius: true,
+      run_agent_on_pull_request: false,
+    });
+  });
+
+  it('rejects arguments the schema forbids without reaching the handler', async () => {
+    const result = await client.callTool({
+      name: 'get_findings',
+      arguments: { repo: 'acme/payments-api', pr: 482, limit: 999 },
+    });
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('list_agents', () => {
+  it('never leaks system_prompt, and hides disabled agents by default', async () => {
+    const client = await connect(
+      stubApi({
+        listAgents: async () => [agent({}), agent({ id: 'a2', name: 'Security', enabled: false })],
+      }),
+    );
+    const out = textOf(await client.callTool({ name: 'list_agents', arguments: {} }));
+    expect(out).not.toContain('SECRET_PROMPT_MARKER');
+    expect(out).toContain('General');
+    expect(out).not.toContain('Security');
+
+    const all = textOf(
+      await client.callTool({ name: 'list_agents', arguments: { include_disabled: true } }),
+    );
+    expect(all).toContain('Security');
+    expect(all).toContain('disabled');
+  });
+});
+
+describe('run_agent_on_pull_request', () => {
+  it('resolves owner/repo + number to a pr id and starts the review', async () => {
+    // The default stub never reports the started run as finished, so this
+    // exercises the wall-reached path — see the dedicated tests below for
+    // "finishes before the wall" and "the wall is reached" in detail.
+    const api = stubApi();
+    const client = await connect(api);
+    const out = textOf(
+      await client.callTool({
+        name: 'run_agent_on_pull_request',
+        arguments: { repo: 'acme/payments-api', pr: 482 },
+      }),
+    );
+    expect(api.started).toEqual([{ prId: 'pr-1', target: { all: true } }]);
+    expect(out).toContain('run-1');
+    expect(out).toContain('get_findings');
+  });
+
+  it('targets one agent by name', async () => {
+    const api = stubApi();
+    const client = await connect(api);
+    await client.callTool({
+      name: 'run_agent_on_pull_request',
+      arguments: { repo: 'acme/payments-api', pr: 482, agent: 'general' },
+    });
+    expect(api.started[0]?.target).toEqual({ agentId: 'a1' });
+  });
+
+  it('names the agents that do exist when the requested one does not', async () => {
+    const client = await connect(stubApi());
+    const result = await client.callTool({
+      name: 'run_agent_on_pull_request',
+      arguments: { repo: 'acme/payments-api', pr: 482, agent: 'Nope' },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('General');
+  });
+
+  it('names the repos that are imported when the requested one is not', async () => {
+    const client = await connect(stubApi());
+    const result = await client.callTool({
+      name: 'run_agent_on_pull_request',
+      arguments: { repo: 'other/thing', pr: 1 },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('acme/payments-api');
+  });
+
+  it('polls until the run finishes and returns the findings inline', async () => {
+    let calls = 0;
+    const api = stubApi({
+      listRuns: async () => {
+        calls += 1;
+        return [run({ status: calls < 3 ? 'running' : 'done' })];
+      },
+      listReviews: async () => [review({ findings: [finding(1, 'CRITICAL')] as never })],
+    });
+    const client = await connect(api);
+    const result = await client.callTool({
+      name: 'run_agent_on_pull_request',
+      arguments: { repo: 'acme/payments-api', pr: 482 },
+    });
+    const out = textOf(result);
+    expect(result.isError).toBeUndefined();
+    expect(out).toContain('request_changes');
+    expect(out).toContain('Problem 1');
+    expect(calls).toBeGreaterThanOrEqual(3);
+  });
+
+  it('returns a partial result — not an error — when the wait wall is reached', async () => {
+    const api = stubApi({
+      startReview: async () =>
+        [
+          { run_id: 'run-1', agent_id: 'a1', agent_name: 'General' },
+          { run_id: 'run-2', agent_id: 'a2', agent_name: 'Security' },
+        ] as RunTarget[],
+      // run-1 finishes; run-2 never appears in listRuns, so it never leaves
+      // "running" from this tool's point of view.
+      listRuns: async () => [run({ run_id: 'run-1', status: 'done' })],
+      listReviews: async () => [review({ run_id: 'run-1', findings: [] as never })],
+    });
+    const client = await connect(api, { waitMs: 100, pollMs: 5 });
+    const result = await client.callTool({
+      name: 'run_agent_on_pull_request',
+      arguments: { repo: 'acme/payments-api', pr: 482 },
+    });
+    const out = textOf(result);
+    expect(result.isError).toBeUndefined();
+    expect(out).toContain('request_changes'); // run-1's finished review
+    expect(out).toContain('run-2'); // the still-running id
+    expect(out).toContain('get_findings'); // where to collect it
+  });
+
+  it('stops polling once the caller aborts the call', async () => {
+    let calls = 0;
+    const api = stubApi({
+      listRuns: async () => {
+        calls += 1;
+        return [run({ status: 'running' })];
+      },
+    });
+    const client = await connect(api, { waitMs: 5000, pollMs: 10 });
+    const controller = new AbortController();
+    const pending = client
+      .callTool(
+        { name: 'run_agent_on_pull_request', arguments: { repo: 'acme/payments-api', pr: 482 } },
+        { signal: controller.signal },
+      )
+      .catch(() => undefined);
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    const callsAtAbort = calls;
+    controller.abort();
+    await pending;
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(calls).toBeLessThanOrEqual(callsAtAbort + 1);
+  });
+
+  it('reports progress only when the caller subscribes to it', async () => {
+    let calls = 0;
+    const withProgress = stubApi({
+      listRuns: async () => {
+        calls += 1;
+        return [run({ status: calls < 2 ? 'running' : 'done' })];
+      },
+      listReviews: async () => [review({ findings: [] as never })],
+    });
+    const client = await connect(withProgress);
+    const updates: { progress: number; total?: number }[] = [];
+    await client.callTool(
+      { name: 'run_agent_on_pull_request', arguments: { repo: 'acme/payments-api', pr: 482 } },
+      { onprogress: (p) => updates.push(p) },
+    );
+    expect(updates.length).toBeGreaterThan(0);
+    expect(updates[0]?.total).toBe(1);
+    expect(updates.every((u) => u.progress >= 0 && u.progress <= 1)).toBe(true);
+
+    // Without onprogress the client never asks for a progress token, so the
+    // handler's `progressToken !== undefined` guard means no notification is
+    // even attempted — this just confirms the call still completes cleanly.
+    const withoutProgress = stubApi({
+      listRuns: async () => [run({ status: 'done' })],
+      listReviews: async () => [review({ findings: [] as never })],
+    });
+    const client2 = await connect(withoutProgress);
+    const result = await client2.callTool({
+      name: 'run_agent_on_pull_request',
+      arguments: { repo: 'acme/payments-api', pr: 482 },
+    });
+    expect(result.isError).toBeUndefined();
+  });
+});
+
+describe('get_findings', () => {
+  const twelve = Array.from({ length: 12 }, (_, i) => finding(i + 1));
+
+  it('reports a run still in flight instead of an empty result', async () => {
+    const client = await connect(
+      stubApi({ listRuns: async () => [run({ status: 'running' })], listReviews: async () => [] }),
+    );
+    const out = textOf(
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+    );
+    expect(out).toContain('status running');
+    expect(out).toContain('Still running');
+  });
+
+  it('caps the list and says how many it dropped', async () => {
+    const client = await connect(
+      stubApi({
+        listRuns: async () => [run({})],
+        listReviews: async () => [review({ findings: twelve as never })],
+      }),
+    );
+    const out = textOf(
+      await client.callTool({
+        name: 'get_findings',
+        arguments: { repo: 'acme/payments-api', pr: 482, limit: 5 },
+      }),
+    );
+    expect(out).toContain('Problem 5');
+    expect(out).not.toContain('Problem 6');
+    expect(out).toContain('+7 more');
+  });
+
+  it('filters by severity floor', async () => {
+    const client = await connect(
+      stubApi({
+        listRuns: async () => [run({})],
+        listReviews: async () => [
+          review({ findings: [finding(1, 'SUGGESTION'), finding(2, 'CRITICAL')] as never }),
+        ],
+      }),
+    );
+    const out = textOf(
+      await client.callTool({
+        name: 'get_findings',
+        arguments: { repo: 'acme/payments-api', pr: 482, min_severity: 'CRITICAL' },
+      }),
+    );
+    expect(out).toContain('Problem 2');
+    expect(out).not.toContain('Problem 1');
+  });
+
+  it('omits rationale unless detail is full', async () => {
+    const api = stubApi({
+      listRuns: async () => [run({})],
+      listReviews: async () => [review({ findings: [finding(1)] as never })],
+    });
+    const client = await connect(api);
+    const args = { repo: 'acme/payments-api', pr: 482 };
+    expect(textOf(await client.callTool({ name: 'get_findings', arguments: args }))).not.toContain(
+      'Because of reason 1',
+    );
+    expect(
+      textOf(await client.callTool({ name: 'get_findings', arguments: { ...args, detail: 'full' } })),
+    ).toContain('Because of reason 1');
+  });
+
+  /**
+   * A fan-out run (`agent` omitted) starts one run per enabled reviewer. Showing
+   * only the newest would read as the whole answer, so the default is the whole
+   * batch — the runs sharing the newest run's head_sha — and never the previous
+   * pass against an older head.
+   */
+  it('defaults to the whole latest pass, not just the newest run', async () => {
+    const client = await connect(
+      stubApi({
+        listRuns: async () => [
+          run({ run_id: 'run-2', agent_id: 'a2', agent_name: 'Security', head_sha: 'sha-new' }),
+          run({ run_id: 'run-1', agent_id: 'a1', agent_name: 'General', head_sha: 'sha-new' }),
+          run({ run_id: 'run-0', agent_id: 'a1', agent_name: 'General', head_sha: 'sha-old' }),
+        ],
+      }),
+    );
+    const out = textOf(
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+    );
+    expect(out).toContain('run-2');
+    expect(out).toContain('run-1');
+    expect(out).not.toContain('run-0');
+  });
+
+  /**
+   * `head_sha` only moves when the PR is pushed to, so re-reviewing the same
+   * commit piles pass on pass under one head. Observed live on the seeded PR:
+   * 11 runs, up to 3 per agent, all one head — the compact tool's default path
+   * returning the package's largest answer, and growing with every re-review.
+   */
+  it('keeps only the newest run per agent within the latest head', async () => {
+    const client = await connect(
+      stubApi({
+        listRuns: async () => [
+          run({ run_id: 'pass3-general', agent_id: 'a1', agent_name: 'General' }),
+          run({ run_id: 'pass3-security', agent_id: 'a2', agent_name: 'Security' }),
+          run({ run_id: 'pass2-general', agent_id: 'a1', agent_name: 'General' }),
+          run({ run_id: 'pass1-general', agent_id: 'a1', agent_name: 'General' }),
+          run({ run_id: 'pass1-security', agent_id: 'a2', agent_name: 'Security' }),
+        ],
+      }),
+    );
+    const out = textOf(
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+    );
+    expect(out).toContain('pass3-general');
+    expect(out).toContain('pass3-security');
+    expect(out).not.toContain('pass2-general');
+    expect(out).not.toContain('pass1-general');
+    expect(out).not.toContain('pass1-security');
+  });
+
+  /** A run whose agent was deleted has a null agent_id — never fold those together. */
+  it('does not collapse runs that have no agent id', async () => {
+    const client = await connect(
+      stubApi({
+        listRuns: async () => [
+          run({ run_id: 'orphan-b', agent_id: null, agent_name: null }),
+          run({ run_id: 'orphan-a', agent_id: null, agent_name: null }),
+        ],
+      }),
+    );
+    const out = textOf(
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+    );
+    expect(out).toContain('orphan-a');
+    expect(out).toContain('orphan-b');
+  });
+
+  it('tells the caller to start a review when the PR has none', async () => {
+    const client = await connect(stubApi({ listRuns: async () => [] }));
+    const out = textOf(
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+    );
+    expect(out).toContain('run_agent_on_pull_request');
+  });
+});
+
+describe('get_conventions', () => {
+  it('defaults to accepted rules and renders the evidence location', async () => {
+    let asked: string | undefined;
+    const client = await connect(
+      stubApi({
+        listConventions: async (_repoId, status) => {
+          asked = status;
+          return [convention({})];
+        },
+      }),
+    );
+    const out = textOf(
+      await client.callTool({ name: 'get_conventions', arguments: { repo: 'acme/payments-api' } }),
+    );
+    expect(asked).toBe('accepted');
+    expect(out).toContain('naming — Services end in Service (src/x.ts:3)');
+    expect(out).not.toContain('class FooService');
+  });
+
+  it('filters by category', async () => {
+    const client = await connect(
+      stubApi({
+        listConventions: async () => [convention({}), convention({ id: 'c2', category: 'testing', rule: 'Vitest only' })],
+      }),
+    );
+    const out = textOf(
+      await client.callTool({
+        name: 'get_conventions',
+        arguments: { repo: 'acme/payments-api', category: 'testing' },
+      }),
+    );
+    expect(out).toContain('Vitest only');
+    expect(out).not.toContain('Services end in Service');
+  });
+});
+
+describe('get_blast_radius', () => {
+  it('is a stub that fails loudly rather than guessing', async () => {
+    const client = await connect(stubApi());
+    const result = await client.callTool({
+      name: 'get_blast_radius',
+      arguments: { repo: 'acme/payments-api', files: ['src/a.ts'] },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('not_implemented');
+  });
+});
+
+describe('api failures', () => {
+  it('turns an unreachable API into an actionable isError result', async () => {
+    const client = await connect(
+      stubApi({
+        listAgents: async () => {
+          throw Object.assign(new Error('Cannot reach the DevDigest API at http://x'), { name: 'ApiError' });
+        },
+      }),
+    );
+    const result = await client.callTool({ name: 'list_agents', arguments: {} });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('Cannot reach the DevDigest API');
+  });
+});

@@ -15,6 +15,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# `mcp/` is deliberately NOT part of this script — do not add it.
+# An MCP server is spawned by its host (Claude Code, Claude Desktop, …) over
+# stdio, on demand, one process per session. A copy started here would own no
+# stdio pair, serve no client, and only compete for the API. Bring it up on its
+# own when you want it: see mcp/README.md.
+
 CONTAINER="devdigest-postgres"
 RUN_SEED=1
 RUN_CLIENT=1
