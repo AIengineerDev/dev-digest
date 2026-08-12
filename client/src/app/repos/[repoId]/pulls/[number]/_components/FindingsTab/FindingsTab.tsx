@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { Icon, Badge, Button, SectionLabel, EmptyState } from "@devdigest/ui";
 import { RunStatus } from "../RunStatus";
 import { RunHistory } from "../RunHistory/RunHistory";
+import { severityCountsByRun } from "../RunHistory/helpers";
+import { isStaleRun } from "../staleness";
 import { ReviewRunAccordion } from "../ReviewRunAccordion";
 import { s } from "./styles";
 import type { FindingRecord, ReviewRecord, RunSummary, PrCommit } from "@devdigest/shared";
@@ -41,6 +44,8 @@ export function FindingsTab({
   onDelete,
   onRunDone,
 }: FindingsTabProps) {
+  const t = useTranslations("prReview");
+
   const handleCancelAll = useCallback(() => {
     liveRunIds.forEach((id) => cancelMutation.mutate(id));
   }, [liveRunIds, cancelMutation]);
@@ -63,13 +68,38 @@ export function FindingsTab({
     [onDelete],
   );
 
+  // The timeline shows the same severity breakdown as the PR list; the counts
+  // come from the reviews already loaded here, keyed by run.
+  const severityCounts = React.useMemo(() => severityCountsByRun(runs), [runs]);
+
+  // Review runs default to the CURRENT head only. A PR that has been reviewed
+  // many times accumulates runs against long-gone revisions, and their findings
+  // read exactly like findings about the code as it stands — the timeline above
+  // keeps every run (it is a history) but marks the stale ones.
+  const [onlyCurrentHead, setOnlyCurrentHead] = React.useState(true);
+  const staleRunCount = React.useMemo(
+    () => runs.filter((r) => isStaleRun(r.head_sha, headSha)).length,
+    [runs, headSha],
+  );
+  const shownRuns = React.useMemo(
+    () => (onlyCurrentHead ? runs.filter((r) => !isStaleRun(r.head_sha, headSha)) : runs),
+    [runs, headSha, onlyCurrentHead],
+  );
+
   // Timeline → Review-runs navigation: clicking an agent name in the timeline
   // opens + scrolls to that run's accordion below. The nonce re-triggers the
   // scroll even when the same run is clicked twice.
   const [target, setTarget] = React.useState<{ runId: string; n: number } | null>(null);
-  const handleGoToReview = useCallback((runId: string) => {
-    setTarget((p) => ({ runId, n: (p?.n ?? 0) + 1 }));
-  }, []);
+  const handleGoToReview = useCallback(
+    (runId: string) => {
+      // The timeline lists stale runs, this list hides them by default — so
+      // jumping to a stale run has to reveal it, or the click does nothing.
+      const review = runs.find((r) => r.run_id === runId);
+      if (review && isStaleRun(review.head_sha, headSha)) setOnlyCurrentHead(false);
+      setTarget((p) => ({ runId, n: (p?.n ?? 0) + 1 }));
+    },
+    [runs, headSha],
+  );
 
   return (
     <section>
@@ -131,6 +161,8 @@ export function FindingsTab({
           <RunHistory
             runs={prRuns ?? []}
             commits={prCommits}
+            severityCounts={severityCounts}
+            currentHeadSha={headSha}
             onOpenTrace={handleOpenTrace}
             onGoToReview={handleGoToReview}
             onDelete={handleDelete}
@@ -140,7 +172,21 @@ export function FindingsTab({
 
       <SectionLabel
         icon="AlertOctagon"
-        right={<span style={{ fontSize: 12, color: "var(--text-muted)" }}>grouped by run · newest first</span>}
+        right={
+          <span style={s.runsToolbar}>
+            {staleRunCount > 0 && (
+              <label style={s.onlyCurrentHead} title={t("staleness.onlyCurrentHint", { count: staleRunCount })}>
+                <input
+                  type="checkbox"
+                  checked={onlyCurrentHead}
+                  onChange={(e) => setOnlyCurrentHead(e.target.checked)}
+                />
+                {t("staleness.onlyCurrent")}
+              </label>
+            )}
+            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>grouped by run · newest first</span>
+          </span>
+        }
       >
         Review runs
       </SectionLabel>
@@ -152,9 +198,15 @@ export function FindingsTab({
             body="Run a review to generate findings. Use Run Review ▾ above (run all enabled agents or a specific one)."
           />
         )
+      ) : shownRuns.length === 0 ? (
+        <EmptyState
+          icon="History"
+          title={t("staleness.allHiddenTitle")}
+          body={t("staleness.allHiddenBody")}
+        />
       ) : (
         prId &&
-        runs.map((review, i) => (
+        shownRuns.map((review, i) => (
           <ReviewRunAccordion
             key={review.id}
             review={review}

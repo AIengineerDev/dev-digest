@@ -5,6 +5,9 @@ import { useTranslations } from "next-intl";
 import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
 import type { RunSummary, PrCommit } from "@devdigest/shared";
 import { RunCostBadge } from "@/components/run-cost-badge";
+import { FindingsCount } from "../../../_components/FindingsCount";
+import { hasSeverities, type SeverityCounts } from "./helpers";
+import { isStaleRun, shortSha } from "../staleness";
 
 /**
  * PR timeline — every agent run interleaved with the PR's commits, newest-first
@@ -16,6 +19,13 @@ import { RunCostBadge } from "@/components/run-cost-badge";
  * run that found blockers reads "rejected" (red), never a green "done". Outcome
  * is derived from the denormalized blocker/finding counts on the run row, so it
  * matches the CI gate (deterministic) rather than the model's verdict.
+ *
+ * A settled run's findings render through the PR list's `FindingsCount` — the
+ * same icon+number-per-severity cell — so a run reads here the way its PR reads
+ * in the list. `RunSummary` carries only a flat `findings_count`, so the
+ * breakdown comes from the caller (which holds the reviews); a run with none
+ * available (review deleted, reviews not loaded yet) or a clean run falls back
+ * to the plain "N finding(s)" text — "—" would lose that it ran and found none.
  */
 
 type Outcome = { key: string; color: string; bg: string; icon: IconName };
@@ -88,12 +98,18 @@ function tsOf(s: string | null | undefined): number {
 export function RunHistory({
   runs,
   commits = [],
+  severityCounts,
+  currentHeadSha,
   onOpenTrace,
   onGoToReview,
   onDelete,
 }: {
   runs: RunSummary[];
   commits?: PrCommit[];
+  /** run_id → findings per severity, for the icon breakdown. See `severityCountsByRun`. */
+  severityCounts?: Record<string, SeverityCounts>;
+  /** The PR's head right now — runs stamped with any other sha are marked stale. */
+  currentHeadSha?: string | null;
   /** Open the trace + log drawer for a run (the logs icon). */
   onOpenTrace: (runId: string) => void;
   /** Jump to this run's inline review accordion below (clicking the agent name). */
@@ -150,8 +166,20 @@ export function RunHistory({
         const r = item.run;
         const o = outcomeOf(r);
         const settled = r.status === "done";
+        const stale = isStaleRun(r.head_sha, currentHeadSha);
         return (
-          <div key={`run:${r.run_id}`} style={rowStyle}>
+          <div
+            key={`run:${r.run_id}`}
+            style={stale ? { ...rowStyle, opacity: 0.62 } : rowStyle}
+            title={
+              stale
+                ? t("staleness.runTooltip", {
+                    sha: shortSha(r.head_sha),
+                    head: shortSha(currentHeadSha),
+                  })
+                : undefined
+            }
+          >
             <Badge color={o.color} bg={o.bg} icon={o.icon}>
               {t(`runStatus.${o.key}`)}
             </Badge>
@@ -179,7 +207,12 @@ export function RunHistory({
                 </button>{" "}
                 <span className="mono" style={{ fontSize: 12, fontWeight: 400, color: "var(--text-muted)" }}>
                   {r.provider}/{r.model}
-                </span>
+                </span>{" "}
+                {stale && (
+                  <Badge color="var(--text-muted)" bg="var(--bg-hover)" icon="History">
+                    {t("staleness.badge")}
+                  </Badge>
+                )}
               </div>
               {r.status === "failed" && r.error && (
                 <div
@@ -190,9 +223,15 @@ export function RunHistory({
                 </div>
               )}
               {settled && (
-                <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                  {t("runStatus.findings", { count: r.findings_count ?? 0 })}
-                  {(r.blockers ?? 0) > 0 ? t("runStatus.blockers", { count: r.blockers ?? 0 }) : ""}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-muted)" }}>
+                  {hasSeverities(severityCounts?.[r.run_id]) ? (
+                    <FindingsCount counts={severityCounts![r.run_id]} />
+                  ) : (
+                    <span>{t("runStatus.findings", { count: r.findings_count ?? 0 })}</span>
+                  )}
+                  {(r.blockers ?? 0) > 0 && (
+                    <span>{t("runStatus.blockers", { count: r.blockers ?? 0 })}</span>
+                  )}
                 </div>
               )}
             </div>

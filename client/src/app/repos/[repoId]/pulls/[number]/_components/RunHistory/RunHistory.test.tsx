@@ -11,7 +11,9 @@ import type { RunSummary } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/prReview.json";
 // RunCostBadge on each settled row reads the `runs` namespace.
 import runsMessages from "../../../../../../../../messages/en/runs.json";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RunHistory } from "./RunHistory";
+import { severityCountsByRun, type SeverityCounts } from "./helpers";
 
 afterEach(cleanup);
 
@@ -33,15 +35,28 @@ function run(o: Partial<RunSummary>): RunSummary {
     ran_at: "2026-06-11T18:44:34.000Z",
     score: null,
     blockers: null,
+    head_sha: null,
     ...o,
   };
 }
 
-function renderRuns(runs: RunSummary[]) {
+const CURRENT_HEAD = "bbbbbbb222";
+
+function renderRuns(runs: RunSummary[], severityCounts?: Record<string, SeverityCounts>) {
+  // FindingsCount (reused from the PR list) fetches findings on hover, so the
+  // timeline now needs a query client even though nothing here hovers.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <NextIntlClientProvider locale="en" messages={{ prReview: messages, runs: runsMessages }}>
-      <RunHistory runs={runs} onOpenTrace={() => {}} />
-    </NextIntlClientProvider>,
+    <QueryClientProvider client={qc}>
+      <NextIntlClientProvider locale="en" messages={{ prReview: messages, runs: runsMessages }}>
+        <RunHistory
+          runs={runs}
+          severityCounts={severityCounts}
+          currentHeadSha={CURRENT_HEAD}
+          onOpenTrace={() => {}}
+        />
+      </NextIntlClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -74,5 +89,65 @@ describe("RunHistory — outcome badge", () => {
   it("a running run reads 'running'", () => {
     renderRuns([run({ status: "running", score: null, blockers: null })]);
     expect(screen.getByText("running")).toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — severity breakdown", () => {
+  it("shows one icon+count per present severity instead of the flat 'N finding(s)'", () => {
+    renderRuns([run({ status: "done", findings_count: 4, blockers: 1, score: 40 })], {
+      "run-1": { CRITICAL: 1, WARNING: 3, SUGGESTION: 0 },
+    });
+    expect(screen.getByTitle("1 Critical")).toBeInTheDocument();
+    expect(screen.getByTitle("3 Warning")).toBeInTheDocument();
+    // A zero severity is dropped, exactly as in the PR list.
+    expect(screen.queryByTitle(/Suggestion/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/finding\(s\)/)).not.toBeInTheDocument();
+    // The blocker count still rides alongside the icons.
+    expect(screen.getByText(/1 blockers/)).toBeInTheDocument();
+  });
+
+  it("falls back to the text when the run has no breakdown (review deleted / not loaded)", () => {
+    renderRuns([run({ status: "done", findings_count: 4, blockers: 0, score: 40 })]);
+    expect(screen.getByText("4 finding(s)")).toBeInTheDocument();
+  });
+
+  it("a clean run keeps '0 finding(s)' rather than the list's em dash", () => {
+    renderRuns([run({ status: "done", findings_count: 0, blockers: 0, score: 100 })], {
+      "run-1": { CRITICAL: 0, WARNING: 0, SUGGESTION: 0 },
+    });
+    expect(screen.getByText("0 finding(s)")).toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — stale runs", () => {
+  it("marks a run whose head_sha is no longer the PR's, and leaves current ones alone", () => {
+    renderRuns([run({ run_id: "old", head_sha: "aaaaaaa111" })]);
+    expect(screen.getByText("stale")).toBeInTheDocument();
+    cleanup();
+    renderRuns([run({ run_id: "cur", head_sha: "bbbbbbb222" })]);
+    expect(screen.queryByText("stale")).not.toBeInTheDocument();
+  });
+
+  it("does not mark runs that predate the column (null head_sha)", () => {
+    renderRuns([run({ head_sha: null })]);
+    expect(screen.queryByText("stale")).not.toBeInTheDocument();
+  });
+});
+
+describe("severityCountsByRun", () => {
+  const finding = (severity: string) => ({ severity }) as any;
+  const review = (run_id: string | null, severities: string[]) =>
+    ({ run_id, findings: severities.map(finding) }) as any;
+
+  it("keys counts by run and skips reviews with no run_id", () => {
+    expect(severityCountsByRun([review("r1", ["CRITICAL", "WARNING"]), review(null, ["CRITICAL"])])).toEqual({
+      r1: { CRITICAL: 1, WARNING: 1, SUGGESTION: 0 },
+    });
+  });
+
+  it("sums several reviews that share a run", () => {
+    expect(severityCountsByRun([review("r1", ["CRITICAL"]), review("r1", ["CRITICAL", "SUGGESTION"])])).toEqual({
+      r1: { CRITICAL: 2, WARNING: 0, SUGGESTION: 1 },
+    });
   });
 });

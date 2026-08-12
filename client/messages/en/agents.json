@@ -91,7 +91,20 @@
     "title": "Skills",
     "enabledCount": "{linked} of {total} enabled",
     "filterPlaceholder": "Filter skills…",
-    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Toggle to attach."
+    "orderHint": "Order matters — earlier skills appear earlier in the assembled prompt. Drag the handle (or focus it and press ↑ / ↓) to reorder.",
+    "orderHintFiltered": "Order matters — earlier skills appear earlier in the assembled prompt. Clear the filter to reorder.",
+    "reorderHandle": "Reorder {name}",
+    "globallyDisabled": "disabled",
+    "globallyDisabledHint": "This skill is disabled workspace-wide, so it cannot be added to an agent. Re-enable it in the Skills Lab first.",
+    "loading": "Loading skills…",
+    "loadErrorTitle": "Couldn’t load skills",
+    "loadErrorBody": "The workspace skills or this agent's links could not be loaded.",
+    "saveError": "Could not save the skill order.",
+    "retry": "Retry",
+    "saving": "Saving…",
+    "noMatches": "No skills match “{query}”.",
+    "emptyTitle": "No skills yet",
+    "emptyBody": "A skill is a reusable block of review guidance shared across agents. Create one in the Skills Lab, then attach it here."
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

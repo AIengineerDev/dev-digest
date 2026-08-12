@@ -1,13 +1,23 @@
 import type { Container } from '../../platform/container.js';
-import type { Provider, Review, RunTrace, UnifiedDiff } from '@devdigest/shared';
+import type { IntentConfidenceBand, Provider, Review, RunTrace, SkillRef, UnifiedDiff } from '@devdigest/shared';
+import { randomUUID } from 'node:crypto';
+import { withAgentProviderContext } from '../_shared/provider-errors.js';
 import { reviewPullRequest, countBlockers } from '@devdigest/reviewer-core';
+import {
+  describePromptSections,
+  formatChars,
+  formatSectionLine,
+  summarisePromptAssembly,
+} from './prompt-log.js';
 import { RunLogger } from '../../platform/run-logger.js';
 import * as schema from '../../db/schema.js';
 import type { AgentRow } from '../../db/rows.js';
 import type { ReviewRepository, FindingRow, PullRow, ReviewRow } from './repository.js';
 import { REVIEW_STRATEGY } from './constants.js';
 import { taskLine } from './helpers.js';
-import { loadDiff } from './diff-loader.js';
+import { loadDiff, type LoadedDiff } from './diff-loader.js';
+import { IntentService } from './intent-service.js';
+import { renderIntentBlock } from './intent-prompt.js';
 
 /** Thrown by a run when the user cancels it mid-flight (between map files). */
 export class RunCancelledError extends Error {
@@ -27,6 +37,16 @@ export type Logger = {
 
 // A reduced "Review per file" — same schema as Review (the model returns a small
 // Review per file; we merge findings + take the worst verdict / mean score).
+/**
+ * One queued run: an agent and the `agent_runs` row it writes into.
+ *
+ * `pinnedSkills` makes the run a REPLAY of an agent version: the skill set,
+ * order and bodies come from that version's `agent_versions` snapshot instead of
+ * the agent's current links. Absent (the live path) = current links, current
+ * bodies.
+ */
+export type RunJob = { agent: AgentRow; runId: string; pinnedSkills?: SkillRef[] };
+
 export type RunOutcome = {
   review: ReviewRow;
   findings: FindingRow[];
@@ -41,11 +61,15 @@ export type RunOutcome = {
  * review. Per-agent failures are isolated.
  */
 export class ReviewRunExecutor {
+  private intentService: IntentService;
+
   constructor(
     private container: Container,
     private repo: ReviewRepository,
     private agents: Container['agentsRepo'],
-  ) {}
+  ) {
+    this.intentService = new IntentService(container, repo);
+  }
 
   /**
    * Background execution of the queued agent runs (NOT awaited by the route).
@@ -56,7 +80,7 @@ export class ReviewRunExecutor {
     workspaceId: string,
     pull: PullRow,
     repo: typeof schema.repos.$inferSelect,
-    jobs: { agent: AgentRow; runId: string }[],
+    jobs: RunJob[],
     logger?: Logger,
   ): Promise<void> {
     // ONE logger fanned out over every queued run: shared pre-work (diff +
@@ -92,9 +116,9 @@ export class ReviewRunExecutor {
       }
     };
 
-    let diff: UnifiedDiff;
+    let loaded: LoadedDiff;
     try {
-      diff = await runLog.step('Loading PR diff', () => loadDiff(this.container, this.repo, workspaceId, pull, repo), {
+      loaded = await runLog.step('Loading PR diff', () => loadDiff(this.container, this.repo, workspaceId, pull, repo), {
         kind: 'tool',
       });
     } catch (err) {
@@ -102,16 +126,40 @@ export class ReviewRunExecutor {
       await failAll(`Failed to load PR diff: ${(err as Error).message}`);
       return;
     }
-    runLog.info(`Diff ready — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`);
+    const diff = loaded.diff;
+    if (loaded.source === 'pr_files') {
+      runLog.info(
+        `Diff assembled from stored GitHub patches (pr_files) — the clone could not serve it: ${loaded.gitError ?? 'unknown reason'}`,
+      );
+    }
+    runLog.info(
+      `Diff ready at ${pull.headSha.slice(0, 7)} via ${loaded.source} — ${diff.files.length} changed file(s); starting ${jobs.length} agent run(s)`,
+    );
 
-    for (const { agent, runId } of jobs) {
+    // Intent — derived ONCE per PR (not per agent), OUTSIDE the try above so
+    // it can never call failAll: any throw here degrades to "no intent",
+    // exactly like buildRepoMapDigest below. undefined → the key is not spread
+    // into reviewPullRequest → the prompt is byte-identical to today's.
+    const intent = await this.buildIntent(workspaceId, pull, runLog);
+
+    for (const { agent, runId, pinnedSkills } of jobs) {
       const agentStart = Date.now();
       logger?.info(
         { runId, agent: agent.name, provider: agent.provider, model: agent.model, prId: pull.id },
         `review: agent "${agent.name}" started (${agent.provider}/${agent.model})`,
       );
       try {
-        const outcome = await this.runOneAgent(workspaceId, pull, repo, diff, agent, runId, runLog);
+        const outcome = await this.runOneAgent(
+          workspaceId,
+          pull,
+          repo,
+          diff,
+          agent,
+          runId,
+          runLog,
+          pinnedSkills,
+          intent,
+        );
         logger?.info(
           {
             runId,
@@ -143,8 +191,13 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     runId: string,
     parentLog: RunLogger,
+    pinnedSkills?: SkillRef[],
+    intent?: { band: IntentConfidenceBand; text: string },
   ): Promise<RunOutcome> {
     const start = Date.now();
+    // Assembled here (not inside the try) so a failure trace can still show the
+    // skills block the run was about to use.
+    let skillsBlock: string | null = null;
     // Narrow the fanned-out pre-work logger to THIS run; the shared diff/intent
     // events are already in this run's buffer, so the persisted trace below
     // (built from the buffer) includes them too.
@@ -157,7 +210,10 @@ export class ReviewRunExecutor {
       // key is missing — caught below and persisted as a failed run.)
       const llm = await runLog.step(
         `Resolving ${agent.provider} provider`,
-        () => this.container.llm(agent.provider as Provider),
+        () =>
+          withAgentProviderContext({ name: agent.name, provider: agent.provider, model: agent.model }, () =>
+            this.container.llm(agent.provider as Provider),
+          ),
         { kind: 'tool' },
       );
 
@@ -183,6 +239,14 @@ export class ReviewRunExecutor {
 
       const task = taskLine(pull) + rankNote;
 
+      // Skills — the agent's ordered, globally-enabled linked skill bodies
+      // (pinned snapshots when this run replays an agent version). Every
+      // exclusion (disabled, budget-dropped, unresolved pin) is written to the
+      // log, so what did NOT reach the prompt is visible in the Run Trace.
+      const skills = await this.resolveSkills(workspaceId, agent.id, pinnedSkills);
+      for (const note of skills.notes) runLog.info(note);
+      skillsBlock = skills.blocks.length > 0 ? skills.blocks.join('\n\n') : null;
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -195,6 +259,10 @@ export class ReviewRunExecutor {
         // Per-agent review strategy (configured in the Agent editor); falls back
         // to the studio default. single-pass = whole diff in one call.
         strategy: agent.strategy ?? REVIEW_STRATEGY,
+        // Linked skills, in `agent_skills.order`. Omitted when the agent has
+        // none enabled, so assemblePrompt leaves out `## Skills / rules`
+        // entirely rather than emitting an empty section.
+        ...(skills.blocks.length > 0 ? { skills: skills.blocks } : {}),
         // T1.3 — pass the callers digest only when we built one. assemblePrompt
         // omits the section when this is empty/undefined.
         ...(callersDigest ? { callers: callersDigest } : {}),
@@ -203,6 +271,9 @@ export class ReviewRunExecutor {
         // PR author's description/body — untrusted; assemblePrompt wraps +
         // truncates it. Omitted when the PR has no body.
         ...(pull.body ? { prDescription: pull.body } : {}),
+        // Derived intent (specs/04-intent-layer.md) — omitted when derivation
+        // was skipped/failed/degraded, so the prompt stays byte-identical.
+        ...(intent ? { intent } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
@@ -212,6 +283,35 @@ export class ReviewRunExecutor {
       });
       const { tokensIn, tokensOut, costUsd, grounding } = outcome;
 
+      // ---- Observability: what went into the prompt, without the prompt -----
+      // Metadata only — section, source, size, model, correlation id. Never
+      // content: `describePromptSections` returns numbers, and the stat type
+      // has nowhere to put text (see prompt-log.ts). The correlation id is
+      // stored on the trace below, so a size anomaly in the log leads back to
+      // the assembly it describes.
+      const correlationId = randomUUID().slice(0, 8);
+      const verbose = this.container.config.promptLogVerbose;
+      const sections = describePromptSections(
+        outcome.assembly,
+        verbose ? (text) => this.container.tokenizer.count(text) : undefined,
+      );
+      const summary = summarisePromptAssembly(sections, {
+        correlationId,
+        provider: agent.provider,
+        model: agent.model,
+      });
+      runLog.info(
+        `prompt assembled: ${summary.sections} sections, ${formatChars(summary.chars)} chars` +
+          `${summary.tokens !== undefined ? ` / ${formatChars(summary.tokens)} tok` : ''}` +
+          ` (${agent.provider}/${agent.model}, cid ${correlationId})`,
+        summary,
+      );
+      if (verbose) {
+        for (const stat of sections) {
+          runLog.info(formatSectionLine(stat), { correlationId, ...stat });
+        }
+      }
+
       const keptFindings = outcome.review.findings;
 
       // ---- Persist review + findings ----------------------------------------
@@ -220,6 +320,7 @@ export class ReviewRunExecutor {
         prId: pull.id,
         agentId: agent.id,
         runId,
+        headSha: pull.headSha,
         kind: 'review',
         verdict: outcome.review.verdict,
         summary: outcome.review.summary,
@@ -270,7 +371,13 @@ export class ReviewRunExecutor {
           findings: findingRows.length,
           grounding,
         },
-        prompt_assembly: outcome.assembly,
+        prompt_assembly: {
+          ...outcome.assembly,
+          // `used` is what the assembler already reports in the run log; the
+          // trace kept only the concatenated bodies until now.
+          skills_used: skills.used.length > 0 ? skills.used : null,
+          correlation_id: correlationId,
+        },
         tool_calls: outcome.chunks.map((c) => ({
           tool: 'review_file',
           args: c.label,
@@ -308,11 +415,42 @@ export class ReviewRunExecutor {
         })
         .catch(() => undefined);
       await this.repo
-        .saveRunTrace(runId, this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start))
+        .saveRunTrace(
+          runId,
+          this.traceFromBuffer(runId, pull, agent, '0/0 passed', Date.now() - start, skillsBlock),
+        )
         .catch(() => undefined);
       this.container.runBus.complete(runId);
       throw err;
     }
+  }
+
+  /**
+   * Resolve the agent's linked skills into prompt blocks.
+   *
+   * Two owners, one call: the agents repository owns `agent_skills`, so the
+   * ordered links come from there; the skills assembler (via the container)
+   * owns the `enabled` kill-switch, pinned-version resolution and the assembly
+   * budget. The executor only carries values between them.
+   */
+  private async resolveSkills(
+    workspaceId: string,
+    agentId: string,
+    pinnedSkills?: SkillRef[],
+  ) {
+    const links = await this.agents.linkedSkills(agentId);
+    return this.container.skills.assemble(
+      workspaceId,
+      links.map((l) => ({
+        id: l.skill.id,
+        name: l.skill.name,
+        body: l.skill.body,
+        enabled: l.skill.enabled,
+        version: l.skill.version,
+        source: l.skill.source,
+      })),
+      pinnedSkills,
+    );
   }
 
   /**
@@ -356,6 +494,34 @@ export class ReviewRunExecutor {
     }
     runLog.info(`callers digest: ${rows.length} caller signature(s) attached`);
     return out.join('\n');
+  }
+
+  /**
+   * Derive the PR's intent ONCE per PR (specs/04-intent-layer.md). Best-effort
+   * exactly like `buildRepoMapDigest`: any throw (including one `IntentService`
+   * itself did not catch) degrades to `undefined`, never `failAll`. A degraded
+   * row (model timed out / failed) is deliberately NOT rendered into the prompt
+   * — only a real classification is.
+   */
+  private async buildIntent(
+    workspaceId: string,
+    pull: PullRow,
+    runLog: RunLogger,
+  ): Promise<{ band: IntentConfidenceBand; text: string } | undefined> {
+    try {
+      const record = await this.intentService.derive(workspaceId, pull.id, {}, runLog);
+      if (!record || record.degraded) return undefined;
+      const text = renderIntentBlock({
+        category: record.category,
+        summary: record.summary,
+        in_scope: record.in_scope,
+        out_of_scope: record.out_of_scope,
+      });
+      return { band: record.band, text };
+    } catch (err) {
+      runLog.info(`intent: derivation failed — ${(err as Error).message}; continuing without intent`);
+      return undefined;
+    }
   }
 
   /**
@@ -413,6 +579,7 @@ export class ReviewRunExecutor {
     agent: AgentRow,
     grounding: string,
     durationMs = 0,
+    skills: string | null = null,
   ): RunTrace {
     return {
       config: {
@@ -424,7 +591,11 @@ export class ReviewRunExecutor {
         source: 'local',
       },
       stats: { duration_ms: durationMs, tokens_in: 0, tokens_out: 0, cost_usd: null, findings: 0, grounding },
-      prompt_assembly: { system: agent.systemPrompt, skills: null, memory: null, specs: null, user: '' },
+      // `skills` is the block this run had already assembled when it failed
+      // (null when it failed before that, or the agent has none) — the same
+      // slot a successful run reports, so a failed run does not silently look
+      // like an agent with no rules.
+      prompt_assembly: { system: agent.systemPrompt, skills, memory: null, specs: null, user: '' },
       tool_calls: [],
       raw_output: '',
       memory_pulled: [],

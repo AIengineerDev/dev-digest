@@ -123,6 +123,9 @@ export class ReviewService {
         prId,
         provider: agent.provider,
         model: agent.model,
+        // Stamped at creation, not completion: the run reviews the head as it
+        // was when it started, even if the PR is pushed to mid-run.
+        headSha: pull.headSha,
       });
       runs.push({ run_id: runId, agent_id: agent.id, agent_name: agent.name });
       jobs.push({ agent, runId });

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Finding, Verdict } from './findings.js';
-import { Intent, SmartDiff } from './brief.js';
+import { DerivedIntent, SmartDiff } from './brief.js';
 
 /**
  * A2 — Review-Core API surface contracts. These extend the core
@@ -26,6 +26,8 @@ export const ReviewRecord = z.object({
   agent_id: z.string().nullable(),
   run_id: z.string().nullable(),
   agent_name: z.string().nullish(),
+  /** PR head this review ran against; see `RunSummary.head_sha`. */
+  head_sha: z.string().nullable(),
   kind: z.enum(['summary', 'review']),
   verdict: Verdict.nullable(),
   summary: z.string().nullable(),
@@ -56,8 +58,8 @@ export const ReviewRunResponse = z.object({
 });
 export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;
 
-/** Intent persisted for a PR (the Intent plus the pr_id it scopes). */
-export const PrIntentRecord = Intent.extend({ pr_id: z.string() });
+/** Derived intent persisted for a PR (the DerivedIntent plus the pr_id it scopes). */
+export const PrIntentRecord = DerivedIntent.extend({ pr_id: z.string() });
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
 
 /** Smart-diff response for a PR (the SmartDiff). */

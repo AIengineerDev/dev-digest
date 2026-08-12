@@ -30,6 +30,23 @@ a contract change reaches every package.
 
 ## Decisions
 
+### 2026-08-09 — Skill trust follows `source`, and extraction is trusted
+
+**What:** the assembler wraps a skill body in `<untrusted>` when its `source` is
+`imported_url` or `community`, and leaves `manual` and `extracted` raw
+(`src/modules/skills/constants.ts:UNTRUSTED_SKILL_SOURCES`,
+`assembler.ts:bodyFor`).
+**Why:** skills are the one prompt block joined in unwrapped, which is only
+correct while they are author-written (`specs/02-skills.md`, *Security*). An
+imported document is data written by someone outside the workspace. An
+*extracted* one is not: the model only proposed it, the evidence was verified in
+code, and a maintainer accepted it by hand before it became a skill — wrapping it
+would tell the model to disregard rules its own user just approved.
+**Rejected:** wrapping at import time, inside the stored body. It looks simpler
+and is worse: the marker is then editable text a user can delete without knowing
+what it was for, and the same body would be double-wrapped if the boundary ever
+moved back to assembly.
+
 ### 2026-07-31 — Schema-first validation at the route boundary
 
 **What:** every route declares Zod `params`/`body`/response schemas from
@@ -43,13 +60,151 @@ reference in every route.
 
 ## What Works
 
-_None yet._
+- **2026-08-09** — Grounding an LLM extraction is two code steps around the
+  model, not a better prompt. The conventions extractor sends the sampled files
+  **line-numbered** (`renderNumberedFile`) so the model can cite a number it can
+  see, then verifies every candidate against the file it named: path must be in
+  the sampled set, snippet must occur in that file with whitespace normalised
+  (models re-indent what they quote), and the **line number is corrected rather
+  than trusted** — the snippet is the claim, the number is a pointer, and a
+  candidate dropped over an off-by-four is a real rule lost. Only the counts of
+  proposed/verified/dropped are returned, which makes the extraction's precision
+  visible instead of folded into the results. `src/modules/conventions/helpers.ts:118`
+- **2026-08-09** — A drizzle-kit `generate` that both adds and drops columns on
+  one table prompts interactively ("created or renamed from another column?") and
+  **cannot be driven from a non-TTY shell** — piping newlines does nothing and a
+  pty via `script` hangs. Split it into two generates instead: keep the doomed
+  column in the schema for the additive pass, then remove it for a drop-only
+  pass. Two migration files, zero prompts, and each one says what it does
+  (`0012` adds the conventions columns, `0013` drops the legacy `accepted`).
+  `src/db/migrations/0013_fancy_skin.sql:1`
+
+- **2026-08-09** — Agent-version replay only pins skill **text** because
+  `snapshotVersion` now records `{id, version}` refs
+  (`skillRefsForAgent`) instead of the bare ids `skillIdsForAgent` returned. Rows
+  written before that change read back through `SkillRefTolerant` as
+  `version: null`, and the assembler deliberately falls back to the skill's
+  *current* body for them — that is the honest reading of "we never recorded
+  which text this ran with". Never backfill those nulls; it would invent history.
+  A pinned ref whose skill or snapshot is gone is omitted with a note in the run
+  log, not thrown, so a deleted skill costs one rule and not the whole review.
+  `src/modules/agents/repository.ts:180` · `src/modules/skills/assembler.ts:116`
+- **2026-08-09** — To write a rollback test that can actually fail, make the
+  **second** write in the transaction violate a constraint, not the first.
+  `skills.it.test.ts` pre-inserts a `skill_versions` row at `(skill_id, 2)`, then
+  PUTs a body change: the `skills` UPDATE has already run when the snapshot
+  insert hits the composite PK, so without the transaction the row is left at
+  version 2 with a body no snapshot describes. Verified the only way that means
+  anything — the transaction was temporarily replaced with a plain IIFE over
+  `this.db` and the test was watched to fail with `expected 2 to be 1`. Note this
+  only works because `insertVersion` deliberately does **not** use
+  `.onConflictDoNothing()`; `agents/repository.ts:195` does, which would swallow
+  the conflict and leave the snapshot silently missing.
+  `test/skills.it.test.ts:174`
 
 ## What Doesn't Work
 
 _None yet._
 
 ## Codebase Patterns
+
+- **2026-08-09** — A `RunLogger` fanned over an EMPTY `runIds` array is a valid,
+  reusable "best-effort logger with no run" — `event()`/`info()`/`step()` just
+  iterate zero SSE targets and skip straight to the stdout mirror. `POST
+  /pulls/:id/intent` uses `new RunLogger(container.runBus, [], req.log, {...})`
+  to get the same logging surface `IntentService.derive()` uses when fanned over
+  active runs from `run-executor.ts`, without a bespoke logger interface for the
+  standalone-call case. `src/modules/reviews/routes.ts` (POST /pulls/:id/intent).
+- **2026-08-09** — A helper that every feature needs but one module happened to
+  own belongs in `modules/_shared/`, not where it was written. `resolveFeatureModel`
+  lived in `modules/settings/` and the second consumer (conventions) tripped
+  `no-cross-module-internals` immediately; it moved to
+  `modules/_shared/feature-models.ts`, which the rule exempts as a target. Moving
+  it meant dropping its one import back into `settings` (`rowsToSettings`, four
+  lines) and inlining that fold — `_shared` → `modules/settings/*` is the same
+  violation in the other direction. `src/modules/_shared/feature-models.ts:1`
+
+- **2026-08-09** — To use one module's logic from another (here: the review run
+  executor needing the skills module's `enabled` filter and assembly budget),
+  build a small class that takes **`Db`, never `Container`**, expose it as a
+  getter on `platform/container.ts`, and consume it as `this.container.skills.…`
+  with the type inferred. Both obvious alternatives are blocked: a direct
+  `modules/reviews/*` → `modules/skills/*` import trips `no-cross-module-internals`
+  (even `import type`, because `tsPreCompilationDeps: true`), and putting the
+  logic on the module's `service.ts` — which takes `Container` for DI — makes the
+  container getter a **new** import cycle, unprotected by the 5 baselined ones.
+  Inference is what keeps it clean: the executor never names the class, so no
+  cross-module edge exists in the graph at all. The precedent it copies is
+  `container.agentsRepo`, consumed as `Container['agentsRepo']`.
+  `src/platform/container.ts:111` · `src/modules/skills/assembler.ts:50`
+- **2026-08-09** — Do not copy `agents/helpers.ts`'s row types into a new module.
+  It imports `AgentRow` from `./repository.js`, which imports helpers back — one
+  of the 5 baselined `pnpm arch` cycles, invisible only because `--ignore-known`
+  hides it. A new module gets no such amnesty, and the obvious escape (importing
+  the row type from `src/db/rows.ts`) is blocked by the `helpers-are-pure` rule,
+  which forbids `src/modules/**/helpers.ts` → `src/(db|adapters)/` — and
+  `tsPreCompilationDeps: true` means a `import type` still counts. The way out
+  used by `skills` is to declare the columns structurally in `helpers.ts`
+  (`SkillRowLike`) and let the service pass the real Drizzle row in; structural
+  typing checks the two agree at the call site.
+  `src/modules/skills/helpers.ts:14`
+- **2026-08-09** — There is **no transaction anywhere in the server**:
+  `grep -rn "\.transaction(" src` returns nothing, while `repo-intel/repository.ts`
+  issues 19 write statements, `agents/repository.ts` 8, `reviews/repository/run.repo.ts`
+  7 and `pulls/routes.ts` 7. So every multi-write invariant is currently
+  best-effort. Two are reachable from normal use: creating an agent writes
+  `agents` then `agent_versions` (an interrupted request leaves an agent with no
+  initial version), and `GET /pulls/:id` **deletes** all `pr_files`/`pr_commits`
+  before re-inserting them — a crash between the two leaves the PR with no files
+  at all, which reads as "the diff vanished", not as a crash. Do not assume any
+  existing repository method is atomic because it looks like one call; Drizzle's
+  `tx` has the same shape as `db`, so the fix is to pass it in, not to restructure
+  the repository. `src/modules/pulls/routes.ts:232`
+- **2026-08-09** — Everything under `src/adapters/` looks alike from the folder
+  name, but it is two different things and the architecture rules treat them
+  differently. **Port-backed** adapters (`github`, `git/simple-git`, `llm`,
+  `embedder`, `secrets`, `auth`, `codeindex/ripgrep`) implement an interface
+  declared in `@devdigest/shared`, are constructed **only** in
+  `platform/container.ts`, and are what `adapters/mocks.ts` swaps in tests —
+  importing their concrete class anywhere else re-couples the core to the edge
+  and silently defeats `ContainerOverrides`. **Stateless helpers**
+  (`astgrep`, `tokenizer`, `git/diff-parser`, `codeindex/extract`) have no
+  credentials and no network, are imported directly all over `repo-intel`, and
+  that is correct — a test just calls them. `pnpm arch` enforces exactly this
+  split, so the test for a new adapter is "would a test ever want to swap it
+  out?", not "does it live in adapters/". `src/adapters/index.ts:1`
+- **2026-08-09** — 5 of the 11 baseline `pnpm arch` violations are import cycles,
+  and nearly all run through the composition root: `platform/container.ts`
+  imports concrete module classes (`AgentsRepository`, `ReviewRepository`,
+  `RepoIntelService` at `container.ts:26-29`) while those modules import
+  `type { Container }` back for constructor injection
+  (`modules/repo-intel/service.ts:21,104`). The type-only import is erased at
+  runtime, so nothing actually breaks — but `tsPreCompilationDeps: true` makes
+  dependency-cruiser see it, and it will keep reporting until the container
+  depends on interfaces rather than on the classes it happens to build. Do not
+  "fix" it by dropping `tsPreCompilationDeps`; that would blind every other rule
+  to type-only imports, which is where most layering violations hide.
+  `src/platform/container.ts:26`
+- **2026-08-07** — PR freshness is a side effect of two GET routes, not of any
+  sync job: `GET /repos/:id/pulls` upserts `head_sha` for every PR from GitHub
+  (`src/modules/pulls/routes.ts:66`), and `GET /pulls/:id` **deletes and
+  re-inserts** all of `pr_files` and `pr_commits` from the detail fetch
+  (`routes.ts:232`). `POST /repos/:id/poll` does the same as the former and
+  nothing more. So a review triggered from a page the user has open reviews
+  current code, and "stale findings" complaints are about *display*, not about
+  fetching — but a review triggered without ever loading those pages (CI, a
+  direct `POST /pulls/:id/review`) runs against whatever the last visit
+  persisted. If you ever need a guaranteed-fresh review, refresh the pull inside
+  `runReview`; do not assume the poller did it. `src/modules/pulls/routes.ts:232`
+- **2026-08-07** — `loadDiff` has two non-equivalent sources and used to pick
+  between them silently. The git path needs the PR head present in the clone, but
+  clones are shallow and track the default branch, so `git diff base...head`
+  routinely throws `bad object` and the `pr_files` reconstruction (GitHub's
+  patches, which truncate on large files and are absent on binaries) is what the
+  reviewer actually sees. A clone that is missing the head can also return an
+  EMPTY diff instead of throwing — that is treated as a miss too, otherwise the
+  agent reviews zero files and reports the PR clean. Both facts are now in the
+  run log; keep them there. `src/modules/reviews/diff-loader.ts:26`
 
 - **2026-08-05** — Per-PR aggregates on `GET /repos/:id/pulls` all use one fixed
   shape: a single `inArray(prIds)` query ordered `desc(createdAt|ranAt)`, then
@@ -70,6 +225,15 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-10** — `text('col', { enum: [...] })` in Drizzle is a **TypeScript-only**
+  union over a plain Postgres `text` column — `\d skills` shows no check
+  constraint and no PG enum type. Adding a value (`'imported_file'` to
+  `source`) therefore needs **no migration**: edit the array, edit the matching
+  `z.enum` in `@devdigest/shared`, and `drizzle-kit generate` correctly reports
+  "No schema changes". Nothing enforces that the two lists agree, so widening
+  only one silently produces rows the API cannot serialize.
+  `src/db/schema/skills.ts:13`
+
 - **2026-08-05** — The `cost_usd` backfill in migration `0010` embeds a verbatim
   price snapshot copied out of `src/adapters/llm/pricing.ts`, and that
   duplication is deliberate — do **not** "DRY it up" or refresh it when prices
@@ -82,6 +246,15 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
+- **2026-08-09** — `GET /skills` is the **first** route in the server with a
+  `querystring` schema (`grep -rn querystring src` returned nothing before it),
+  so there was no house pattern for a boolean filter — and the intuitive one is
+  wrong. `z.coerce.boolean()` maps the string `"false"` to `true`, because
+  coercion is `Boolean(value)` and any non-empty string is truthy, so
+  `?enabled=false` would silently list the enabled skills. Spell the two literals
+  out: `z.enum(['true','false']).transform(v => v === 'true').optional()`. The
+  `.optional()` must come after the transform, or an absent param becomes
+  `false` rather than "no filter". `src/modules/skills/routes.ts:28`
 - **2026-08-06** — "Cannot reach the DevDigest engine at http://localhost:3001.
   Is the API running?" in the UI usually does **not** mean the API is down —
   check `curl localhost:3001/health` first. The CORS allowlist is exactly one

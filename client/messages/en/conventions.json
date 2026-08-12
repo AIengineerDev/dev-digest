@@ -5,11 +5,17 @@
     "headingPrefix": "Conventions in ",
     "repoFallback": "repo",
     "subtitle": "Scan the cloned repo to surface house-rules — each backed by evidence you can turn into a Skill.",
+    "scanSummary": "Sampled {files} files · {proposed} proposed · {dropped} dropped for unverifiable evidence",
     "scanning": "Scanning…",
     "rescan": "Re-scan",
     "runExtraction": "Run extraction",
-    "extractionFailed": "Extraction failed",
+    "extractionFailed": "Extraction failed, and the server sent no reason. Check that the API is reachable.",
+    "extractionFailedWith": "Extraction failed: {message}",
     "loadError": "Could not load conventions.",
+    "pendingCount": "{count} pending",
+    "acceptedCount": "{count} accepted",
+    "rejectedCount": "{count} rejected",
+    "createSkill": "Create skill from {count} accepted",
     "empty": {
       "title": "No conventions extracted yet",
       "body": "Scan the repo to surface house-rules — naming, error handling, structure — each backed by evidence you can turn into a Skill.",
@@ -20,7 +26,27 @@
   "card": {
     "confidence": "Confidence",
     "accepted": "Accepted",
+    "rejected": "Rejected",
     "accepting": "Accepting…",
-    "acceptAsSkill": "Accept as Skill"
+    "acceptAsSkill": "Accept as Skill",
+    "accept": "Accept",
+    "edit": "Edit first",
+    "reject": "Reject",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "skillModal": {
+    "title": "Create skill from conventions",
+    "mergedFrom": "Merged from {count} accepted conventions in {repo}. Everything below is editable before you save.",
+    "defaultDescription": "{count} house conventions extracted from {repo}",
+    "name": "Name",
+    "description": "Description",
+    "type": "Type",
+    "body": "Skill body",
+    "counter": "{count} / {limit} characters",
+    "create": "Create skill",
+    "creating": "Creating…",
+    "cancel": "Cancel",
+    "createError": "Could not create the skill. Check the body length and try again."
   }
 }

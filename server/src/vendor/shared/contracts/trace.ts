@@ -41,13 +41,30 @@ export const PromptAssembly = z.object({
   skills: z.string().nullish(),
   memory: z.string().nullish(),
   specs: z.string().nullish(),
-  /** Callers-of-changed-symbols digest (T1.3); null when absent. */
+  /** Callers-of-changed-symbols digest (repo-intel); null when absent. */
   callers: z.string().nullish(),
-  /** Repo skeleton / map (T3); null when absent. Enables per-slot token
+  /** Repo skeleton / map (repo-intel); null when absent. Enables per-slot token
       attribution in the run trace. */
   repo_map: z.string().nullish(),
   /** PR author's description/body (truncated); null when absent. */
   pr_description: z.string().nullish(),
+  /** Derived-intent block (rendered, exactly as sent); null when omitted. */
+  intent: z.string().nullish(),
+  /**
+   * `name@version` of every skill whose body is inside `skills`, in prompt
+   * order. The `skills` slot is one concatenated string, so without this the
+   * only way to answer "which skills did this run actually use?" is to scroll
+   * the whole block and recognise each body — the question that motivated the
+   * field. Null on traces written before it existed, and on runs with no skills.
+   */
+  skills_used: z.array(z.string()).nullish(),
+  /**
+   * Ties this assembly to its `prompt assembled` log lines. The run log carries
+   * only metadata (section, source, size, model), so this id is what lets an
+   * operator go from a size anomaly in the log to the actual assembly stored
+   * here. Null on traces written before the id existed.
+   */
+  correlation_id: z.string().nullish(),
   user: z.string(),
 });
 export type PromptAssembly = z.infer<typeof PromptAssembly>;
@@ -118,5 +135,12 @@ export const RunSummary = z.object({
   // findings that trip the agent's gate. Null on failed/cancelled runs.
   score: z.number().int().nullable(),
   blockers: z.number().int().nullable(),
+  /**
+   * PR head this run reviewed, stamped when it started. Compare with the PR's
+   * current `head_sha` to tell a live run from one whose findings describe code
+   * that has since changed or been deleted. Null on runs that predate the
+   * column.
+   */
+  head_sha: z.string().nullable(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;

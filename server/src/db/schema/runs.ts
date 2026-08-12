@@ -34,6 +34,13 @@ export const agentRuns = pgTable('agent_runs', {
   score: integer('score'),
   /** Findings that tripped the agent's gate (severity ≥ ciFailOn). */
   blockers: integer('blockers'),
+  /**
+   * PR head the run reviewed, stamped at start. Findings outlive the code they
+   * describe — without this there is no way to tell a run against the current
+   * head from one against a revision where the file still existed. Null on rows
+   * written before this column, and on runs with no PR.
+   */
+  headSha: text('head_sha'),
 });
 
 /** Whole trace of one run as a SINGLE jsonb document. */

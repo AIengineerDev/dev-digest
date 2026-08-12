@@ -73,9 +73,37 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
 
       <TraceSection icon="FileText" title={t("trace.promptAssembly")} defaultOpen={false}>
         <PromptBlock label={t("trace.prompt.system")} text={trace.prompt_assembly.system} color={PROMPT_COLORS.system} />
-        {trace.prompt_assembly.skills != null && (
-          <PromptBlock label={t("trace.prompt.skills")} text={trace.prompt_assembly.skills} color={PROMPT_COLORS.skills} />
+        {trace.prompt_assembly.intent != null && (
+          <PromptBlock label={t("trace.prompt.intent")} text={trace.prompt_assembly.intent} color={PROMPT_COLORS.intent} />
         )}
+        {trace.prompt_assembly.pr_description != null && (
+          <PromptBlock
+            label={t("trace.prompt.prDescription")}
+            text={trace.prompt_assembly.pr_description}
+            color={PROMPT_COLORS.prDescription}
+          />
+        )}
+        {/* Always rendered, unlike every other optional slot: an absent Skills
+            row is read as a broken trace, not as "this agent has none linked".
+            The other slots are infrastructure the reader does not choose; skills
+            are the one thing they configured, so its absence is the answer. */}
+        <PromptBlock
+          label={t("trace.prompt.skills")}
+          text={trace.prompt_assembly.skills ?? ""}
+          color={PROMPT_COLORS.skills}
+          // The block is every linked skill concatenated; naming them is the
+          // difference between "some skills ran" and knowing which.
+          note={
+            trace.prompt_assembly.skills == null
+              ? t("trace.prompt.skillsNone")
+              : trace.prompt_assembly.skills_used?.length
+                ? t("trace.prompt.skillsUsed", {
+                    count: trace.prompt_assembly.skills_used.length,
+                    names: trace.prompt_assembly.skills_used.join(", "),
+                  })
+                : undefined
+          }
+        />
         {trace.prompt_assembly.memory != null && (
           <PromptBlock label={t("trace.prompt.memory")} text={trace.prompt_assembly.memory} color={PROMPT_COLORS.memory} />
         )}

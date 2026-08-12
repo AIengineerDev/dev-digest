@@ -1,11 +1,14 @@
+import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { RunRequest } from '@devdigest/shared';
+import { RunRequest, PrIntentRecord } from '@devdigest/shared';
 import type { RunEvent } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
+import { RunLogger } from '../../platform/run-logger.js';
 import { ReviewService } from './service.js';
+import { IntentService } from './intent-service.js';
 
 /**
  * reviews module.
@@ -13,13 +16,17 @@ import { ReviewService } from './service.js';
  *   GET    /runs/:id/events                            → SSE stream of RunEvent (replay-first)
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
+ *   GET    /pulls/:id/intent                            → derived intent (null if not yet derived)
+ *   POST   /pulls/:id/intent                            → (re-)derive intent
  *   POST   /findings/:id/(accept|dismiss)              → finding actions
  */
 const FINDING_ACTIONS = ['accept', 'dismiss'] as const;
+const DeriveIntentBody = z.object({ force: z.boolean().optional() });
 export default async function reviewsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
   const service = new ReviewService(container);
+  const intentService = new IntentService(container, container.reviewRepo);
 
   // ---- Run a review (manual trigger) -------------------------------
   // Tight per-route limit: each call can fan out to expensive LLM runs.
@@ -130,6 +137,34 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     const { workspaceId } = await getContext(container, req);
     return service.reviewsForPull(workspaceId, req.params.id);
   });
+
+  // ---- Derived intent (specs/04-intent-layer.md) ---------------------------
+  // 200 + null when not yet derived — "no intent" is a state, not a 404.
+  app.get(
+    '/pulls/:id/intent',
+    { schema: { params: IdParams, response: { 200: PrIntentRecord.nullable() } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return intentService.get(workspaceId, req.params.id);
+    },
+  );
+
+  // Rate limit matches /pulls/:id/review — it spends money too.
+  app.post(
+    '/pulls/:id/intent',
+    {
+      schema: { params: IdParams, response: { 200: PrIntentRecord.nullable() } },
+      config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
+    },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      const body = DeriveIntentBody.parse(req.body ?? {});
+      // Fanned to zero runIds: no SSE stream (there is no run here), but every
+      // line still mirrors to stdout via req.log — same RunLogger the wire uses.
+      const log = new RunLogger(container.runBus, [], req.log, { prId: req.params.id });
+      return intentService.derive(workspaceId, req.params.id, { force: body.force }, log);
+    },
+  );
 
   // ---- Delete a whole review run (one agent's pass) + its findings --------
   app.delete('/reviews/:id', { schema: { params: IdParams } }, async (req) => {

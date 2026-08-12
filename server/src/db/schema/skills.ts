@@ -10,8 +10,12 @@ export const skills = pgTable('skills', {
   name: text('name').notNull(),
   description: text('description').notNull(),
   type: text('type', { enum: ['rubric', 'convention', 'security', 'custom'] }).notNull(),
+  // A TypeScript-side union over a plain `text` column — Postgres has no enum
+  // here, so adding a value needs no migration. Keep it in step with
+  // `SkillSource` in `@devdigest/shared`; the two are checked against each other
+  // by nothing but this comment.
   source: text('source', {
-    enum: ['manual', 'imported_url', 'extracted', 'community'],
+    enum: ['manual', 'imported_url', 'imported_file', 'extracted', 'community'],
   }).notNull(),
   body: text('body').notNull(),
   enabled: boolean('enabled').notNull().default(true),

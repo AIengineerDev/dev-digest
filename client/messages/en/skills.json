@@ -1,79 +1,28 @@
 {
-  "page": {
+  "lab": {
     "crumbLab": "Skills Lab",
     "crumbSkills": "Skills",
     "heading": "Skills",
     "addSkill": "Add Skill",
     "searchPlaceholder": "Search skills…",
     "loadError": "Could not load skills.",
+    "emptyTitle": "No skills yet",
+    "emptyBody": "A skill is a named block of review guidance you can attach to any agent.",
+    "emptyCta": "Create from scratch",
+    "noMatchTitle": "No matching skills",
+    "noMatchBody": "Try a different search term.",
+    "selectTitle": "Select a skill",
+    "selectBody": "Pick a skill on the left to read and edit its body.",
     "menu": {
+      "createFromScratch": "Create from scratch",
       "fromFile": "Import from file",
       "fromUrl": "Import from URL",
-      "community": "Search community skills…"
-    },
-    "empty": {
-      "title": "No skills yet",
-      "body": "Import a skill from a file, a URL, or the community catalog.",
-      "cta": "Import from file"
-    },
-    "selectPrompt": {
-      "title": "Select a skill",
-      "body": "Pick a skill on the left to preview its body."
+      "community": "Search community skills…",
+      "comingSoon": "coming soon"
     }
-  },
-  "detail": {
-    "crumbSkill": "Skill",
-    "back": "← All skills",
-    "loadError": "Could not load this skill.",
-    "notFound": {
-      "title": "Skill not found",
-      "body": "It may have been deleted."
-    }
-  },
-  "drawer": {
-    "title": "Add a skill",
-    "subtitle": "Import from a file, a URL, or search vetted community skills",
-    "tabs": {
-      "file": "From file",
-      "url": "From URL",
-      "community": "Community"
-    },
-    "importFailed": "Import failed"
-  },
-  "file": {
-    "nameLabel": "Skill name",
-    "nameHint": "Optional — derived from the first heading if blank.",
-    "namePlaceholder": "pr-quality-rubric",
-    "bodyLabel": "Skill body (Markdown)",
-    "bodyHint": "Pasted content is wrapped as untrusted data — never executed as instructions.",
-    "bodyPlaceholder": "# Rule\nDescribe the rule…",
-    "importing": "Importing…",
-    "import": "Import skill",
-    "success": "Imported \"{name}\" (stored as untrusted data)."
-  },
-  "url": {
-    "label": "Skill URL",
-    "hint": "Fetched server-side, stored as untrusted, and left disabled until vetted.",
-    "placeholder": "https://example.com/skills/security.md",
-    "fetching": "Fetching…",
-    "import": "Import from URL",
-    "success": "Imported \"{name}\". Disabled until you vet + enable it."
-  },
-  "community": {
-    "searchPlaceholder": "Search community skills (e.g. security)…",
-    "allLanguages": "All languages",
-    "loadError": "Could not load community skills",
-    "retry": "Retry",
-    "noMatch": {
-      "title": "No matching skills",
-      "body": "Try a different search term."
-    },
-    "importing": "Importing…",
-    "import": "Import"
   },
   "listItem": {
-    "needsVetting": "needs vetting",
-    "vettingTitle": "Untrusted source — vet before enabling",
+    "noDescription": "No description",
     "type": {
       "rubric": "rubric",
       "convention": "convention",
@@ -84,18 +33,73 @@
       "manual": "Manual",
       "extracted": "Extracted",
       "community": "Community",
-      "imported_url": "Imported"
+      "imported_url": "Imported (URL)",
+      "imported_file": "Imported (file)"
     }
   },
-  "preview": {
-    "untrustedBadge": "untrusted source",
-    "enabled": "Enabled",
-    "disabled": "Disabled",
+  "editor": {
+    "loadError": "Could not load this skill.",
+    "unsaved": "unsaved",
+    "disabled": "disabled",
+    "version": "v{version}",
     "save": "Save",
-    "edit": "Edit",
-    "untrustedNotice": "This skill came from an untrusted source. Its body is stored as data (delimiter-wrapped) and must be vetted before it is enabled for an agent.",
-    "bodyLabel": "Skill body (Markdown)",
-    "bodyHint": "Saving a changed body creates a new immutable version.",
-    "version": "v{version}"
+    "saving": "Saving…",
+    "delete": "Delete",
+    "deleteConfirm": "Delete \"{name}\"? Agents linked to it lose the rule.",
+    "saveError": "Could not save this skill.",
+    "bodyPlaceholder": "# Rule\nDescribe the rule in Markdown…",
+    "count": "{count} / {limit}",
+    "overLimit": "This body is {count} characters. The limit is {limit} per skill — trim it before saving."
+  },
+  "create": {
+    "title": "Create a skill",
+    "subtitle": "A skill is review guidance in Markdown. It is text only — it cannot run code or read files.",
+    "cancel": "Cancel",
+    "create": "Create skill",
+    "creating": "Creating…",
+    "createError": "Could not create the skill.",
+    "fields": {
+      "name": "Name",
+      "namePlaceholder": "pr-quality-rubric",
+      "description": "Description",
+      "descriptionPlaceholder": "What this skill tells a reviewer to do",
+      "type": "Type",
+      "body": "Body (Markdown)",
+      "bodyPlaceholder": "# Rule\nDescribe the rule in Markdown…"
+    }
+  },
+  "add": {
+    "title": "Add a skill",
+    "subtitle": "A skill is review guidance in Markdown. It is text only — it cannot run code or read files.",
+    "derivedName": "Optional — derived from the first heading if left blank.",
+    "tabs": {
+      "create": "Create",
+      "file": "From file",
+      "url": "Import from URL"
+    },
+    "create": {
+      "submit": "Create skill",
+      "submitting": "Creating…",
+      "error": "Could not create the skill."
+    },
+    "file": {
+      "field": "File (.md, .mdx or .txt)",
+      "hint": "The file is read in your browser and its text is sent — the file itself is not uploaded. Imported bodies are treated as untrusted.",
+      "choose": "Choose file…",
+      "none": "No file selected",
+      "wrongType": "Only {accept} files can be imported.",
+      "readError": "Could not read that file.",
+      "submit": "Import skill",
+      "submitting": "Importing…",
+      "error": "Could not import the file."
+    },
+    "url": {
+      "field": "URL",
+      "hint": "The server fetches the document. Imported bodies are treated as untrusted.",
+      "placeholder": "https://raw.githubusercontent.com/…/skill.md",
+      "submit": "Import skill",
+      "submitting": "Importing…",
+      "error": "Could not import from that URL."
+    }
   }
 }

@@ -11,11 +11,17 @@ dist/
 .env.*
 !.env.example
 
-# Cloned user repos — see CLAUDE.md "Do not touch".
+# Cloned user repos — see AGENTS.md "Do not touch".
 server/clones/
 
 # Unpacked from "DevDigest Design (standalone).html" — regenerate rather than commit.
 design-mocks/
 
-# Local agent/session state
-.claude/
+# Local agent/session state. `.claude/skills/` and `.claude/agents/` are shared:
+# AGENTS.md tells every agent to run `engineering-insights`, so the skill has to
+# travel with the repo, and the agent set encodes this repo's own gates, layering
+# rules and doc surfaces — it is worth no more than the repo it was written for.
+.claude/*
+!.claude/skills/
+!.claude/agents/
+.claude/settings.local.json
