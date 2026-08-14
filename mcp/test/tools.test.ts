@@ -362,6 +362,46 @@ describe('run_agent_on_pr', () => {
     expect(out).toContain('get_findings'); // where to collect it
   });
 
+  it('leads the partial result with a count, not a wall of uuids', async () => {
+    // A bare id list under "still running" reads as a failure; "0 of 2
+    // finished ... this is not an error" reads as the progress it is.
+    const client = await connect(
+      stubApi({
+        startReview: async () =>
+          [
+            { run_id: 'run-1', agent_id: 'a1', agent_name: 'General' },
+            { run_id: 'run-2', agent_id: 'a2', agent_name: 'Security' },
+          ] as RunTarget[],
+        listRuns: async () => [],
+      }),
+    );
+    const out = textOf(
+      await client.callTool({ name: 'run_agent_on_pr', arguments: { repo: 'acme/payments-api', pr: '482' } }),
+    );
+    expect(out.split('\n')[0]).toContain('0 of 2 reviewers finished');
+    expect(out).toContain('not an error');
+    expect(out).toContain('get_findings');
+    // Fanned out with no `agent`, so it says how to avoid the wait next time.
+    expect(out).toContain('pass `agent`');
+  });
+
+  it('omits the fan-out hint when the caller already named one agent', async () => {
+    const client = await connect(
+      stubApi({
+        startReview: async () => [{ run_id: 'run-1', agent_id: 'a1', agent_name: 'General' }] as RunTarget[],
+        listRuns: async () => [],
+      }),
+    );
+    const out = textOf(
+      await client.callTool({
+        name: 'run_agent_on_pr',
+        arguments: { repo: 'acme/payments-api', pr: '482', agent: 'General' },
+      }),
+    );
+    expect(out).toContain('0 of 1 reviewer finished');
+    expect(out).not.toContain('pass `agent`');
+  });
+
   it('stops polling once the caller aborts the call', async () => {
     let calls = 0;
     const api = stubApi({

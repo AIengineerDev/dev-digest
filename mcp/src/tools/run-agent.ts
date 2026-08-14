@@ -137,16 +137,26 @@ export function registerRunAgent(server: McpServer, { api, resolver, timing }: D
 
         // The wait wall was reached with runs still in flight. This is a
         // partial result, not a failure: the review keeps running on the
-        // server regardless of whether this tool call is still attached to
-        // it — say so, and point at how to collect the rest.
+        // server regardless of whether this tool call is still attached to it.
+        //
+        // Lead with the COUNT. A bare list of uuids under the word "still
+        // running" reads as a failure — reported by a user who saw exactly that
+        // and called it an error — while "0 of 5 finished" reads as progress,
+        // which is what it is.
         const stillRunning = started.filter((r) => !finished.has(r.run_id)).map((r) => r.run_id);
-        return text(
-          [
-            ...blocks,
-            `Still running after ${timing.waitMs}ms: ${stillRunning.join(', ')}. ` +
-              `The review is continuing in the background — collect these with get_findings.`,
-          ].join('\n\n'),
-        );
+        const secs = Math.round(timing.waitMs / 1000);
+        const header =
+          `${finished.size} of ${total} reviewer${total === 1 ? '' : 's'} finished within ${secs}s; ` +
+          `${stillRunning.length} still running. This is not an error — the review continues on the ` +
+          `server whether or not this call is still attached to it.`;
+        const next =
+          `Collect the rest with get_findings (pr is enough; run_id narrows it to one): ` +
+          `${stillRunning.join(', ')}.` +
+          // Only worth saying when the fan-out is what made it slow.
+          (agent === undefined && total > 1
+            ? ` To wait inline next time, pass \`agent\` and run one reviewer instead of ${total}.`
+            : '');
+        return text([header, ...blocks, next].join('\n\n'));
       }),
   );
 }
