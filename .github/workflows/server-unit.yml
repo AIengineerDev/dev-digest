@@ -48,6 +48,17 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # server/tsconfig.json aliases @devdigest/reviewer-core to
+      # ../reviewer-core/src, so tsc pulls those files into THIS program — and
+      # resolves their bare imports (`openai`, `zod`) against reviewer-core's
+      # own node_modules, which nothing else here installs. Without this the
+      # job fails with "Cannot find module 'openai'" while passing locally,
+      # where every package's node_modules already exists. npm, not pnpm:
+      # reviewer-core carries its own package-lock.json.
+      - name: install reviewer-core deps (path-aliased source)
+        run: npm ci
+        working-directory: reviewer-core
+
       - run: pnpm typecheck
 
   # Onion layering ratchet. `pnpm arch` ignores the recorded baseline and fails
