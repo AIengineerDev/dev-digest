@@ -825,6 +825,30 @@ describe('addressing by uuid', () => {
     expect(out).toContain('Services end in Service');
   });
 
+  it('treats a cleared repo field as absent, not as a repo named ""', async () => {
+    // Hosts send "" (or "  ") for a field the user typed into and then cleared.
+    // Read literally it produced `No imported repo matches "  "`, which blames
+    // the repo name for a missing argument.
+    const client = await connect(stubApi());
+    const result = await client.callTool({
+      name: 'run_agent_on_pr',
+      arguments: { pr: '482', repo: '   ' },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('Pass `repo`');
+    expect(textOf(result)).not.toContain('No imported repo matches');
+  });
+
+  it('ignores a cleared repo alongside a pr uuid, which needs none', async () => {
+    const api = stubApi();
+    const client = await connect(api);
+    await client.callTool({
+      name: 'run_agent_on_pr',
+      arguments: { pr: PR_UUID, repo: '' },
+    });
+    expect(api.started).toEqual([{ prId: PR_UUID, target: { all: true } }]);
+  });
+
   it('rejects a pr string that is neither a number nor a uuid, and says which', async () => {
     const client = await connect(stubApi());
     const result = await client.callTool({ name: 'run_agent_on_pr', arguments: { pr: 'PR-482' } });

@@ -80,7 +80,18 @@ export function createResolver(api: DevDigestApi): Resolver {
   const repoIds = new Map<string, string>();
   const prIds = new Map<string, string>();
 
+  /**
+   * A field the user typed into and then cleared arrives as `""` or `"  "`,
+   * not as absent — hosts send the empty string. Treating that as a real repo
+   * name produced `No imported repo matches "  "`, which reads as "your repo is
+   * wrong" when the actual state is "you did not give one".
+   */
+  const blank = (v: string | undefined): boolean => v === undefined || v.trim() === '';
+
   async function repoId(repo: string): Promise<string> {
+    if (blank(repo)) {
+      throw new ApiError('`repo` is empty. Pass owner/name, the repo uuid, or a repo URL.');
+    }
     // A uuid is already the answer. Not verified against the API first: the
     // caller's next request will 404 with the id in the message, which says the
     // same thing at no extra round trip.
@@ -127,7 +138,7 @@ export function createResolver(api: DevDigestApi): Resolver {
     // name-driven one it exists to simplify. `repoId` is returned empty because
     // no caller needs it on this path; the one that does passes a name.
     const uuid = asUuid(pr);
-    if (uuid) return { repoId: repo ? await repoId(repo) : '', prId: uuid };
+    if (uuid) return { repoId: blank(repo) ? '' : await repoId(repo!), prId: uuid };
 
     // `pr` is a STRING even when it holds a number, so that the tool schema
     // stays `type: "string"` rather than `anyOf: [integer, string]`. See the
@@ -138,6 +149,8 @@ export function createResolver(api: DevDigestApi): Resolver {
     // wrong pull request.
     const url = parsePrUrl(pr);
     const trimmed = pr.trim();
+    // Normalise a cleared field to "absent" before it is used as a lookup key.
+    const repoArg = blank(repo) ? undefined : repo;
     if (!url && !/^\d+$/.test(trimmed)) {
       throw new ApiError(
         `"${pr}" is not a PR number, a pull-request id, or a PR URL. Pass "482", ` +
@@ -145,7 +158,7 @@ export function createResolver(api: DevDigestApi): Resolver {
       );
     }
     const number = url ? url.number : Number(trimmed);
-    const repoRef = url ? url.repo : repo;
+    const repoRef = url ? url.repo : repoArg;
 
     if (repoRef === undefined) {
       throw new ApiError('Pass `repo` (owner/name) alongside a PR number, or pass the PR URL / pull-request uuid as `pr`.');
