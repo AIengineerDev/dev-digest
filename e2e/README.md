@@ -103,8 +103,8 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `03-agents` | agents list renders the seeded reviewer agents |
 | `04-pr-findings` | PR #482 → Agent runs tab → seeded run verdict + findings; expand → FindingCard |
 | `05-pr-diff` | PR #482 → Files changed tab → seeded file renders in the diff viewer |
-| `09-pr-blast-radius` | PR #482 → Overview → Blast Radius card, counts + the degraded-index summary |
-| `08-pr-smart-diff` | PR #482 → Files changed → Smart Diff groups, lock file in boilerplate, finding badge, Original-order fallback |
 | `06-onboarding` | `/onboarding` → add-repository form renders (no submit) |
 | `07-settings` | `/settings/api-keys` + `/settings/models` → section titles render |
 | `08-skills` | Create a skill in the Skills Lab, attach it to the seeded `Test Quality Reviewer` agent — confirmed by `aria-checked` flipping on its row checkbox. Real writes (`POST /skills`, agent skill-link save), no LLM call. Does **not** run a review — see `INSIGHTS.md`. |
+| `09-pr-smart-diff` | PR #482 → Files changed → Smart Diff groups, lock file in boilerplate, finding badge, Original-order fallback |
+| `10-pr-blast-radius` | PR #482 → Overview → Blast Radius card, counts + the degraded-index summary |

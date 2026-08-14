@@ -98,7 +98,7 @@ _None yet._
   `test-results/NN-*-fail.png` is what proves that, so read it before assuming
   the UI is broken. Match the casing you SEE, and prefer a body string over a
   `SectionLabel` title when you have one.
-  `specs/09-pr-blast-radius.flow.json:10`
+  `specs/10-pr-blast-radius.flow.json:10`
 - **2026-08-10** — `agent-browser find text "<string>" click` (non-`--exact`)
   can match a `<script>` tag, not the visible element you meant. Next.js embeds
   every `next-intl` namespace as one large serialized hydration payload in an
