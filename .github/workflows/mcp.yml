@@ -1,0 +1,48 @@
+name: mcp
+
+# npm, not pnpm — mcp carries its own package-lock.json, same as reviewer-core.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mcp/**"
+      - ".github/workflows/mcp.yml"
+      # mcp reaches @devdigest/shared through a tsconfig path alias straight
+      # into server/src/vendor/shared (see mcp/AGENTS.md) — it is never
+      # published or copied in. That makes it a real build input: a contract
+      # change here can break typecheck or tests in mcp/ without touching a
+      # single file inside mcp/ itself.
+      - "server/src/vendor/shared/**"
+  pull_request:
+    paths:
+      - "mcp/**"
+      - ".github/workflows/mcp.yml"
+      - "server/src/vendor/shared/**"
+
+concurrency:
+  group: mcp-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: mcp
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - run: npm ci
+
+      # `build` is a typecheck here too — mcp is consumed as TypeScript source
+      # and never emits JS (see mcp/AGENTS.md).
+      - run: npm run typecheck
+
+      - run: npm test

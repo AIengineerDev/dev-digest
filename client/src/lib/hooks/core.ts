@@ -17,6 +17,8 @@ import type {
   PrDetail,
   SpecFile,
   IndexStatus,
+  SmartDiff,
+  BlastRadius,
 } from "../types";
 
 // ---- Settings (F1: GET/PUT /settings, POST /settings/test-connection) ----
@@ -116,6 +118,36 @@ export function usePullDetail(prId: string | number | null | undefined) {
     queryKey: ["pull", prId],
     queryFn: () => api.get<PrDetail>(`/pulls/${prId}`),
     enabled: prId != null,
+  });
+}
+
+/**
+ * Smart Diff — the PR's files grouped by role, with the latest review's
+ * finding lines already attached.
+ *
+ * Deliberately NOT invalidated on a schedule: the server computes it from the
+ * imported files and the stored findings, so it changes only when a review
+ * finishes. `FindingsTab`'s `onRunDone` is what refetches it.
+ */
+export function useSmartDiff(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["smart-diff", prId],
+    queryFn: () => api.get<SmartDiff>(`/pulls/${prId}/smart-diff`),
+    enabled: !!prId,
+  });
+}
+
+/**
+ * Blast radius — which symbols a PR changes, who calls them, what sits
+ * downstream. Served from the persistent code index, so it costs no model call
+ * and, like Smart Diff, is never polled: it changes when the PR's files change
+ * or the repo is re-indexed, not on a timer.
+ */
+export function useBlastRadius(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["blast", prId],
+    queryFn: () => api.get<BlastRadius>(`/pulls/${prId}/blast`),
+    enabled: !!prId,
   });
 }
 

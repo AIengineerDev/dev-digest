@@ -1,0 +1,22 @@
+{
+  "name": "Files changed opens in Smart Diff order, lock file last and collapsed",
+  "description": "From PR #482, open the Files changed tab and confirm the reviewer-ordered view: Core logic first, Boilerplate last, the seeded package-lock.json grouped as boilerplate and collapsed (its diff body is not rendered), and the seeded review's finding badge present on the file it flagged. Toggling to Original order falls back to the flat viewer. Read-only seeded data — Smart Diff is deterministic and makes no model call. Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Files changed"], "label": "switch to the Files changed tab" },
+    { "cmd": ["wait", "--url", "tab=diff"], "label": "diff tab is active in the URL" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "smart-diff response settles" },
+    { "cmd": ["wait", "--text", "Core logic"], "label": "the core group renders" },
+    { "cmd": ["wait", "--text", "The substance of the change — review closely"], "label": "core group carries its reviewer hint" },
+    { "cmd": ["wait", "--text", "src/middleware/ratelimit.ts"], "label": "business logic is on the page" },
+    { "cmd": ["wait", "--text", "Boilerplate"], "label": "the boilerplate group renders" },
+    { "cmd": ["wait", "--text", "package-lock.json"], "label": "the lock file is classified as boilerplate" },
+    { "cmd": ["find", "role", "button", "click", "--name", "1 finding"], "label": "click the findings badge on the flagged file" },
+    { "cmd": ["find", "role", "button", "click", "--name", "Original order"], "label": "switch back to the unordered diff" },
+    { "cmd": ["wait", "--text", "src/middleware/ratelimit.ts"], "label": "the flat viewer still lists the changed files" }
+  ]
+}
