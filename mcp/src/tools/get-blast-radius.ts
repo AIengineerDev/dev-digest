@@ -22,7 +22,8 @@ export function registerGetBlastRadius(server: McpServer, { api, resolver }: Dep
       description:
         'What a PR reaches: changed symbols, who calls them, and the endpoints and crons downstream. From the code index — no review needed.',
       inputSchema: z.object({
-        pr: z.union([z.number().int().positive(), z.string()]).describe('PR number, or its uuid'),
+        // Plain string, not a union — see the note in `run-agent.ts`.
+        pr: z.string().describe('PR number (e.g. "482") or its uuid'),
         repo: z.string().optional().describe('owner/name — omit if pr is a uuid'),
         limit: z.number().int().min(1).max(60).optional().describe('Symbols, default 15'),
         detail: z.enum(['compact', 'full']).optional().describe('full lists each caller and endpoint'),

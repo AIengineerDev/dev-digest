@@ -39,7 +39,12 @@ export function registerRunAgent(server: McpServer, { api, resolver, timing }: D
       description:
         'Review a pull request and return its findings. Waits up to 2 min; on timeout returns finished runs plus run ids for get_findings.',
       inputSchema: z.object({
-        pr: z.union([z.number().int().positive(), z.string()]).describe('PR number, or its uuid'),
+        // A plain string, never `z.union([number, string])`: a union renders as
+        // `anyOf` in the JSON Schema, and a host with no widget for that falls
+        // back to a raw JSON editor — the MCP Inspector re-encodes the value on
+        // every keystroke there, so quotes accumulate backslashes and Backspace
+        // appears to do nothing. One type keeps the field a normal text input.
+        pr: z.string().describe('PR number (e.g. "482") or its uuid'),
         repo: z.string().optional().describe('owner/name — omit if pr is a uuid'),
         agent: z.string().optional().describe('Agent name or id from list_agents; omit to run every enabled agent'),
       }),

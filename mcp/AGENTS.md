@@ -74,6 +74,14 @@ before the user types a word. Input schemas are 60–80% of that cost.
   else — and cannot analyse a diff it reconstructed wrongly. Its first line is
   always the API's `summary`, which is what separates "nothing calls this" from
   "the index could not say"; never render the caller list without it.
+- **No input property may be a union.** `pr` is `z.string()` even though it
+  holds a number, because `z.union([number, string])` serialises to `anyOf`, and
+  a host with no widget for `anyOf` falls back to a raw JSON editor — in the MCP
+  Inspector that editor re-encodes on every keystroke, so quotes accumulate
+  backslashes and Backspace does nothing. The tool is then unusable by hand.
+  `resolve.ts` parses the digits instead. Pinned by a test that walks every
+  tool's `inputSchema.properties` and fails on `anyOf`/`oneOf`. Dropping the
+  union also freed 195 chars of the session budget, so this is not a trade.
 - **Every tool takes a name or a uuid.** `resolve.ts` short-circuits on anything
   matching `UUID_RE` (trimmed — a value pasted from an address bar carries
   whitespace), and `findAgent` matches on `id` or `name`. This exists because

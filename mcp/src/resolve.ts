@@ -34,8 +34,9 @@ export function asUuid(value: string): string | null {
 
 export interface Resolver {
   repoId(repo: string): Promise<string>;
-  /** `pr` is a PR number, or a pull-request uuid; `repo` may be omitted for a uuid. */
-  prId(repo: string | undefined, pr: number | string): Promise<{ repoId: string; prId: string }>;
+  /** `pr` is a PR number or a pull-request uuid, always as a string; `repo` may
+   *  be omitted for a uuid. */
+  prId(repo: string | undefined, pr: string): Promise<{ repoId: string; prId: string }>;
 }
 
 export function createResolver(api: DevDigestApi): Resolver {
@@ -78,32 +79,38 @@ export function createResolver(api: DevDigestApi): Resolver {
 
   async function prId(
     repo: string | undefined,
-    pr: number | string,
+    pr: string,
   ): Promise<{ repoId: string; prId: string }> {
     // A pull-request uuid identifies the PR on its own — `repo` is then
     // redundant, and demanding it would make the id-driven path harder than the
     // name-driven one it exists to simplify. `repoId` is returned empty because
     // no caller needs it on this path; the one that does passes a name.
-    if (typeof pr === 'string') {
-      const uuid = asUuid(pr);
-      if (uuid) return { repoId: repo ? await repoId(repo) : '', prId: uuid };
+    const uuid = asUuid(pr);
+    if (uuid) return { repoId: repo ? await repoId(repo) : '', prId: uuid };
+
+    // `pr` is a STRING even when it holds a number, so that the tool schema
+    // stays `type: "string"` rather than `anyOf: [integer, string]`. See the
+    // note on the schema in `tools/*.ts`.
+    const trimmed = pr.trim();
+    if (!/^\d+$/.test(trimmed)) {
       throw new ApiError(
-        `"${pr}" is neither a PR number nor a pull-request id. Pass the number (e.g. 482), ` +
-          'or the uuid from the DevDigest URL /pulls/<number> page.',
+        `"${pr}" is neither a PR number nor a pull-request id. Pass the number (e.g. "482"), ` +
+          'or the uuid from the DevDigest /pulls/<number> page URL.',
       );
     }
+    const number = Number(trimmed);
 
     if (repo === undefined) {
       throw new ApiError('Pass `repo` (owner/name) alongside a PR number, or pass the pull-request uuid as `pr`.');
     }
 
     const rid = await repoId(repo);
-    const key = `${rid}#${pr}`;
+    const key = `${rid}#${number}`;
     const cached = prIds.get(key);
     if (cached) return { repoId: rid, prId: cached };
 
     const pulls = await api.listPulls(rid);
-    const match = pulls.find((p) => p.number === pr);
+    const match = pulls.find((p) => p.number === number);
     if (!match?.id) {
       // `PrMeta.id` is nullish by contract: a PR seen on GitHub but not yet
       // persisted has no local id, and neither case is actionable differently.
@@ -112,7 +119,7 @@ export function createResolver(api: DevDigestApi): Resolver {
         .filter(Boolean)
         .join(' ');
       throw new ApiError(
-        `PR #${pr} is not imported for ${repo}. Imported: ${known || '(none)'}`,
+        `PR #${number} is not imported for ${repo}. Imported: ${known || '(none)'}`,
       );
     }
     prIds.set(key, match.id);

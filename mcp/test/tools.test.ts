@@ -209,6 +209,25 @@ describe('tool surface', () => {
     expect(len, `tools/list = ${len}`).toBeLessThan(4000);
   });
 
+  /**
+   * A union renders as `anyOf` in the JSON Schema, and a host with no widget for
+   * that falls back to a raw JSON editor. In the MCP Inspector that editor
+   * re-encodes the value on every keystroke: quotes accumulate backslashes and
+   * Backspace appears to do nothing, which makes the tool unusable by hand.
+   * `pr` was `z.union([number, string])` and hit exactly that.
+   */
+  it('keeps every input property a single JSON Schema type, never anyOf', async () => {
+    const { tools } = await client.listTools();
+    const unions: string[] = [];
+    for (const t of tools) {
+      for (const [name, schema] of Object.entries(t.inputSchema.properties ?? {})) {
+        const s = schema as Record<string, unknown>;
+        if (s.anyOf || s.oneOf) unions.push(`${t.name}.${name}`);
+      }
+    }
+    expect(unions).toEqual([]);
+  });
+
   it('marks the four read tools read-only and the run tool not', async () => {
     const { tools } = await client.listTools();
     const readOnly = Object.fromEntries(tools.map((t) => [t.name, t.annotations?.readOnlyHint]));
@@ -224,7 +243,7 @@ describe('tool surface', () => {
   it('rejects arguments the schema forbids without reaching the handler', async () => {
     const result = await client.callTool({
       name: 'get_findings',
-      arguments: { repo: 'acme/payments-api', pr: 482, limit: 999 },
+      arguments: { repo: 'acme/payments-api', pr: '482', limit: 999 },
     });
     expect(result.isError).toBe(true);
   });
@@ -260,7 +279,7 @@ describe('run_agent_on_pr', () => {
     const out = textOf(
       await client.callTool({
         name: 'run_agent_on_pr',
-        arguments: { repo: 'acme/payments-api', pr: 482 },
+        arguments: { repo: 'acme/payments-api', pr: '482' },
       }),
     );
     expect(api.started).toEqual([{ prId: 'pr-1', target: { all: true } }]);
@@ -273,7 +292,7 @@ describe('run_agent_on_pr', () => {
     const client = await connect(api);
     await client.callTool({
       name: 'run_agent_on_pr',
-      arguments: { repo: 'acme/payments-api', pr: 482, agent: 'general' },
+      arguments: { repo: 'acme/payments-api', pr: '482', agent: 'general' },
     });
     expect(api.started[0]?.target).toEqual({ agentId: 'a1' });
   });
@@ -282,7 +301,7 @@ describe('run_agent_on_pr', () => {
     const client = await connect(stubApi());
     const result = await client.callTool({
       name: 'run_agent_on_pr',
-      arguments: { repo: 'acme/payments-api', pr: 482, agent: 'Nope' },
+      arguments: { repo: 'acme/payments-api', pr: '482', agent: 'Nope' },
     });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain('General');
@@ -292,7 +311,7 @@ describe('run_agent_on_pr', () => {
     const client = await connect(stubApi());
     const result = await client.callTool({
       name: 'run_agent_on_pr',
-      arguments: { repo: 'other/thing', pr: 1 },
+      arguments: { repo: 'other/thing', pr: '1' },
     });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain('acme/payments-api');
@@ -310,7 +329,7 @@ describe('run_agent_on_pr', () => {
     const client = await connect(api);
     const result = await client.callTool({
       name: 'run_agent_on_pr',
-      arguments: { repo: 'acme/payments-api', pr: 482 },
+      arguments: { repo: 'acme/payments-api', pr: '482' },
     });
     const out = textOf(result);
     expect(result.isError).toBeUndefined();
@@ -334,7 +353,7 @@ describe('run_agent_on_pr', () => {
     const client = await connect(api, { waitMs: 100, pollMs: 5 });
     const result = await client.callTool({
       name: 'run_agent_on_pr',
-      arguments: { repo: 'acme/payments-api', pr: 482 },
+      arguments: { repo: 'acme/payments-api', pr: '482' },
     });
     const out = textOf(result);
     expect(result.isError).toBeUndefined();
@@ -355,7 +374,7 @@ describe('run_agent_on_pr', () => {
     const controller = new AbortController();
     const pending = client
       .callTool(
-        { name: 'run_agent_on_pr', arguments: { repo: 'acme/payments-api', pr: 482 } },
+        { name: 'run_agent_on_pr', arguments: { repo: 'acme/payments-api', pr: '482' } },
         { signal: controller.signal },
       )
       .catch(() => undefined);
@@ -381,7 +400,7 @@ describe('run_agent_on_pr', () => {
     const client = await connect(withProgress);
     const updates: { progress: number; total?: number }[] = [];
     await client.callTool(
-      { name: 'run_agent_on_pr', arguments: { repo: 'acme/payments-api', pr: 482 } },
+      { name: 'run_agent_on_pr', arguments: { repo: 'acme/payments-api', pr: '482' } },
       { onprogress: (p) => updates.push(p) },
     );
     expect(updates.length).toBeGreaterThan(0);
@@ -398,7 +417,7 @@ describe('run_agent_on_pr', () => {
     const client2 = await connect(withoutProgress);
     const result = await client2.callTool({
       name: 'run_agent_on_pr',
-      arguments: { repo: 'acme/payments-api', pr: 482 },
+      arguments: { repo: 'acme/payments-api', pr: '482' },
     });
     expect(result.isError).toBeUndefined();
   });
@@ -412,7 +431,7 @@ describe('get_findings', () => {
       stubApi({ listRuns: async () => [run({ status: 'running' })], listReviews: async () => [] }),
     );
     const out = textOf(
-      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: '482' } }),
     );
     expect(out).toContain('status running');
     expect(out).toContain('Still running');
@@ -428,7 +447,7 @@ describe('get_findings', () => {
     const out = textOf(
       await client.callTool({
         name: 'get_findings',
-        arguments: { repo: 'acme/payments-api', pr: 482, limit: 5 },
+        arguments: { repo: 'acme/payments-api', pr: '482', limit: 5 },
       }),
     );
     expect(out).toContain('Problem 5');
@@ -448,7 +467,7 @@ describe('get_findings', () => {
     const out = textOf(
       await client.callTool({
         name: 'get_findings',
-        arguments: { repo: 'acme/payments-api', pr: 482, min_severity: 'CRITICAL' },
+        arguments: { repo: 'acme/payments-api', pr: '482', min_severity: 'CRITICAL' },
       }),
     );
     expect(out).toContain('Problem 2');
@@ -461,7 +480,7 @@ describe('get_findings', () => {
       listReviews: async () => [review({ findings: [finding(1)] as never })],
     });
     const client = await connect(api);
-    const args = { repo: 'acme/payments-api', pr: 482 };
+    const args = { repo: 'acme/payments-api', pr: '482' };
     expect(textOf(await client.callTool({ name: 'get_findings', arguments: args }))).not.toContain(
       'Because of reason 1',
     );
@@ -487,7 +506,7 @@ describe('get_findings', () => {
       }),
     );
     const out = textOf(
-      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: '482' } }),
     );
     expect(out).toContain('run-2');
     expect(out).toContain('run-1');
@@ -513,7 +532,7 @@ describe('get_findings', () => {
       }),
     );
     const out = textOf(
-      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: '482' } }),
     );
     expect(out).toContain('pass3-general');
     expect(out).toContain('pass3-security');
@@ -533,7 +552,7 @@ describe('get_findings', () => {
       }),
     );
     const out = textOf(
-      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: '482' } }),
     );
     expect(out).toContain('orphan-a');
     expect(out).toContain('orphan-b');
@@ -542,7 +561,7 @@ describe('get_findings', () => {
   it('tells the caller to start a review when the PR has none', async () => {
     const client = await connect(stubApi({ listRuns: async () => [] }));
     const out = textOf(
-      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+      await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: '482' } }),
     );
     expect(out).toContain('run_agent_on_pr');
   });
@@ -598,7 +617,7 @@ describe('get_blast_radius', () => {
     const out = textOf(
       await client.callTool({
         name: 'get_blast_radius',
-        arguments: { repo: 'acme/payments-api', pr: 482 },
+        arguments: { repo: 'acme/payments-api', pr: '482' },
       }),
     );
     expect(seen).toEqual(['pr-1']);
@@ -617,7 +636,7 @@ describe('get_blast_radius', () => {
   it('omits per-caller lines until detail is full', async () => {
     const client = await connect(stubApi({ getBlastRadius: async () => BLAST }));
     const compact = textOf(
-      await client.callTool({ name: 'get_blast_radius', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+      await client.callTool({ name: 'get_blast_radius', arguments: { repo: 'acme/payments-api', pr: '482' } }),
     );
     expect(compact).not.toContain('src/server.ts:40');
     // Endpoints survive compaction: "which routes can break" is the question.
@@ -626,7 +645,7 @@ describe('get_blast_radius', () => {
     const full = textOf(
       await client.callTool({
         name: 'get_blast_radius',
-        arguments: { repo: 'acme/payments-api', pr: 482, detail: 'full' },
+        arguments: { repo: 'acme/payments-api', pr: '482', detail: 'full' },
       }),
     );
     expect(full).toContain('boot — src/server.ts:40');
@@ -647,7 +666,7 @@ describe('get_blast_radius', () => {
     const out = textOf(
       await client.callTool({
         name: 'get_blast_radius',
-        arguments: { repo: 'acme/payments-api', pr: 482, limit: 2 },
+        arguments: { repo: 'acme/payments-api', pr: '482', limit: 2 },
       }),
     );
     expect(out).toContain('+3 more');
@@ -656,7 +675,7 @@ describe('get_blast_radius', () => {
   it('returns the API summary verbatim when there is nothing to report', async () => {
     const client = await connect(stubApi());
     const out = textOf(
-      await client.callTool({ name: 'get_blast_radius', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+      await client.callTool({ name: 'get_blast_radius', arguments: { repo: 'acme/payments-api', pr: '482' } }),
     );
     expect(out).toBe(EMPTY_BLAST.summary);
   });
@@ -731,7 +750,7 @@ describe('addressing by uuid', () => {
 
   it('asks for a repo when given a bare PR number without one', async () => {
     const client = await connect(stubApi());
-    const result = await client.callTool({ name: 'run_agent_on_pr', arguments: { pr: 482 } });
+    const result = await client.callTool({ name: 'run_agent_on_pr', arguments: { pr: '482' } });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain('owner/name');
   });

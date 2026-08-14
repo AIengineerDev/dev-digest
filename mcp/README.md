@@ -8,7 +8,8 @@ Why it exists and what was deliberately left out: [`../specs/06-mcp-server.md`](
 ## Tools
 
 Every tool takes **either a name or a uuid**: `repo` accepts `owner/name` or the
-repo id, `pr` accepts the PR number or the pull-request id, and `agent` accepts
+repo id, `pr` accepts the PR number or the pull-request id (always as a
+**string** — `"482"`, not `482`), and `agent` accepts
 the agent's name or its id. Names are what a model has in a checkout; ids are
 what a person copies out of the studio URL or out of `list_agents`. A `pr` uuid
 identifies the PR on its own, so `repo` may be omitted with one.
@@ -173,7 +174,7 @@ Three of the tests are guards rather than feature coverage: exactly five tools,
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `"…" is neither a PR number nor a pull-request id` | A `pr` string that is not a uuid | Pass the number (`482`) or the uuid from the studio URL |
+| `"…" is neither a PR number nor a pull-request id` | A `pr` that is neither digits nor a uuid | Pass `"482"` or the uuid from the studio URL |
 | `Cannot reach the DevDigest API…` | The stack is not up | Step 1; check `curl localhost:3001/health` |
 | Host shows the server but no tools | Server failed to start | Run step 3 by hand; errors go to stderr, which the host shows as server logs |
 | `No imported repo matches "…"` | Repo not imported into DevDigest | The message lists the repos that *are* imported; add yours in the UI |
