@@ -342,20 +342,7 @@ export class ReviewRunExecutor {
       // the timeline colors on, NOT the model's self-reported verdict.
       const blockers = countBlockers(keptFindings, agent.ciFailOn);
 
-      // ---- Observability: agent_runs + ONE run_traces document --------------
-      await this.repo.completeAgentRun(runId, {
-        status: 'done',
-        durationMs,
-        tokensIn,
-        tokensOut,
-        costUsd,
-        findingsCount: findingRows.length,
-        grounding,
-        score: outcome.review.score,
-        blockers,
-        error: null,
-      });
-
+      // ---- Observability: ONE run_traces document, THEN agent_runs ---------
       const trace: RunTrace = {
         config: {
           agent: agent.name,
@@ -397,8 +384,27 @@ export class ReviewRunExecutor {
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),
       };
-      runLog.info('Run complete; trace persisted');
+      // The trace is persisted BEFORE the run is marked done, so that `done`
+      // means "everything about this run is readable". The other order left a
+      // window in which a consumer that polls for the status and then fetches
+      // the trace — which is exactly what the PR page and the MCP tools do —
+      // got a run marked complete with no trace document behind it. Rare
+      // locally, reproducible on slower CI, where it surfaced as
+      // `Cannot read properties of undefined (reading 'skills')`.
       await this.repo.saveRunTrace(runId, trace);
+      await this.repo.completeAgentRun(runId, {
+        status: 'done',
+        durationMs,
+        tokensIn,
+        tokensOut,
+        costUsd,
+        findingsCount: findingRows.length,
+        grounding,
+        score: outcome.review.score,
+        blockers,
+        error: null,
+      });
+      runLog.info('Run complete; trace persisted');
       this.container.runBus.complete(runId);
 
       return { review, findings: findingRows, grounding, raw: outcome.review };
