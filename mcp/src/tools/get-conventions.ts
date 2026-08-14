@@ -9,9 +9,9 @@ export function registerGetConventions(server: McpServer, { api, resolver }: Dep
     {
       title: 'Get repository conventions',
       description:
-        "A repository's house rules mined from its own code, each with the file and line that evidences it. Use them before writing code for that repo.",
+        "A repo's house rules mined from its own code, each with the file and line evidencing it. Read before writing code for it.",
       inputSchema: z.object({
-        repo: z.string().describe('owner/name, e.g. acme/payments-api'),
+        repo: z.string().describe('owner/name, or the repo uuid'),
         // Default is `accepted`: pending candidates are unreviewed model output
         // and rejected ones were turned down on purpose — neither is a house rule.
         status: z.enum(['accepted', 'pending', 'rejected']).optional(),

@@ -7,13 +7,19 @@ Why it exists and what was deliberately left out: [`../specs/06-mcp-server.md`](
 
 ## Tools
 
+Every tool takes **either a name or a uuid**: `repo` accepts `owner/name` or the
+repo id, `pr` accepts the PR number or the pull-request id, and `agent` accepts
+the agent's name or its id. Names are what a model has in a checkout; ids are
+what a person copies out of the studio URL or out of `list_agents`. A `pr` uuid
+identifies the PR on its own, so `repo` may be omitted with one.
+
 | Tool | Does | Read-only |
 | --- | --- | --- |
 | `list_agents` | The configured reviewers: name, provider/model, strategy, CI gate | yes |
-| `run_agent_on_pull_request` | Starts a review, waits up to 120 s, returns findings inline (or a partial result plus run ids if the wall is hit) | **no** |
+| `run_agent_on_pr` | Starts a review, waits up to 120 s, returns findings inline (or a partial result plus run ids if the wall is hit) | **no** |
 | `get_findings` | Status, verdict, score and findings of a run | yes |
 | `get_conventions` | A repo's mined house rules, each with its evidence line | yes |
-| `get_blast_radius` | **Stub** — always fails with `not_implemented` | yes |
+| `get_blast_radius` | What a PR reaches: changed symbols, callers, endpoints, crons | yes |
 
 Pull requests are addressed the way you would say them out loud:
 `repo: "acme/payments-api", pr: 482`.
@@ -86,7 +92,7 @@ go back to step 1.
 
 ### 5. Raise the tool call timeout before registering with a host
 
-`run_agent_on_pull_request` blocks for up to 120 s. Most MCP hosts, including
+`run_agent_on_pr` blocks for up to 120 s. Most MCP hosts, including
 Claude Code, cap a single tool call well under that (the MCP TypeScript SDK's
 client default is 60 s) and **do not** extend it for progress notifications —
 it is a hard per-call wall. Raise it or the host will cut the call before the
@@ -141,7 +147,7 @@ Then, in a **new** session: `/mcp` should list `devdigest` with five tools.
 | --- | --- | --- |
 | `DEVDIGEST_API_URL` | `http://localhost:3001` | Where the DevDigest API listens |
 | `MCP_TOOL_TIMEOUT` | host-dependent (SDK default 60 s) | How long the **host** allows one tool call. Must exceed the wait wall below |
-| `DEVDIGEST_MCP_WAIT_MS` | `120000` | How long `run_agent_on_pull_request` waits before returning a partial result |
+| `DEVDIGEST_MCP_WAIT_MS` | `120000` | How long `run_agent_on_pr` waits before returning a partial result |
 | `DEVDIGEST_MCP_POLL_MS` | `2000` | How often it polls the API while waiting |
 | `DEVDIGEST_MCP_REQUEST_TIMEOUT_MS` | `15000` | Per-HTTP-request timeout, so a hung connection cannot eat the wait budget |
 
@@ -167,10 +173,12 @@ Three of the tests are guards rather than feature coverage: exactly five tools,
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
+| `"…" is neither a PR number nor a pull-request id` | A `pr` string that is not a uuid | Pass the number (`482`) or the uuid from the studio URL |
 | `Cannot reach the DevDigest API…` | The stack is not up | Step 1; check `curl localhost:3001/health` |
 | Host shows the server but no tools | Server failed to start | Run step 3 by hand; errors go to stderr, which the host shows as server logs |
 | `No imported repo matches "…"` | Repo not imported into DevDigest | The message lists the repos that *are* imported; add yours in the UI |
 | `PR #N is not imported for …` | PR not synced | Open the repo's PR list in the UI once |
+| `No changed files recorded for this PR` from `get_blast_radius` | The PR's diff was never imported | Open the PR once in the studio — `GET /pulls/:id` is what imports it |
 | Review call dies around 60 s | Host cut the call | Raise `MCP_TOOL_TIMEOUT` (step 5). The run survives — collect it with `get_findings` |
 | `Rate limited: … 10 requests per minute` | Too many reviews started | Wait a minute; the limit is the API's, not this server's |
 | Reviews return `approve · 100` and "the diff is empty" | Stack has no `GITHUB_TOKEN` or no clone | Set the token in Settings, re-import the PR |
@@ -183,7 +191,7 @@ returns findings directly, no polling from the model:
 
 ```
 list_agents                                            → General, Security
-run_agent_on_pull_request  acme/payments-api #482      → request_changes · 62
+run_agent_on_pr  acme/payments-api #482      → request_changes · 62
                                                           CRITICAL security src/auth.ts:41 — …
 get_conventions            acme/payments-api           → error-handling — …
 ```
@@ -192,7 +200,7 @@ The timeout path — the review is still running when the 120 s wall hits, so
 the tool returns what finished plus a pointer to collect the rest:
 
 ```
-run_agent_on_pull_request  acme/payments-api #482      → partial: General done (approve · 88)
+run_agent_on_pr  acme/payments-api #482      → partial: General done (approve · 88)
                                                           Security still running (run_id 8f3c…)
                                                           → get_findings run_id: 8f3c…
 get_findings               run_id 8f3c…                → request_changes · 62

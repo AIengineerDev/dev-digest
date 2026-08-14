@@ -9,7 +9,7 @@ export function registerListAgents(server: McpServer, { api }: Deps): void {
     {
       title: 'List review agents',
       description:
-        'List the DevDigest review agents (reviewers): name, provider/model, strategy and CI gate.',
+        'DevDigest review agents: id, name, provider/model, strategy, CI gate.',
       inputSchema: z.object({
         include_disabled: z.boolean().optional(),
       }),

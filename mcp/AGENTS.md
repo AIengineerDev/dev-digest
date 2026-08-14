@@ -40,6 +40,11 @@ before the user types a word. Input schemas are 60–80% of that cost.
 
 - `tools/list` must serialise to **under 4000 characters** (≈ 900 tokens). Pinned
   by a test in `test/tools.test.ts`. Adding a tool means staying under it.
+  Measured 2026-08-13: **3910** — 90 chars of headroom, so the next schema field
+  is a real trade, not a rounding error. Making `get_blast_radius` real pushed it
+  to 4016 and the guard failed; three over-long descriptions were trimmed rather
+  than the limit raised. Trim descriptions first, and re-measure by temporarily
+  logging `len` in that test.
 - One-line descriptions. `.describe()` only where the model cannot guess.
 - **No `outputSchema`** — it is advertised in `tools/list` and would roughly
   double the static cost, and these results are read by a model, not a program.
@@ -64,11 +69,20 @@ before the user types a word. Input schemas are 60–80% of that cost.
   11 runs, up to 3 per agent, one head. Dropping the per-agent dedupe turns the
   package's compact tool into its largest response, and it grows with every
   re-review. `src/tools/get-findings.ts`
-- `get_blast_radius` is a **stub** that always returns `isError`. The engine side
-  (`RepoIntelService.getBlastRadius`) exists but has no HTTP route yet.
+- `get_blast_radius` takes the **PR**, not a file list. The server derives the
+  changed files from `pr_files`, so a caller that can name the PR needs nothing
+  else — and cannot analyse a diff it reconstructed wrongly. Its first line is
+  always the API's `summary`, which is what separates "nothing calls this" from
+  "the index could not say"; never render the caller list without it.
+- **Every tool takes a name or a uuid.** `resolve.ts` short-circuits on anything
+  matching `UUID_RE` (trimmed — a value pasted from an address bar carries
+  whitespace), and `findAgent` matches on `id` or `name`. This exists because
+  the Inspector is where these tools are first driven by hand, and there the
+  caller has ids, not names. It costs nothing in the schema: the parameter is a
+  string either way. Do not "simplify" it back to names-only.
 - Errors are returned as `isError` results, never thrown: the model reads the
   message and retries. Phrase every one of them with the fix in it.
-- **`run_agent_on_pull_request` blocks, and the wait window is bigger than what
+- **`run_agent_on_pr` blocks, and the wait window is bigger than what
   most hosts allow a single tool call.** It waits up to 120 s
   (`DEVDIGEST_MCP_WAIT_MS`), but the MCP TypeScript SDK's client default is
   `DEFAULT_REQUEST_TIMEOUT_MSEC = 60_000` — half that — and progress

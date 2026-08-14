@@ -1,6 +1,6 @@
 # `devdigest-mcp` — DevDigest's reviewers as MCP tools
 
-**Status:** in progress (`run_agent_on_pull_request` now blocking; blast radius
+**Status:** in progress (`run_agent_on_pr` now blocking; blast radius
 stubbed)
 **Packages touched:** `mcp/` (new). No change to `server`, `client`,
 `reviewer-core` or `@devdigest/shared`.
@@ -19,7 +19,8 @@ in reverse: a repo's mined conventions are house rules an agent should be readin
 ## Scope
 
 **In** — a standalone `mcp/` package; a stdio MCP server exposing five tools;
-name-based addressing (`owner/repo` + PR number); compact responses; tests.
+addressing by name **or** uuid (`owner/repo` + PR number, or the ids copied out
+of the studio URL); compact responses; tests.
 
 **Out** — any change to the server or client; real blast radius; authentication
 (the API runs `LocalNoAuthProvider` against a single default workspace);
@@ -32,10 +33,10 @@ publishing to npm; resources and prompts (tools only).
 | Tool | Endpoints |
 | --- | --- |
 | `list_agents` | `GET /agents` |
-| `run_agent_on_pull_request` | `GET /repos`, `GET /repos/:id/pulls`, `POST /pulls/:id/review` |
+| `run_agent_on_pr` | `GET /repos`, `GET /repos/:id/pulls`, `POST /pulls/:id/review` |
 | `get_findings` | + `GET /pulls/:id/runs`, `GET /pulls/:id/reviews` |
 | `get_conventions` | + `GET /repos/:id/conventions?status=` |
-| `get_blast_radius` | none — stub |
+| `get_blast_radius` | `GET /pulls/:id/blast` (added by `specs/08-blast-radius.md`) |
 
 `POST /pulls/:id/review` is **still** fire-and-forget on the server side:
 `ReviewService.runReview` creates the `agent_runs` rows, returns the run ids,
@@ -57,7 +58,7 @@ ids and memoises successes for the process lifetime — misses are never cached,
 since "not imported yet" is a state the user can fix mid-session.
 
 **The run tool blocks, up to a 120 s wall, and returns findings inline.**
-`run_agent_on_pull_request` calls `POST /pulls/:id/review` (which still returns
+`run_agent_on_pr` calls `POST /pulls/:id/review` (which still returns
 immediately server-side), then polls `GET /pulls/:id/runs` every 2 s until every
 run it started has finished or the wall is hit. On the wall it returns a
 **partial** result — the runs that finished, plus the run ids still going and a
@@ -89,7 +90,7 @@ longer the primary way to collect a result, only the way to collect after a
 > design returned `run_id` immediately on the theory that a review takes tens
 > of seconds and a blocking tool call risks a host timeout and dumps the whole
 > result into context at once. This was overruled: in practice the two-call
-> shape (`run_agent_on_pull_request` then `get_findings`) cost a full
+> shape (`run_agent_on_pr` then `get_findings`) cost a full
 > conversation turn per poll, which is worse for a model than one call that
 > waits — and the host-timeout risk is bounded and documented (see
 > `mcp/AGENTS.md`) rather than designed around, since the run's own progress is
@@ -123,20 +124,22 @@ where one that gets an empty result invents an impact analysis.
    a test; it is the guard that keeps session-start cost from drifting.
 3. The four read tools carry `readOnlyHint: true`, the run tool `false`.
 4. `list_agents` output contains no `system_prompt`.
-5. Against a running stack: `run_agent_on_pull_request` on the seeded
+5. Against a running stack: `run_agent_on_pr` on the seeded
    `acme/payments-api` #482 blocks and returns the finished runs' verdict,
    score and findings inline when the review completes inside the wait window.
 6. Against a running stack with a review forced past the wait window (or
-   `DEVDIGEST_MCP_WAIT_MS` lowered): `run_agent_on_pull_request` returns a
+   `DEVDIGEST_MCP_WAIT_MS` lowered): `run_agent_on_pr` returns a
    **partial** result before the wall — the runs already finished, the run ids
    still going, and a pointer to `get_findings` — never an `isError`.
-7. `get_blast_radius` returns `isError` with `not_implemented`.
+7. `get_blast_radius` returns the PR's impact map, summary first.
 
 ## Open questions
 
-- Blast radius needs an HTTP route before the tool can be real. Whether it takes
-  a PR (changed files derived server-side) or an explicit file list is undecided;
-  the stub takes the file list.
+~~- Blast radius needs an HTTP route before the tool can be real…~~ **Resolved
+  2026-08-13:** the route is `GET /pulls/:id/blast` and the tool takes the **PR**,
+  not a file list — the server already knows which files the PR touches, so a
+  caller that reconstructs the diff can only get it wrong. See
+  `specs/08-blast-radius.md`.
 - Some hosts cap a single tool call around 60 s (the MCP TypeScript SDK's
   `DEFAULT_REQUEST_TIMEOUT_MSEC`), below our 120 s wall, and progress
   notifications do not extend that limit in Claude Code. Whether to lower the

@@ -1,5 +1,5 @@
 /**
- * Timing for the one tool that blocks: `run_agent_on_pull_request` polls
+ * Timing for the one tool that blocks: `run_agent_on_pr` polls
  * `GET /pulls/:id/runs` instead of returning immediately (see
  * `tools/run-agent.ts`). These are read once at module load and handed to
  * `buildServer()` as defaults — never read from `process.env` deep inside the
@@ -17,7 +17,7 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-/** Wall-clock budget `run_agent_on_pull_request` blocks for, in ms. */
+/** Wall-clock budget `run_agent_on_pr` blocks for, in ms. */
 export const WAIT_MS = envInt('DEVDIGEST_MCP_WAIT_MS', 120_000);
 
 /** Interval between `GET /pulls/:id/runs` polls, in ms. */

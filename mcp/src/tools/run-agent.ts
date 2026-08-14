@@ -3,7 +3,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import type { RunSummary } from '@devdigest/shared';
 import { ApiError } from '../api.js';
 import { formatRun } from '../format.js';
-import { guard, text, type Deps } from './shared.js';
+import { findAgent, guard, text, type Deps } from './shared.js';
 
 /** Findings per run in the inline render — same cap as `get_findings`. */
 const FINDINGS_CAP = 20;
@@ -33,15 +33,15 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 
 export function registerRunAgent(server: McpServer, { api, resolver, timing }: Deps): void {
   server.registerTool(
-    'run_agent_on_pull_request',
+    'run_agent_on_pr',
     {
       title: 'Run a review agent on a pull request',
       description:
         'Review a pull request and return its findings. Waits up to 2 min; on timeout returns finished runs plus run ids for get_findings.',
       inputSchema: z.object({
-        repo: z.string().describe('owner/name, e.g. acme/payments-api'),
-        pr: z.number().int().positive().describe('Pull request number'),
-        agent: z.string().optional().describe('Agent name from list_agents; omit to run every enabled agent'),
+        pr: z.union([z.number().int().positive(), z.string()]).describe('PR number, or its uuid'),
+        repo: z.string().optional().describe('owner/name — omit if pr is a uuid'),
+        agent: z.string().optional().describe('Agent name or id from list_agents; omit to run every enabled agent'),
       }),
       // Not read-only: it spends money on an LLM call and writes a run + review.
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
@@ -52,13 +52,7 @@ export function registerRunAgent(server: McpServer, { api, resolver, timing }: D
 
         let target: { agentId: string } | { all: true } = { all: true };
         if (agent !== undefined) {
-          const agents = await api.listAgents();
-          const match = agents.find((a) => a.name.toLowerCase() === agent.toLowerCase());
-          if (!match) {
-            throw new ApiError(
-              `No agent named "${agent}". Available: ${agents.map((a) => a.name).join(', ') || '(none)'}`,
-            );
-          }
+          const match = findAgent(await api.listAgents(), agent);
           if (!match.enabled) {
             throw new ApiError(`Agent "${match.name}" is disabled — enable it in DevDigest first.`);
           }

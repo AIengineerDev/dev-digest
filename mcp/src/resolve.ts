@@ -1,9 +1,15 @@
 /**
- * Names in, uuids out.
+ * Names in, uuids out — and uuids in, uuids out.
  *
  * Tools take `repo: "acme/payments-api"` and `pr: 482` because that is what the
  * model can see in a checkout; the HTTP API takes uuids. This is the one place
  * that bridges the two.
+ *
+ * A raw uuid is also accepted wherever a name is, and short-circuits the lookup.
+ * That is not redundancy: a person driving the MCP Inspector by hand copies ids
+ * out of the DevDigest studio URL, and rejecting them would make the tools
+ * unusable in exactly the setting they are first tried in. It costs nothing in
+ * the tool schema — the parameter is a string either way.
  *
  * Only *successful* lookups are memoised, and only for the life of the process:
  * a repo id never changes, but "not imported yet" is a state the user can fix
@@ -13,9 +19,23 @@ import type { DevDigestApi } from './api.js';
 import { ApiError } from './api.js';
 import { more } from './format.js';
 
+/**
+ * Canonical uuid form, trimmed. The trim is load-bearing, not politeness: a
+ * value pasted out of a browser address bar routinely carries whitespace, and a
+ * near-miss uuid otherwise falls through to the name path and reports "no repo
+ * matches", which sends the reader looking in the wrong place.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function asUuid(value: string): string | null {
+  const trimmed = value.trim();
+  return UUID_RE.test(trimmed) ? trimmed : null;
+}
+
 export interface Resolver {
   repoId(repo: string): Promise<string>;
-  prId(repo: string, pr: number): Promise<{ repoId: string; prId: string }>;
+  /** `pr` is a PR number, or a pull-request uuid; `repo` may be omitted for a uuid. */
+  prId(repo: string | undefined, pr: number | string): Promise<{ repoId: string; prId: string }>;
 }
 
 export function createResolver(api: DevDigestApi): Resolver {
@@ -23,7 +43,13 @@ export function createResolver(api: DevDigestApi): Resolver {
   const prIds = new Map<string, string>();
 
   async function repoId(repo: string): Promise<string> {
-    const key = repo.toLowerCase();
+    // A uuid is already the answer. Not verified against the API first: the
+    // caller's next request will 404 with the id in the message, which says the
+    // same thing at no extra round trip.
+    const uuid = asUuid(repo);
+    if (uuid) return uuid;
+
+    const key = repo.trim().toLowerCase();
     const cached = repoIds.get(key);
     if (cached) return cached;
 
@@ -50,7 +76,27 @@ export function createResolver(api: DevDigestApi): Resolver {
     return id;
   }
 
-  async function prId(repo: string, pr: number): Promise<{ repoId: string; prId: string }> {
+  async function prId(
+    repo: string | undefined,
+    pr: number | string,
+  ): Promise<{ repoId: string; prId: string }> {
+    // A pull-request uuid identifies the PR on its own — `repo` is then
+    // redundant, and demanding it would make the id-driven path harder than the
+    // name-driven one it exists to simplify. `repoId` is returned empty because
+    // no caller needs it on this path; the one that does passes a name.
+    if (typeof pr === 'string') {
+      const uuid = asUuid(pr);
+      if (uuid) return { repoId: repo ? await repoId(repo) : '', prId: uuid };
+      throw new ApiError(
+        `"${pr}" is neither a PR number nor a pull-request id. Pass the number (e.g. 482), ` +
+          'or the uuid from the DevDigest URL /pulls/<number> page.',
+      );
+    }
+
+    if (repo === undefined) {
+      throw new ApiError('Pass `repo` (owner/name) alongside a PR number, or pass the pull-request uuid as `pr`.');
+    }
+
     const rid = await repoId(repo);
     const key = `${rid}#${pr}`;
     const cached = prIds.get(key);
