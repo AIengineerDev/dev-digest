@@ -41,6 +41,18 @@ jobs:
 
       - run: npm ci
 
+      # mcp/tsconfig.json aliases @devdigest/shared straight into
+      # server/src/vendor/shared, whose files `import { z } from 'zod'` — tsc
+      # resolves that against SERVER's node_modules, so the server's deps are a
+      # build input for this job even though no file under mcp/ changes.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: install server deps (path-aliased @devdigest/shared)
+        run: pnpm install --frozen-lockfile
+        working-directory: server
+
       # `build` is a typecheck here too — mcp is consumed as TypeScript source
       # and never emits JS (see mcp/AGENTS.md).
       - run: npm run typecheck
