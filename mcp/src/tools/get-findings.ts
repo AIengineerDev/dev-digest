@@ -48,7 +48,7 @@ export function registerGetFindings(server: McpServer, { api, resolver }: Deps):
         "Read an existing review: status, verdict, score, findings. Use to collect a run that timed out.",
       inputSchema: z.object({
         // Plain string, not a union — see the note in `run-agent.ts`.
-        pr: z.string().describe('PR number (e.g. "482") or its uuid'),
+        pr: z.string().describe('PR number, its uuid, or a pasted PR URL'),
         repo: z.string().optional().describe('owner/name — omit if pr is a uuid'),
         run_id: z.string().optional().describe('From run_agent_on_pr; omit for the latest review pass'),
         min_severity: z.enum(['CRITICAL', 'WARNING', 'SUGGESTION']).optional(),

@@ -82,6 +82,13 @@ before the user types a word. Input schemas are 60–80% of that cost.
   `resolve.ts` parses the digits instead. Pinned by a test that walks every
   tool's `inputSchema.properties` and fails on `anyOf`/`oneOf`. Dropping the
   union also freed 195 chars of the session budget, so this is not a trade.
+- **Every tool also takes a pasted URL.** `parsePrUrl` / `parseRepoUrl` accept a
+  GitHub PR link and a DevDigest studio link; the GitHub one carries owner, repo
+  and number, so `repo` becomes unnecessary. This exists because the URL is what
+  is on the clipboard when a person is looking at the PR, and it was the one
+  value the tool rejected. A URL beats an explicit `repo` when they disagree —
+  reviewing a different repo's PR silently is the worse outcome. Free in the
+  schema: still `type: "string"`. `src/resolve.ts`
 - **Every tool takes a name or a uuid.** `resolve.ts` short-circuits on anything
   matching `UUID_RE` (trimmed — a value pasted from an address bar carries
   whitespace), and `findAgent` matches on `id` or `name`. This exists because

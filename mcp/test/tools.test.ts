@@ -741,11 +741,55 @@ describe('addressing by uuid', () => {
     expect(out).toContain(AGENT_UUID);
   });
 
+  it('takes a pasted GitHub PR URL, repo and number and all', async () => {
+    // The URL is what is on the clipboard when someone is looking at the PR.
+    const api = stubApi();
+    const client = await connect(api);
+    await client.callTool({
+      name: 'run_agent_on_pr',
+      arguments: { pr: 'https://github.com/acme/payments-api/pull/482' },
+    });
+    expect(api.started).toEqual([{ prId: 'pr-1', target: { all: true } }]);
+  });
+
+  it('takes a pasted DevDigest studio PR URL', async () => {
+    const api = stubApi();
+    const client = await connect(api);
+    await client.callTool({
+      name: 'run_agent_on_pr',
+      arguments: { pr: `http://localhost:3002/repos/${REPO_UUID}/pulls/482` },
+    });
+    expect(api.started).toEqual([{ prId: 'pr-1', target: { all: true } }]);
+  });
+
+  it('lets the URL win over a repo argument that disagrees with it', async () => {
+    // Reviewing the wrong PR silently is worse than either answer being wrong.
+    const api = stubApi();
+    const client = await connect(api);
+    const res = await client.callTool({
+      name: 'run_agent_on_pr',
+      arguments: { repo: 'other/thing', pr: 'https://github.com/acme/payments-api/pull/482' },
+    });
+    expect(res.isError).toBeFalsy();
+    expect(api.started).toEqual([{ prId: 'pr-1', target: { all: true } }]);
+  });
+
+  it('takes a pasted repo URL where it takes owner/name', async () => {
+    const client = await connect(uuidApi());
+    const out = textOf(
+      await client.callTool({
+        name: 'get_conventions',
+        arguments: { repo: 'https://github.com/acme/payments-api' },
+      }),
+    );
+    expect(out).toContain('Services end in Service');
+  });
+
   it('rejects a pr string that is neither a number nor a uuid, and says which', async () => {
     const client = await connect(stubApi());
     const result = await client.callTool({ name: 'run_agent_on_pr', arguments: { pr: 'PR-482' } });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('neither a PR number nor a pull-request id');
+    expect(textOf(result)).toContain('not a PR number, a pull-request id, or a PR URL');
   });
 
   it('asks for a repo when given a bare PR number without one', async () => {

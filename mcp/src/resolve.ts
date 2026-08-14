@@ -32,6 +32,43 @@ export function asUuid(value: string): string | null {
   return UUID_RE.test(trimmed) ? trimmed : null;
 }
 
+/**
+ * Pull a repo and/or a PR number out of a pasted URL.
+ *
+ * Both URLs a person actually has in hand are accepted: the GitHub PR page
+ * (which carries owner, repo AND number, so nothing else is needed) and the
+ * DevDigest studio page (which carries the repo uuid and the number). Parsing
+ * them costs nothing in the tool schema — the parameter is a string either way
+ * — and not parsing them means the one value already on the clipboard is the
+ * one value the tool rejects.
+ */
+const GITHUB_PR_RE = /github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/i;
+const STUDIO_PR_RE = /\/repos\/([0-9a-f-]{36})\/pulls\/(\d+)/i;
+const GITHUB_REPO_RE = /github\.com\/([^/\s]+)\/([^/\s?#]+)/i;
+const STUDIO_REPO_RE = /\/repos\/([0-9a-f-]{36})/i;
+
+/** `{repo, number}` from a PR URL, or null when the value is not one. */
+export function parsePrUrl(value: string): { repo: string; number: number } | null {
+  const v = value.trim();
+  const gh = GITHUB_PR_RE.exec(v);
+  // `.git` and a trailing slash are both common in copied remotes.
+  if (gh) return { repo: `${gh[1]}/${gh[2]!.replace(/\.git$/, '')}`, number: Number(gh[3]) };
+  const studio = STUDIO_PR_RE.exec(v);
+  if (studio) return { repo: studio[1]!, number: Number(studio[2]) };
+  return null;
+}
+
+/** A repo identifier from a repo or PR URL, or null. */
+export function parseRepoUrl(value: string): string | null {
+  const v = value.trim();
+  if (!/^https?:\/\//i.test(v) && !/^github\.com/i.test(v)) return null;
+  const studio = STUDIO_REPO_RE.exec(v);
+  if (studio) return studio[1]!;
+  const gh = GITHUB_REPO_RE.exec(v);
+  if (gh) return `${gh[1]}/${gh[2]!.replace(/\.git$/, '')}`;
+  return null;
+}
+
 export interface Resolver {
   repoId(repo: string): Promise<string>;
   /** `pr` is a PR number or a pull-request uuid, always as a string; `repo` may
@@ -49,6 +86,10 @@ export function createResolver(api: DevDigestApi): Resolver {
     // same thing at no extra round trip.
     const uuid = asUuid(repo);
     if (uuid) return uuid;
+
+    // A pasted repo or PR URL resolves to whichever identifier it carries.
+    const fromUrl = parseRepoUrl(repo);
+    if (fromUrl) return asUuid(fromUrl) ? fromUrl : repoId(fromUrl);
 
     const key = repo.trim().toLowerCase();
     const cached = repoIds.get(key);
@@ -91,20 +132,26 @@ export function createResolver(api: DevDigestApi): Resolver {
     // `pr` is a STRING even when it holds a number, so that the tool schema
     // stays `type: "string"` rather than `anyOf: [integer, string]`. See the
     // note on the schema in `tools/*.ts`.
+    // A pasted PR URL carries the repo as well as the number, so it needs no
+    // `repo` argument — and when one is supplied anyway the URL wins, because it
+    // is the more specific of the two and disagreeing silently would review the
+    // wrong pull request.
+    const url = parsePrUrl(pr);
     const trimmed = pr.trim();
-    if (!/^\d+$/.test(trimmed)) {
+    if (!url && !/^\d+$/.test(trimmed)) {
       throw new ApiError(
-        `"${pr}" is neither a PR number nor a pull-request id. Pass the number (e.g. "482"), ` +
-          'or the uuid from the DevDigest /pulls/<number> page URL.',
+        `"${pr}" is not a PR number, a pull-request id, or a PR URL. Pass "482", ` +
+          'the uuid from the studio URL, or paste the GitHub PR link.',
       );
     }
-    const number = Number(trimmed);
+    const number = url ? url.number : Number(trimmed);
+    const repoRef = url ? url.repo : repo;
 
-    if (repo === undefined) {
-      throw new ApiError('Pass `repo` (owner/name) alongside a PR number, or pass the pull-request uuid as `pr`.');
+    if (repoRef === undefined) {
+      throw new ApiError('Pass `repo` (owner/name) alongside a PR number, or pass the PR URL / pull-request uuid as `pr`.');
     }
 
-    const rid = await repoId(repo);
+    const rid = await repoId(repoRef);
     const key = `${rid}#${number}`;
     const cached = prIds.get(key);
     if (cached) return { repoId: rid, prId: cached };
@@ -119,7 +166,7 @@ export function createResolver(api: DevDigestApi): Resolver {
         .filter(Boolean)
         .join(' ');
       throw new ApiError(
-        `PR #${number} is not imported for ${repo}. Imported: ${known || '(none)'}`,
+        `PR #${number} is not imported for ${repoRef}. Imported: ${known || '(none)'}`,
       );
     }
     prIds.set(key, match.id);

@@ -174,7 +174,7 @@ Three of the tests are guards rather than feature coverage: exactly five tools,
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `"…" is neither a PR number nor a pull-request id` | A `pr` that is neither digits nor a uuid | Pass `"482"` or the uuid from the studio URL |
+| `"…" is not a PR number, a pull-request id, or a PR URL` | A `pr` that is none of the three | Pass `"482"`, the uuid, or paste the GitHub PR link |
 | `Cannot reach the DevDigest API…` | The stack is not up | Step 1; check `curl localhost:3001/health` |
 | Host shows the server but no tools | Server failed to start | Run step 3 by hand; errors go to stderr, which the host shows as server logs |
 | `No imported repo matches "…"` | Repo not imported into DevDigest | The message lists the repos that *are* imported; add yours in the UI |

@@ -44,7 +44,7 @@ export function registerRunAgent(server: McpServer, { api, resolver, timing }: D
         // back to a raw JSON editor — the MCP Inspector re-encodes the value on
         // every keystroke there, so quotes accumulate backslashes and Backspace
         // appears to do nothing. One type keeps the field a normal text input.
-        pr: z.string().describe('PR number (e.g. "482") or its uuid'),
+        pr: z.string().describe('PR number, its uuid, or a pasted PR URL'),
         repo: z.string().optional().describe('owner/name — omit if pr is a uuid'),
         agent: z.string().optional().describe('Agent name or id from list_agents; omit to run every enabled agent'),
       }),
