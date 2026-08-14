@@ -1,5 +1,6 @@
 /* FileCard — one collapsible file in the diff: header (path, +/- stat, comment
-   count) and, when open, its parsed lines plus any outdated comments. */
+   count, findings badge) and, when open, its parsed lines plus any outdated
+   comments. */
 "use client";
 
 import React from "react";
@@ -15,7 +16,14 @@ import {
   type CommentThread,
   type DiffCommentApi,
 } from "../comments";
-import { s, chevronFor } from "../styles";
+import {
+  diffLineDomId,
+  marksForLine,
+  worstSeverity,
+  type DiffFindingMark,
+  type DiffReveal,
+} from "../annotations";
+import { s, chevronFor, findingBadgeFor } from "../styles";
 import { CodeLine } from "../CodeLine";
 import { OutdatedComments } from "../OutdatedComments";
 
@@ -30,10 +38,30 @@ function threadsForLine(ln: Line, matched: Map<string, CommentThread[]>): Commen
   return out;
 }
 
-export function FileCard({ file, commenting }: { file: PrFile; commenting?: DiffCommentApi }) {
+export function FileCard({
+  file,
+  commenting,
+  marks = [],
+  defaultOpen,
+  reveal = null,
+  onRevealLine,
+}: {
+  file: PrFile;
+  commenting?: DiffCommentApi;
+  /** Findings in this file, from the PR's latest review. */
+  marks?: readonly DiffFindingMark[];
+  /** Overrides the size heuristic — Smart Diff collapses boilerplate whatever
+   *  its size, and expands a file that has findings however big it is. */
+  defaultOpen?: boolean;
+  /** Set while this card is the target of a badge click. */
+  reveal?: DiffReveal | null;
+  /** Clicking the "N findings" badge asks the parent to reveal a line. */
+  onRevealLine?: (path: string, line: number) => void;
+}) {
   const t = useTranslations("shell");
+  const tSmart = useTranslations("prReview.smartDiff");
   const [open, setOpen] = React.useState(
-    (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
+    defaultOpen ?? (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
 
@@ -52,6 +80,23 @@ export function FileCard({ file, commenting }: { file: PrFile; commenting?: Diff
     ? commenting.comments.filter((c) => c.path === file.path).length
     : 0;
 
+  // Scrolling to a finding is a DOM operation on a node that does not exist
+  // until the card is expanded, which is the one thing an effect is for here.
+  const target = reveal?.path === file.path ? reveal : null;
+  React.useEffect(() => {
+    if (!target) return;
+    setOpen(true);
+    // One frame: React has to commit the expansion before the line has a node.
+    const frame = requestAnimationFrame(() => {
+      document
+        .getElementById(diffLineDomId(file.path, target.line))
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [target?.line, target?.nonce, file.path]);
+
+  const badgeSeverity = worstSeverity(marks);
+
   return (
     <div style={s.fileCard}>
       <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
@@ -60,6 +105,22 @@ export function FileCard({ file, commenting }: { file: PrFile; commenting?: Diff
         <span className="mono" style={s.filePath}>
           {file.path}
         </span>
+        {badgeSeverity && (
+          <button
+            type="button"
+            style={findingBadgeFor(badgeSeverity)}
+            title={marks.map((m) => `L${m.line} · ${m.title}`).join("\n")}
+            onClick={(e) => {
+              // Without this the header's own toggle would collapse the card we
+              // are about to scroll into.
+              e.stopPropagation();
+              const first = [...marks].sort((a, b) => a.line - b.line)[0];
+              if (first) onRevealLine?.(file.path, first.line);
+            }}
+          >
+            {tSmart("findingsBadge", { count: marks.length })}
+          </button>
+        )}
         <span className="mono tnum" style={s.fileStat}>
           <span style={s.addText}>+{file.additions}</span>{" "}
           <span style={s.delText}>−{file.deletions}</span>
@@ -85,6 +146,8 @@ export function FileCard({ file, commenting }: { file: PrFile; commenting?: Diff
                 path={file.path}
                 threads={threadsForLine(ln, matched)}
                 commenting={commenting}
+                marks={marksForLine(ln, marks)}
+                revealed={target != null && ln.newNo === target.line}
               />
             ))
           )}

@@ -125,6 +125,12 @@ pnpm arch        # fails on NEW violations only
 pnpm arch:all    # shows everything, including the 11 known ones
 ```
 
+Most rules restate a sentence above. One does not: `smart-diff-spends-nothing`
+forbids `modules/smart-diff/**` from importing the LLM adapter, `reviewer-core`
+or `modules/reviews`. It is there because "opening a diff is free" is a promise
+to the user, and a promise that only a code reviewer enforces is not enforced.
+A feature with a cost guarantee may add a rule of the same shape.
+
 Known violations are recorded in `.dependency-cruiser-known-violations.json`.
 **Never regenerate that file to silence a failure.** Fix the import, or change
 the rule deliberately in the same commit as the skill.
@@ -158,4 +164,5 @@ from the baseline in the same commit.
 
 | Version | Change |
 | --- | --- |
+| 1.1.0 | Adds `smart-diff-spends-nothing` — the first feature-specific rule, enforcing a cost guarantee rather than a layer boundary. |
 | 1.0.0 | First version. Names the layering already present in `server/src`, adds the enforced rule set (`.dependency-cruiser.cjs`, `pnpm arch`) with a baseline of the 11 violations measured 2026-08-09, and sets the criterion for when a module earns a service layer. |
