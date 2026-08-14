@@ -21,6 +21,10 @@ server/clones/
 DevDigest Design (standalone).html
 design-mocks/
 
+# Failure screenshots written by the e2e runner. e2e/README.md has always
+# described these as git-ignored; they never actually were.
+e2e/test-results/
+
 # Local agent/session state. `.claude/skills/` and `.claude/agents/` are shared:
 # AGENTS.md tells every agent to run `engineering-insights`, so the skill has to
 # travel with the repo, and the agent set encodes this repo's own gates, layering
