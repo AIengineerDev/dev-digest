@@ -25,3 +25,7 @@ design-mocks/
 !.claude/skills/
 !.claude/agents/
 .claude/settings.local.json
+
+# Failure screenshots from the browser suite — regenerated per run, never committed
+# (e2e/README.md has always claimed these were ignored; they were not).
+e2e/test-results/

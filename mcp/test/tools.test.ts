@@ -7,12 +7,20 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { createMcpHandler } from '@modelcontextprotocol/server';
-import type { Agent, Convention, PrMeta, Repo, ReviewRecord, RunSummary } from '@devdigest/shared';
+import type {
+  Agent,
+  BlastRadius,
+  Convention,
+  PrMeta,
+  Repo,
+  ReviewRecord,
+  RunSummary,
+} from '@devdigest/shared';
 import type { DevDigestApi, RunTarget } from '../src/api.js';
 import type { Timing } from '../src/constants.js';
 import { buildServer } from '../src/server.js';
 
-// Every test drives the run_agent_on_pull_request poll loop through this
+// Every test drives the run_agent_on_pr poll loop through this
 // timing, not the production defaults (120s wait / 2s poll) — fast enough
 // that no test needs fake timers around it.
 const FAST_TIMING: Timing = { waitMs: 200, pollMs: 5 };
@@ -111,6 +119,29 @@ const convention = (over: Partial<Convention>): Convention =>
     ...over,
   }) as Convention;
 
+const EMPTY_BLAST: BlastRadius = {
+  changed_symbols: [],
+  downstream: [],
+  summary: 'No changed files recorded for this PR — open it once to import its diff.',
+};
+
+const BLAST: BlastRadius = {
+  changed_symbols: [
+    { name: 'rateLimit', file: 'src/middleware/ratelimit.ts', kind: 'function' },
+    { name: 'bucketKey', file: 'src/middleware/ratelimit.ts', kind: 'function' },
+  ],
+  downstream: [
+    {
+      symbol: 'rateLimit',
+      callers: [{ name: 'boot', file: 'src/server.ts', line: 40 }],
+      endpoints_affected: ['POST /webhooks'],
+      crons_affected: ['nightly-sweep'],
+    },
+    { symbol: 'bucketKey', callers: [], endpoints_affected: [], crons_affected: [] },
+  ],
+  summary: '2 changed symbols · 1 caller · 1 endpoint.',
+};
+
 // ---- harness --------------------------------------------------------------
 
 interface Stub extends DevDigestApi {
@@ -131,6 +162,7 @@ function stubApi(over: Partial<DevDigestApi> = {}): Stub {
     listRuns: async () => [],
     listReviews: async () => [],
     listConventions: async () => [],
+    getBlastRadius: async () => EMPTY_BLAST,
     ...over,
   } as Stub;
 }
@@ -161,7 +193,7 @@ describe('tool surface', () => {
   it('advertises exactly the five tools', async () => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name).sort()).toEqual(
-      ['get_blast_radius', 'get_conventions', 'get_findings', 'list_agents', 'run_agent_on_pull_request'].sort(),
+      ['get_blast_radius', 'get_conventions', 'get_findings', 'list_agents', 'run_agent_on_pr'].sort(),
     );
   });
 
@@ -185,7 +217,7 @@ describe('tool surface', () => {
       get_findings: true,
       get_conventions: true,
       get_blast_radius: true,
-      run_agent_on_pull_request: false,
+      run_agent_on_pr: false,
     });
   });
 
@@ -218,7 +250,7 @@ describe('list_agents', () => {
   });
 });
 
-describe('run_agent_on_pull_request', () => {
+describe('run_agent_on_pr', () => {
   it('resolves owner/repo + number to a pr id and starts the review', async () => {
     // The default stub never reports the started run as finished, so this
     // exercises the wall-reached path — see the dedicated tests below for
@@ -227,7 +259,7 @@ describe('run_agent_on_pull_request', () => {
     const client = await connect(api);
     const out = textOf(
       await client.callTool({
-        name: 'run_agent_on_pull_request',
+        name: 'run_agent_on_pr',
         arguments: { repo: 'acme/payments-api', pr: 482 },
       }),
     );
@@ -240,7 +272,7 @@ describe('run_agent_on_pull_request', () => {
     const api = stubApi();
     const client = await connect(api);
     await client.callTool({
-      name: 'run_agent_on_pull_request',
+      name: 'run_agent_on_pr',
       arguments: { repo: 'acme/payments-api', pr: 482, agent: 'general' },
     });
     expect(api.started[0]?.target).toEqual({ agentId: 'a1' });
@@ -249,7 +281,7 @@ describe('run_agent_on_pull_request', () => {
   it('names the agents that do exist when the requested one does not', async () => {
     const client = await connect(stubApi());
     const result = await client.callTool({
-      name: 'run_agent_on_pull_request',
+      name: 'run_agent_on_pr',
       arguments: { repo: 'acme/payments-api', pr: 482, agent: 'Nope' },
     });
     expect(result.isError).toBe(true);
@@ -259,7 +291,7 @@ describe('run_agent_on_pull_request', () => {
   it('names the repos that are imported when the requested one is not', async () => {
     const client = await connect(stubApi());
     const result = await client.callTool({
-      name: 'run_agent_on_pull_request',
+      name: 'run_agent_on_pr',
       arguments: { repo: 'other/thing', pr: 1 },
     });
     expect(result.isError).toBe(true);
@@ -277,7 +309,7 @@ describe('run_agent_on_pull_request', () => {
     });
     const client = await connect(api);
     const result = await client.callTool({
-      name: 'run_agent_on_pull_request',
+      name: 'run_agent_on_pr',
       arguments: { repo: 'acme/payments-api', pr: 482 },
     });
     const out = textOf(result);
@@ -301,7 +333,7 @@ describe('run_agent_on_pull_request', () => {
     });
     const client = await connect(api, { waitMs: 100, pollMs: 5 });
     const result = await client.callTool({
-      name: 'run_agent_on_pull_request',
+      name: 'run_agent_on_pr',
       arguments: { repo: 'acme/payments-api', pr: 482 },
     });
     const out = textOf(result);
@@ -323,7 +355,7 @@ describe('run_agent_on_pull_request', () => {
     const controller = new AbortController();
     const pending = client
       .callTool(
-        { name: 'run_agent_on_pull_request', arguments: { repo: 'acme/payments-api', pr: 482 } },
+        { name: 'run_agent_on_pr', arguments: { repo: 'acme/payments-api', pr: 482 } },
         { signal: controller.signal },
       )
       .catch(() => undefined);
@@ -349,7 +381,7 @@ describe('run_agent_on_pull_request', () => {
     const client = await connect(withProgress);
     const updates: { progress: number; total?: number }[] = [];
     await client.callTool(
-      { name: 'run_agent_on_pull_request', arguments: { repo: 'acme/payments-api', pr: 482 } },
+      { name: 'run_agent_on_pr', arguments: { repo: 'acme/payments-api', pr: 482 } },
       { onprogress: (p) => updates.push(p) },
     );
     expect(updates.length).toBeGreaterThan(0);
@@ -365,7 +397,7 @@ describe('run_agent_on_pull_request', () => {
     });
     const client2 = await connect(withoutProgress);
     const result = await client2.callTool({
-      name: 'run_agent_on_pull_request',
+      name: 'run_agent_on_pr',
       arguments: { repo: 'acme/payments-api', pr: 482 },
     });
     expect(result.isError).toBeUndefined();
@@ -512,7 +544,7 @@ describe('get_findings', () => {
     const out = textOf(
       await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: 482 } }),
     );
-    expect(out).toContain('run_agent_on_pull_request');
+    expect(out).toContain('run_agent_on_pr');
   });
 });
 
@@ -553,14 +585,155 @@ describe('get_conventions', () => {
 });
 
 describe('get_blast_radius', () => {
-  it('is a stub that fails loudly rather than guessing', async () => {
+  it('takes the PR, not a file list — the server derives the diff', async () => {
+    const seen: string[] = [];
+    const client = await connect(
+      stubApi({
+        getBlastRadius: async (prId) => {
+          seen.push(prId);
+          return BLAST;
+        },
+      }),
+    );
+    const out = textOf(
+      await client.callTool({
+        name: 'get_blast_radius',
+        arguments: { repo: 'acme/payments-api', pr: 482 },
+      }),
+    );
+    expect(seen).toEqual(['pr-1']);
+    expect(out).toContain('rateLimit');
+    expect(out).toContain('POST /webhooks');
+  });
+
+  it('leads with the summary, so an empty caller list is never read as "safe"', async () => {
+    const client = await connect(stubApi({ getBlastRadius: async () => BLAST }));
+    const out = textOf(
+      await client.callTool({ name: 'get_blast_radius', arguments: { pr: 'a23e635c-cb87-4230-8bb8-ff3fa63d1c30' } }),
+    );
+    expect(out.split('\n')[0]).toBe('2 changed symbols · 1 caller · 1 endpoint.');
+  });
+
+  it('omits per-caller lines until detail is full', async () => {
+    const client = await connect(stubApi({ getBlastRadius: async () => BLAST }));
+    const compact = textOf(
+      await client.callTool({ name: 'get_blast_radius', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+    );
+    expect(compact).not.toContain('src/server.ts:40');
+    // Endpoints survive compaction: "which routes can break" is the question.
+    expect(compact).toContain('POST /webhooks');
+
+    const full = textOf(
+      await client.callTool({
+        name: 'get_blast_radius',
+        arguments: { repo: 'acme/payments-api', pr: 482, detail: 'full' },
+      }),
+    );
+    expect(full).toContain('boot — src/server.ts:40');
+    expect(full).toContain('cron: nightly-sweep');
+  });
+
+  it('caps the symbol list and says how many it dropped', async () => {
+    const many: BlastRadius = {
+      ...BLAST,
+      downstream: Array.from({ length: 5 }, (_, i) => ({
+        symbol: `s${i}`,
+        callers: [],
+        endpoints_affected: [],
+        crons_affected: [],
+      })),
+    };
+    const client = await connect(stubApi({ getBlastRadius: async () => many }));
+    const out = textOf(
+      await client.callTool({
+        name: 'get_blast_radius',
+        arguments: { repo: 'acme/payments-api', pr: 482, limit: 2 },
+      }),
+    );
+    expect(out).toContain('+3 more');
+  });
+
+  it('returns the API summary verbatim when there is nothing to report', async () => {
     const client = await connect(stubApi());
-    const result = await client.callTool({
-      name: 'get_blast_radius',
-      arguments: { repo: 'acme/payments-api', files: ['src/a.ts'] },
+    const out = textOf(
+      await client.callTool({ name: 'get_blast_radius', arguments: { repo: 'acme/payments-api', pr: 482 } }),
+    );
+    expect(out).toBe(EMPTY_BLAST.summary);
+  });
+});
+
+/**
+ * The Inspector path. A person driving the tools by hand has ids, not names —
+ * they copy them out of the DevDigest studio URL and out of `list_agents` — so
+ * every place that takes a name takes an id too. These are the tests that stop
+ * that from quietly regressing back to names-only.
+ */
+describe('addressing by uuid', () => {
+  const REPO_UUID = '639f9292-8f9c-4c2a-90a7-2c48ff86fe6c';
+  const PR_UUID = 'a23e635c-cb87-4230-8bb8-ff3fa63d1c30';
+  const AGENT_UUID = '6ecf9f1d-56c1-4047-a2c7-774e2e49498f';
+
+  const uuidApi = () =>
+    stubApi({
+      listAgents: async () => [agent({ id: AGENT_UUID, name: 'Test Quality Reviewer' })],
+      listConventions: async () => [convention({})],
     });
+
+  it('takes a pull-request uuid with no repo at all', async () => {
+    const api = stubApi();
+    const client = await connect(api);
+    await client.callTool({ name: 'run_agent_on_pr', arguments: { pr: PR_UUID } });
+    // Straight through: no listRepos/listPulls lookup, the uuid IS the id.
+    expect(api.started).toEqual([{ prId: PR_UUID, target: { all: true } }]);
+  });
+
+  it('takes a repo uuid where it takes owner/name', async () => {
+    const client = await connect(uuidApi());
+    const out = textOf(
+      await client.callTool({ name: 'get_conventions', arguments: { repo: REPO_UUID } }),
+    );
+    expect(out).toContain('Services end in Service');
+  });
+
+  it('tolerates whitespace around a pasted uuid', async () => {
+    // Copying out of an address bar picks up stray whitespace routinely; the
+    // failure it would otherwise cause ("no repo matches") points at the wrong
+    // thing entirely.
+    const client = await connect(uuidApi());
+    const out = textOf(
+      await client.callTool({ name: 'get_conventions', arguments: { repo: `  ${REPO_UUID}\n` } }),
+    );
+    expect(out).toContain('Services end in Service');
+  });
+
+  it('targets an agent by id as well as by name', async () => {
+    const api = stubApi({ listAgents: async () => [agent({ id: AGENT_UUID, name: 'Test Quality Reviewer' })] });
+    const client = await connect(api);
+    await client.callTool({
+      name: 'run_agent_on_pr',
+      arguments: { pr: PR_UUID, agent: AGENT_UUID },
+    });
+    expect(api.started[0]?.target).toEqual({ agentId: AGENT_UUID });
+  });
+
+  it('surfaces the ids in list_agents, so the handoff has a source', async () => {
+    const client = await connect(uuidApi());
+    const out = textOf(await client.callTool({ name: 'list_agents', arguments: {} }));
+    expect(out).toContain(AGENT_UUID);
+  });
+
+  it('rejects a pr string that is neither a number nor a uuid, and says which', async () => {
+    const client = await connect(stubApi());
+    const result = await client.callTool({ name: 'run_agent_on_pr', arguments: { pr: 'PR-482' } });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('not_implemented');
+    expect(textOf(result)).toContain('neither a PR number nor a pull-request id');
+  });
+
+  it('asks for a repo when given a bare PR number without one', async () => {
+    const client = await connect(stubApi());
+    const result = await client.callTool({ name: 'run_agent_on_pr', arguments: { pr: 482 } });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('owner/name');
   });
 });
 

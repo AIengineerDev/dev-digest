@@ -9,7 +9,7 @@ import { guard, text, type Deps } from './shared.js';
  * Which runs to report when the caller did not name one: the newest run per
  * agent, among the runs stamped with the newest head.
  *
- * Not "the newest run" — `run_agent_on_pull_request` without an `agent` fans out
+ * Not "the newest run" — `run_agent_on_pr` without an `agent` fans out
  * to every enabled reviewer, and showing one of them would read as the whole
  * answer. But not "every run at this head" either: `head_sha` only changes when
  * the PR is pushed to, so re-reviewing the same commit piles pass on pass under
@@ -45,11 +45,11 @@ export function registerGetFindings(server: McpServer, { api, resolver }: Deps):
     {
       title: 'Get review findings',
       description:
-        "Read an existing review's findings: status, verdict, score, findings. Use to collect a run that timed out, or to re-read at more detail.",
+        "Read an existing review: status, verdict, score, findings. Use to collect a run that timed out.",
       inputSchema: z.object({
-        repo: z.string().describe('owner/name, e.g. acme/payments-api'),
-        pr: z.number().int().positive().describe('Pull request number'),
-        run_id: z.string().optional().describe('From run_agent_on_pull_request; omit for the latest review pass'),
+        pr: z.union([z.number().int().positive(), z.string()]).describe('PR number, or its uuid'),
+        repo: z.string().optional().describe('owner/name — omit if pr is a uuid'),
+        run_id: z.string().optional().describe('From run_agent_on_pr; omit for the latest review pass'),
         min_severity: z.enum(['CRITICAL', 'WARNING', 'SUGGESTION']).optional(),
         limit: z.number().int().min(1).max(100).optional().describe('Findings per run, default 20'),
         detail: z.enum(['compact', 'full']).optional().describe('full adds rationale and suggestion'),
@@ -66,7 +66,7 @@ export function registerGetFindings(server: McpServer, { api, resolver }: Deps):
           const one = runs.find((r) => r.run_id === run_id);
           if (!one) {
             throw new ApiError(
-              `No run ${run_id} on ${repo}#${pr}. Runs on this PR: ${
+              `No run ${run_id} on this PR. Runs on it: ${
                 runs.map((r) => r.run_id).slice(0, 10).join(', ') || '(none)'
               }`,
             );
@@ -76,7 +76,7 @@ export function registerGetFindings(server: McpServer, { api, resolver }: Deps):
           selected = latestBatch(runs);
         }
         if (selected.length === 0) {
-          return text(`No review has been run on ${repo}#${pr}. Start one with run_agent_on_pull_request.`);
+          return text(`No review has been run on ${repo}#${pr}. Start one with run_agent_on_pr.`);
         }
 
         // Only pay for the reviews call when something can actually be in it.

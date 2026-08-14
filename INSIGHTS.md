@@ -93,6 +93,22 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-11** — "The latest review" is **one agent's opinion, not the PR's
+  review.** One trigger of "run all agents" writes one `reviews` row per agent,
+  so `ORDER BY created_at DESC LIMIT 1` returns whichever agent happened to
+  finish last — and an agent that found nothing blanks the result entirely.
+  Measured on the dev DB: PR #482 had 10 review rows, the newest 9 of them
+  empty, so a latest-row scope reported zero findings while the Findings tab
+  listed two. The correct scope is **every review at the PR's current
+  `head_sha`, counting a null `head_sha` as current** — the same tolerant rule
+  `isStaleRun` applies in the UI, and the only scope that agrees with what the
+  Findings tab renders. `GET /pulls/:id/smart-diff` uses it
+  (`server/src/modules/smart-diff/repository.ts:findingsAtHead`); the Pull
+  Requests list's FINDINGS column still uses latest-row and is wrong in the same
+  way for any multi-agent run — fix it when you are next in that file.
+  `server/src/modules/pulls/routes.ts:126` ·
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/staleness.ts:14`
+
 - **2026-08-09** — `PromptAssembly` has **no diff slot**: `assemblePrompt` folds
   the diff into `user` along with every `## Heading` and `<untrusted>` wrapper,
   so anything doing per-section accounting cannot report a diff size — only

@@ -62,7 +62,16 @@ _None yet._
 
 ## Tool & Library Notes
 
-_None yet._
+- **2026-08-13** — `wait --text` matches the **rendered** text, not
+  `textContent`, so a CSS `text-transform` defeats it. `SectionLabel` uppercases
+  its children, which means every card title in the app is asserted as
+  `"BLAST RADIUS"` / `"PR BRIEF"` / `"INTENT"` and never as the string the JSX
+  actually contains. Asserting `"Blast radius"` failed the whole flow while the
+  card was on screen and correct — the failure screenshot in
+  `test-results/NN-*-fail.png` is what proves that, so read it before assuming
+  the UI is broken. Match the casing you SEE, and prefer a body string over a
+  `SectionLabel` title when you have one.
+  `specs/09-pr-blast-radius.flow.json:10`
 
 ## Recurring Errors & Fixes
 

@@ -8,7 +8,14 @@
  * information; a truncated list always ends with `more()` so a cap is never
  * mistaken for "that was everything".
  */
-import type { Agent, Convention, FindingRecord, ReviewRecord, RunSummary } from '@devdigest/shared';
+import type {
+  Agent,
+  BlastRadius,
+  Convention,
+  FindingRecord,
+  ReviewRecord,
+  RunSummary,
+} from '@devdigest/shared';
 
 /** Trailer for a capped list. Empty when nothing was dropped. */
 export function more(total: number, shown: number): string[] {
@@ -19,11 +26,16 @@ export function formatAgents(agents: Agent[]): string {
   if (agents.length === 0) return 'No agents configured.';
   // `system_prompt` is deliberately absent: it is kilobytes per agent and the
   // model is choosing which reviewer to run, not auditing how it is worded.
+  //
+  // The id IS here — 36 chars a piece — because `run_agent_on_pr` accepts an id
+  // as well as a name, and a hand-driven Inspector session has nowhere else to
+  // get one. Without it the documented list_agents → run_agent_on_pr handoff
+  // only works for callers that happen to prefer names.
   return agents
     .map((a) => {
       const flags = [a.enabled ? null : 'disabled', a.repo_intel ? null : 'no-repo-intel'].filter(Boolean);
       return (
-        `${a.name} · ${a.provider}/${a.model} · ${a.strategy} · gate:${a.ci_fail_on}` +
+        `${a.name} · ${a.id} · ${a.provider}/${a.model} · ${a.strategy} · gate:${a.ci_fail_on}` +
         (flags.length > 0 ? ` · ${flags.join(' ')}` : '')
       );
     })
@@ -101,4 +113,39 @@ export function formatConventions(
     return [head, ...extra.map((l) => `  ${l}`)].join('\n');
   });
   return [...lines, ...more(opts.total, conventions.length)].join('\n');
+}
+
+/**
+ * Blast radius, one changed symbol per block.
+ *
+ * The summary goes FIRST and always: on a degraded index it is the only thing
+ * separating "nothing calls this" from "the index could not say", and a model
+ * that reads an empty caller list without it will report the change as safe.
+ */
+export function formatBlast(
+  blast: BlastRadius,
+  opts: { detail: 'compact' | 'full'; limit: number },
+): string {
+  if (blast.changed_symbols.length === 0 && blast.downstream.length === 0) return blast.summary;
+
+  const shown = blast.downstream.slice(0, opts.limit);
+  const fileOf = new Map(blast.changed_symbols.map((s) => [s.name, s.file]));
+
+  const blocks = shown.map((d) => {
+    const head = `${d.symbol} (${fileOf.get(d.symbol) ?? 'unknown file'}) · ${d.callers.length} callers`;
+    if (opts.detail === 'compact') {
+      // Endpoints stay even in compact form: "which routes can break" is the
+      // question the tool is called to answer, and it is one short line.
+      const endpoints = d.endpoints_affected.length > 0 ? ` · ${d.endpoints_affected.join(', ')}` : '';
+      return `${head}${endpoints}`;
+    }
+    const lines = [
+      ...d.callers.map((c) => `  ${c.name} — ${c.file}:${c.line}`),
+      ...d.endpoints_affected.map((e) => `  endpoint: ${e}`),
+      ...d.crons_affected.map((c) => `  cron: ${c}`),
+    ];
+    return [head, ...lines].join('\n');
+  });
+
+  return [blast.summary, '', ...blocks, ...more(blast.downstream.length, shown.length)].join('\n');
 }

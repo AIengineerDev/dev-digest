@@ -8,7 +8,15 @@
  * The tools depend on this interface, not on `fetch`, which is what lets the
  * tests drive the whole server with a plain object and no network.
  */
-import type { Agent, Convention, PrMeta, Repo, ReviewRecord, RunSummary } from '@devdigest/shared';
+import type {
+  Agent,
+  BlastRadius,
+  Convention,
+  PrMeta,
+  Repo,
+  ReviewRecord,
+  RunSummary,
+} from '@devdigest/shared';
 import { REQUEST_TIMEOUT_MS } from './constants.js';
 
 export const DEFAULT_API_URL = 'http://localhost:3001';
@@ -31,6 +39,7 @@ export interface DevDigestApi {
   listRuns(prId: string, signal?: AbortSignal): Promise<RunSummary[]>;
   listReviews(prId: string, signal?: AbortSignal): Promise<ReviewRecord[]>;
   listConventions(repoId: string, status?: string): Promise<Convention[]>;
+  getBlastRadius(prId: string): Promise<BlastRadius>;
 }
 
 /**
@@ -62,7 +71,7 @@ export function createApi(baseUrl = process.env.DEVDIGEST_API_URL ?? DEFAULT_API
 
   async function request<T>(path: string, init?: RequestInit, signal?: AbortSignal): Promise<T> {
     // A hung connection must not silently eat the caller's whole budget: with
-    // run_agent_on_pull_request polling every couple of seconds for up to two
+    // run_agent_on_pr polling every couple of seconds for up to two
     // minutes, a stuck fetch here is load-bearing, not a nicety.
     const timeoutSignal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
     const composedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
@@ -119,5 +128,6 @@ export function createApi(baseUrl = process.env.DEVDIGEST_API_URL ?? DEFAULT_API
       request<Convention[]>(
         `/repos/${repoId}/conventions${status ? `?status=${encodeURIComponent(status)}` : ''}`,
       ),
+    getBlastRadius: (prId) => request<BlastRadius>(`/pulls/${prId}/blast`),
   };
 }

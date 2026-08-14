@@ -1,33 +1,39 @@
 import * as z from 'zod/v4';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { failure, type Deps } from './shared.js';
+import { formatBlast } from '../format.js';
+import { guard, text, type Deps } from './shared.js';
 
 /**
- * Stub — registered so the tool surface is final now and only this body changes.
+ * Blast radius for a PR, from `GET /pulls/:id/blast`.
  *
- * The engine side already exists (`RepoIntelService.getBlastRadius`, which walks
- * the persistent import graph and falls back to ripgrep), but it has no HTTP
- * route yet. Wiring one is the second half of L04; until then this returns an
- * `isError` result naming the state of things, so the model stops and says so
- * rather than inventing an impact analysis.
+ * Takes the **pull request**, not a file list, and that is the whole ergonomic
+ * point: the server already knows which files the PR touches, so a model that
+ * can name the PR needs nothing else. An explicit `files[]` — the shape this
+ * tool was stubbed with — would make the caller reconstruct the diff first, and
+ * every reconstruction is a chance to analyse the wrong change.
+ *
+ * No model call: the answer comes from the persistent code index.
  */
-export function registerGetBlastRadius(server: McpServer, _deps: Deps): void {
+export function registerGetBlastRadius(server: McpServer, { api, resolver }: Deps): void {
   server.registerTool(
     'get_blast_radius',
     {
-      title: 'Get blast radius (not implemented)',
+      title: 'Get blast radius',
       description:
-        'NOT IMPLEMENTED YET — always fails. Intended: which symbols, callers and endpoints a set of changed files impacts.',
+        'What a PR reaches: changed symbols, who calls them, and the endpoints and crons downstream. From the code index — no review needed.',
       inputSchema: z.object({
-        repo: z.string().describe('owner/name'),
-        files: z.array(z.string()).min(1).describe('Repo-relative paths'),
+        pr: z.union([z.number().int().positive(), z.string()]).describe('PR number, or its uuid'),
+        repo: z.string().optional().describe('owner/name — omit if pr is a uuid'),
+        limit: z.number().int().min(1).max(60).optional().describe('Symbols, default 15'),
+        detail: z.enum(['compact', 'full']).optional().describe('full lists each caller and endpoint'),
       }),
       annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     },
-    async () =>
-      failure(
-        'not_implemented: blast radius ships with the second half of L04. ' +
-          'Do not guess the impact — use get_findings for what the reviewers actually found.',
-      ),
+    async ({ pr, repo, limit, detail }) =>
+      guard(async () => {
+        const { prId } = await resolver.prId(repo, pr);
+        const blast = await api.getBlastRadius(prId);
+        return text(formatBlast(blast, { detail: detail ?? 'compact', limit: limit ?? 15 }));
+      }),
   );
 }

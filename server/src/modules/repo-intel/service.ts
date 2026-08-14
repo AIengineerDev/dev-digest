@@ -52,6 +52,7 @@ import {
   RESYNC_JOB_KIND,
   SUPPORTED_EXT,
 } from './constants.js';
+import { capCallersPerSymbol } from './helpers.js';
 import { runFullIndex, type IndexPayload } from './pipeline/full.js';
 import { runIncremental } from './pipeline/incremental.js';
 
@@ -371,6 +372,12 @@ export class RepoIntelService implements RepoIntel {
     }
     callers.sort((a, b) => b.rank - a.rank);
 
+    // Cap PER CHANGED SYMBOL, which is what `MAX_CALLERS_PER_SYMBOL` has always
+    // said it does. It used to be `.slice(0, 20)` over the flat list, so a
+    // change touching 85 symbols reported 20 callers TOTAL and every other
+    // symbol came back looking uncalled. See `capCallersPerSymbol`.
+    const capped = capCallersPerSymbol(callers);
+
     // Precomputed facts per caller file (endpoints + crons), so consumers can
     // attribute them to the changed symbol whose callers live in that file.
     const facts = await this.repo.getFileFacts(repoId, callerFiles);
@@ -383,7 +390,7 @@ export class RepoIntelService implements RepoIntel {
 
     return {
       changedSymbols,
-      callers: callers.slice(0, MAX_CALLERS_PER_SYMBOL),
+      callers: capped,
       impactedEndpoints: [...endpoints],
       factsByFile,
       degraded: false,

@@ -88,6 +88,17 @@ module.exports = {
       to: { path: '^src/(modules|adapters|platform)/' },
     },
     {
+      name: 'smart-diff-spends-nothing',
+      comment:
+        'Smart Diff re-projects files that are already imported and findings ' +
+        'that are already stored — opening a diff must never cost a model call. ' +
+        'That is a product promise, so it is a build failure and not a review ' +
+        'comment. If this needs an LLM, it is a different feature.',
+      severity: 'error',
+      from: { path: '^src/modules/smart-diff/' },
+      to: { path: '^(src/adapters/llm|reviewer-core|src/modules/reviews)' },
+    },
+    {
       name: 'no-circular',
       comment:
         'A cycle means the layer boundary is fictional. Most cycles here run ' +
