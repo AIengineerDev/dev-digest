@@ -268,6 +268,18 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
+- **2026-08-14** — A poll-until-ready test helper that **returns** on timeout
+  instead of throwing converts "we stopped waiting" into "the value is wrong",
+  and the two need completely different fixes. `waitForPrRuns` returned the
+  half-settled rows at its deadline, so the caller's next line failed as
+  `expected 'running' to be 'done'` — which reads as a broken run executor. It
+  was a 10s budget against a test that takes **8.3s on a dev machine**, so it
+  passed locally and failed only on CI, twice, before the cause was visible.
+  Budget is now 30s and the deadline throws with the run ids and their statuses
+  in the message. When a wait helper feeds an assertion, make its timeout loud:
+  a silent return costs a full CI round-trip to diagnose.
+  `test/helpers/runs.ts:14`
+
 - **2026-08-09** — `GET /skills` is the **first** route in the server with a
   `querystring` schema (`grep -rn querystring src` returned nothing before it),
   so there was no house pattern for a boolean filter — and the intuitive one is
