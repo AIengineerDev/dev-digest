@@ -140,10 +140,12 @@ where one that gets an empty result invents an impact analysis.
   not a file list — the server already knows which files the PR touches, so a
   caller that reconstructs the diff can only get it wrong. See
   `specs/08-blast-radius.md`.
-- Some hosts cap a single tool call around 60 s (the MCP TypeScript SDK's
-  `DEFAULT_REQUEST_TIMEOUT_MSEC`), below our 120 s wall, and progress
-  notifications do not extend that limit in Claude Code. Whether to lower the
-  default wall to fit inside the common-host default, or keep 120 s and rely on
-  `MCP_TOOL_TIMEOUT` being raised at registration, is left to see how it plays
-  out in practice — see `mcp/README.md` and `mcp/AGENTS.md` for the mitigation
+- ~~Whether to lower the default wall to fit inside the common-host default, or
+  keep 120 s and rely on `MCP_TOOL_TIMEOUT`, is left to see how it plays out in
+  practice.~~ **Resolved 2026-08-14:** it played out badly. At 120 s the host's
+  60 s limit always fired first, killing the call and discarding the result, so
+  the partial-result path this spec designed never executed once — the caller
+  just saw "MCP request timed out after 60000ms". The wall is now 55 s, under
+  the host default, so OUR timeout is the one that fires and it returns finished
+  runs plus run ids. Raising it requires raising the host's limit too — see `mcp/README.md` and `mcp/AGENTS.md` for the mitigation
   either way (the run survives on the server; `get_findings` collects it).

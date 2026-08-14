@@ -97,13 +97,15 @@ before the user types a word. Input schemas are 60–80% of that cost.
   string either way. Do not "simplify" it back to names-only.
 - Errors are returned as `isError` results, never thrown: the model reads the
   message and retries. Phrase every one of them with the fix in it.
-- **`run_agent_on_pr` blocks, and the wait window is bigger than what
-  most hosts allow a single tool call.** It waits up to 120 s
-  (`DEVDIGEST_MCP_WAIT_MS`), but the MCP TypeScript SDK's client default is
-  `DEFAULT_REQUEST_TIMEOUT_MSEC = 60_000` — half that — and progress
-  notifications do **not** extend a host's per-call wall in Claude Code; it is
-  hard, not a soft heartbeat budget. Document this as a real setup requirement
-  (`MCP_TOOL_TIMEOUT`, see `README.md`), don't quietly shrink the wall to fit —
+- **`run_agent_on_pr` blocks, and its wall is deliberately UNDER the host's.** It waits 55 s
+  (`DEVDIGEST_MCP_WAIT_MS`) against the MCP TypeScript SDK client default of
+  `DEFAULT_REQUEST_TIMEOUT_MSEC = 60_000`, and progress notifications do **not**
+  extend a host's per-call wall in Claude Code; it is hard, not a soft heartbeat
+  budget. It was 120 s, which inverted the design — the host killed the call at
+  60 s and discarded everything, so the partial-result path never ran and the
+  caller saw "MCP request timed out" with no run ids to follow up on. Measured
+  live in the Inspector. **Our wall must expire first**, so raise it only
+  together with the host's (`MCP_TOOL_TIMEOUT`, see `README.md`) —
   the review survives on the server regardless of whether the MCP call is still
   attached to it (`agent_runs`), so a host that cuts the call early still
   leaves `get_findings` able to collect the result. That's also why the wall

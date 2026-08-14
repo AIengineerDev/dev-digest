@@ -37,7 +37,7 @@ export function registerRunAgent(server: McpServer, { api, resolver, timing }: D
     {
       title: 'Run a review agent on a pull request',
       description:
-        'Review a pull request and return its findings. Waits up to 2 min; on timeout returns finished runs plus run ids for get_findings.',
+        'Review a pull request and return its findings. Waits ~55s; if runs are still going it returns those that finished plus run ids for get_findings.',
       inputSchema: z.object({
         // A plain string, never `z.union([number, string])`: a union renders as
         // `anyOf` in the JSON Schema, and a host with no widget for that falls

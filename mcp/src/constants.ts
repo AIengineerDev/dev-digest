@@ -17,8 +17,23 @@ function envInt(name: string, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-/** Wall-clock budget `run_agent_on_pr` blocks for, in ms. */
-export const WAIT_MS = envInt('DEVDIGEST_MCP_WAIT_MS', 120_000);
+/**
+ * Wall-clock budget `run_agent_on_pr` blocks for, in ms.
+ *
+ * **55s, deliberately under the 60s most hosts allow a single tool call**
+ * (the MCP TypeScript SDK's `DEFAULT_REQUEST_TIMEOUT_MSEC`). This used to be
+ * 120s, which inverted the whole design: the host killed the call at 60s and
+ * DISCARDED the result, so the partial-result path — finished runs plus run
+ * ids for `get_findings` — never ran, and the caller got
+ * "MCP request timed out" with nothing to follow up on. Our wall has to expire
+ * FIRST for that path to mean anything.
+ *
+ * Raise it only together with the host's own limit (`MCP_TOOL_TIMEOUT`, or the
+ * Inspector's Configuration panel); raising it alone brings the old bug back.
+ * The review itself is unaffected either way — it runs to completion on the
+ * server whether or not a tool call is still attached to it.
+ */
+export const WAIT_MS = envInt('DEVDIGEST_MCP_WAIT_MS', 55_000);
 
 /** Interval between `GET /pulls/:id/runs` polls, in ms. */
 export const POLL_MS = envInt('DEVDIGEST_MCP_POLL_MS', 2_000);

@@ -148,7 +148,7 @@ Then, in a **new** session: `/mcp` should list `devdigest` with five tools.
 | --- | --- | --- |
 | `DEVDIGEST_API_URL` | `http://localhost:3001` | Where the DevDigest API listens |
 | `MCP_TOOL_TIMEOUT` | host-dependent (SDK default 60 s) | How long the **host** allows one tool call. Must exceed the wait wall below |
-| `DEVDIGEST_MCP_WAIT_MS` | `120000` | How long `run_agent_on_pr` waits before returning a partial result |
+| `DEVDIGEST_MCP_WAIT_MS` | `55000` | How long `run_agent_on_pr` waits before returning a partial result. Kept **under** the host's limit on purpose — see below |
 | `DEVDIGEST_MCP_POLL_MS` | `2000` | How often it polls the API while waiting |
 | `DEVDIGEST_MCP_REQUEST_TIMEOUT_MS` | `15000` | Per-HTTP-request timeout, so a hung connection cannot eat the wait budget |
 
@@ -180,7 +180,7 @@ Three of the tests are guards rather than feature coverage: exactly five tools,
 | `No imported repo matches "…"` | Repo not imported into DevDigest | The message lists the repos that *are* imported; add yours in the UI |
 | `PR #N is not imported for …` | PR not synced | Open the repo's PR list in the UI once |
 | `No changed files recorded for this PR` from `get_blast_radius` | The PR's diff was never imported | Open the PR once in the studio — `GET /pulls/:id` is what imports it |
-| Review call dies around 60 s | Host cut the call | Raise `MCP_TOOL_TIMEOUT` (step 5). The run survives — collect it with `get_findings` |
+| `MCP request … timed out after 60000ms` | Host cut the call before our 55s wall could return a partial | Raise the host's limit (`MCP_TOOL_TIMEOUT`, or the Inspector's **Configuration → Request Timeout**) AND `DEVDIGEST_MCP_WAIT_MS` together. The runs survive regardless — collect them with `get_findings` |
 | `Rate limited: … 10 requests per minute` | Too many reviews started | Wait a minute; the limit is the API's, not this server's |
 | Reviews return `approve · 100` and "the diff is empty" | Stack has no `GITHUB_TOKEN` or no clone | Set the token in Settings, re-import the PR |
 | Tools missing after editing the code | Host caches the process | Restart the host session; the server is spawned once per session |
