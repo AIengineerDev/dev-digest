@@ -14,7 +14,11 @@ dist/
 # Cloned user repos — see AGENTS.md "Do not touch".
 server/clones/
 
-# Unpacked from "DevDigest Design (standalone).html" — regenerate rather than commit.
+# The design bundle and everything unpacked from it. The .html is 1.7 MB of
+# base64+gzip assets behind a JSON manifest (INSIGHTS.md, "Tool & Library
+# Notes") — it does not diff, and committing it would weigh the history down
+# forever. Keep it locally; regenerate design-mocks/ from it rather than commit.
+DevDigest Design (standalone).html
 design-mocks/
 
 # Local agent/session state. `.claude/skills/` and `.claude/agents/` are shared:

@@ -30,6 +30,28 @@ a contract change reaches every package.
 
 ## Decisions
 
+### 2026-08-10 — Token counting for the run trace is unconditional; only the verbose LOG stays gated
+
+**What:** `run-executor.ts` now always passes a `countTokens` fn into
+`describePromptSections`, so every populated prompt section — including
+`skills` — gets a `tokens` figure on every run, not just when
+`config.promptLogVerbose` is on. `config.promptLogVerbose` still gates only the
+per-section `runLog.info(formatSectionLine(...))` lines (`run-executor.ts:294-313`).
+The `skills` figure is copied onto the persisted trace as
+`prompt_assembly.skills_tokens` (`trace.ts:PromptAssembly`), which is what
+closed `specs/02-skills.md` acceptance #4 — the Run Trace's `skills` slot
+attributing a token count, not just showing a non-null block.
+**Why:** the Run Trace needs a real count on every run to answer "how many
+tokens did the skills block cost", and `prompt-log.ts`'s own doc comment says
+tokens are "only populated in verbose mode (tokenising every section is not
+free)" — that comment now describes the LOG's behaviour, not the counting
+function's, so do not re-read it as still gating `describePromptSections`
+itself; the function always tokenises whatever `countTokens` you hand it.
+**Rejected:** a second, cheaper token estimator just for the trace field. The
+repo has exactly one counter (`this.container.tokenizer.count`, wired through
+`describePromptSections`) and duplicating it would mean two token numbers that
+can silently disagree.
+
 ### 2026-08-09 — Skill trust follows `source`, and extraction is trusted
 
 **What:** the assembler wraps a skill body in `<untrusted>` when its `source` is

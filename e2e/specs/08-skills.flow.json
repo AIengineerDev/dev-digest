@@ -1,0 +1,53 @@
+{
+  "name": "Create a skill and attach it to the seeded Test Quality Reviewer agent",
+  "description": "Skills Lab: create a skill from scratch, confirm it lands in the editor. Agent Editor: open the seeded 'Test Quality Reviewer' agent (server/src/db/seed.ts:371), switch to its Skills tab, and attach the new skill — confirmed by aria-checked flipping false->true on its row checkbox. Both steps are real writes through the UI (POST /skills, PUT the agent's skill links), but neither touches the LLM. Does NOT trigger a review run: run-executor.ts resolves the agent's LLM provider (container.llm) before it resolves skills, and that call throws unless a provider secret is configured — which the hermetic/CI stack deliberately does not have (README: 'No Playwright, no LLM, no API key'). No seeded review run exists for this agent to inspect instead (only the PR's built-in seed review at seed.ts:141 has one, and it is not linked to an agent). Running a review to show the skill in the Run Trace is therefore out of reach for a deterministic, key-free flow with the current fixtures — see e2e/INSIGHTS.md.",
+  "steps": [
+    { "cmd": ["open", "{BASE}/skills"], "label": "load the Skills Lab" },
+    { "cmd": ["wait", "--url", "/skills"], "label": "skills route reached" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "skills list fetch settles" },
+    {
+      "cmd": ["find", "role", "button", "click", "--name", "Add Skill"],
+      "label": "open the Add Skill menu"
+    },
+    { "cmd": ["find", "text", "Create from scratch", "click"], "label": "choose Create from scratch" },
+    { "cmd": ["wait", "--text", "Add a skill"], "label": "Add a skill modal is open" },
+    {
+      "cmd": ["find", "placeholder", "pr-quality-rubric", "fill", "E2E Run Trace Check"],
+      "label": "name the new skill"
+    },
+    {
+      "cmd": ["find", "role", "button", "click", "--name", "Create skill"],
+      "label": "submit the create form"
+    },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "create request settles" },
+    { "cmd": ["wait", "--text", "E2E Run Trace Check"], "label": "new skill selected in the editor pane" },
+
+    { "cmd": ["open", "{BASE}/agents"], "label": "load the agents page" },
+    { "cmd": ["wait", "--url", "/agents"], "label": "agents route reached" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "agents fetch settles" },
+    { "cmd": ["find", "text", "Test Quality Reviewer", "click"], "label": "open the seeded Test Quality Reviewer agent" },
+    { "cmd": ["wait", "--url", "/agents/"], "label": "navigated to the agent detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "agent editor loaded" },
+    {
+      "cmd": ["find", "role", "button", "click", "--name", "Skills", "--exact"],
+      "label": "switch to the agent's Skills tab"
+    },
+    { "cmd": ["wait", "--url", "tab=skills"], "label": "skills tab is active in the URL" },
+    { "cmd": ["wait", "--text", "E2E Run Trace Check"], "label": "the new workspace skill is listed for this agent" },
+    {
+      "cmd": ["get", "attr", "[role=\"checkbox\"][aria-label=\"E2E Run Trace Check\"]", "aria-checked"],
+      "label": "new skill starts unattached to this agent",
+      "assert": { "stdoutIncludes": "false" }
+    },
+    {
+      "cmd": ["find", "role", "checkbox", "click", "--name", "E2E Run Trace Check"],
+      "label": "attach the new skill to the agent"
+    },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "link save settles" },
+    {
+      "cmd": ["get", "attr", "[role=\"checkbox\"][aria-label=\"E2E Run Trace Check\"]", "aria-checked"],
+      "label": "skill is now attached to the agent",
+      "assert": { "stdoutIncludes": "true" }
+    }
+  ]
+}

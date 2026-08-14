@@ -58,7 +58,8 @@ as stale would flag a repo's entire history. `client/src/app/repos/[repoId]/pull
 
 ### 2026-07-31 — Standalone packages instead of a workspace
 
-**What:** four packages, each with its own `package.json` and lockfile; sharing
+**What:** standalone packages (four at the time; `mcp/` made five on 2026-08-11),
+each with its own `package.json` and lockfile; sharing
 happens through tsconfig path aliases, not published modules. Each suite is
 gated by its own CI workflow with a path filter.
 **Why:** _rationale not recorded anywhere in the repo — fill this in._ Do not
@@ -109,6 +110,37 @@ _None yet._
   `server/src/modules/pulls/routes.ts:126` ·
   `client/src/app/repos/[repoId]/pulls/[number]/_components/staleness.ts:14`
 
+- **2026-08-10** — The 2026-07-31 decision below says "each suite is gated by
+  its own CI workflow with a path filter". **There is no CI in this repository**
+  — no `.github/` directory exists on disk and `git ls-files` tracks no workflow
+  file. Verified 2026-08-10. So every gate is a local command a human or an
+  agent must remember to run: `pnpm typecheck`, `pnpm test`, and in `server/`
+  also `pnpm arch` (which does fail correctly — 11 known violations, exit code
+  11). Two consequences: do not write a skill, hook, or doc that says "CI will
+  catch this", and when adding the workflows later, the path filters the old
+  entry describes still have to be invented, not restored. `server/package.json:11`
+
+  **Correction 2026-08-14:** this stopped holding when `main` gained
+  `.github/`. CI exists and runs — five tracked workflows (`client.yml`,
+  `mcp.yml`, `reviewer-core.yml`, `server-unit.yml`, `server-integration.yml`)
+  — and `gh pr checks` returns real results per PR. The entry was written on a
+  branch that predated them. The rest of it still stands: run the local gates
+  yourself rather than assuming CI catches it, because the workflows are
+  path-filtered and a change outside a filter is never checked.
+
+- **2026-08-10** — Before authoring a skill in `.claude/skills/`, read the
+  existing ones — "React/frontend best practices" was requested and would have
+  duplicated `frontend-ui-architecture`, which already answers where components,
+  constants, helpers and business logic go. The boundary that keeps the two
+  apart is worth stating: that skill owns **where code goes**, a second one may
+  only own **how it behaves once there** (rendering, state, effects, failure,
+  a11y, tests) — its own description already excludes performance, styling and
+  test strategy, which is exactly the free ground. Also reuse, don't re-derive,
+  its `README.md`: ~85 sources graded P/S/T (primary / named practitioner /
+  content-farm) plus a measured `client/src` baseline, and a "Not yet read"
+  list. A duplicate skill is not merely redundant — every linked skill is tokens
+  in every run. `.claude/skills/frontend-ui-architecture/README.md:1`
+
 - **2026-08-09** — `PromptAssembly` has **no diff slot**: `assemblePrompt` folds
   the diff into `user` along with every `## Heading` and `<untrusted>` wrapper,
   so anything doing per-section accounting cannot report a diff size — only
@@ -142,6 +174,36 @@ _None yet._
   request. `reviewer-core/src/review/run.ts:216`
 
 ## Tool & Library Notes
+
+- **2026-08-11** — A package whose tsconfig `paths` alias `@devdigest/shared` to
+  `../server/src/vendor/shared` **cannot emit JS**, even when every import from it
+  is `import type`. Path-mapped `.ts` files join the program, tsc emits them too,
+  and the common root shifts: `outDir: "dist"` produced `dist/mcp/src/index.js`
+  *and* `dist/server/src/vendor/shared/**`, breaking any `bin` path. This is why
+  `reviewer-core` and `mcp` are consumed as source and their `build` is a
+  typecheck. If an aliased package needs an executable, register tsx's ESM loader
+  in a `.mjs` shim and import the `.ts` entry — one process, no build step.
+  `mcp/bin/devdigest-mcp.mjs:1`
+
+- **2026-08-11** — With `@modelcontextprotocol/server` v2, `ctx.mcpReq.signal`
+  really does abort when a client cancels `callTool({ signal })` mid-request —
+  verified against the in-process `StreamableHTTPClientTransport` +
+  `createMcpHandler` test harness (`mcp/test/tools.test.ts`'s `connect()`),
+  which bridges the two over a synthetic `fetch`, not a real socket. Same for
+  progress: the client only stamps `_meta.progressToken` on the request when
+  `callTool` is given an `onprogress` callback, so a handler gating on
+  `ctx.mcpReq._meta?.progressToken !== undefined` sends zero notifications to a
+  caller that never asked — no separate opt-out needed.
+  `mcp/src/tools/run-agent.ts:78`
+
+- **2026-08-11** — With `@modelcontextprotocol/server` v2, type a tool handler's
+  return as the SDK's exported `CallToolResult`, never as your own `interface`.
+  The SDK's result union carries an index signature and an `interface` is never
+  assignable to one, so tsc reports the failure against whichever union member it
+  tried last — `Property 'resultType' is missing … but required in type
+  'InputRequiredResult'`, which names a feature the code does not use and sends
+  you looking in the wrong place. A `type` alias works; an `interface` does not.
+  `mcp/src/tools/shared.ts:14`
 
 - **2026-08-09** — The "edit each vendored copy by hand" advice below stopped
   holding: `./scripts/check-shared.sh` now diffs the two `@devdigest/shared`

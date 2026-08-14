@@ -171,6 +171,12 @@ d('skills → prompt assembly (Testcontainers pg)', () => {
     expect(trace.prompt_assembly.user).toContain('## Skills / rules');
     expect(trace.prompt_assembly.user).toContain('RULE TWO: never truncate a rule.');
 
+    // Acceptance criterion 4's second clause: the slot carries its own token
+    // count, and it survives the round trip through the persisted trace. The
+    // hermetic test in `prompt-log.test.ts` pins the counting; this pins the
+    // wiring, which is the half that a refactor of the executor would break.
+    expect(trace.prompt_assembly.skills_tokens).toBeGreaterThan(0);
+
     await app.close();
   });
 

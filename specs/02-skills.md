@@ -1,6 +1,11 @@
 # Skills — reusable review rules shared across agents
 
-**Status:** draft
+**Status:** shipped, with one open decision — audited against the code 2026-08-10.
+Acceptance criteria 1–9 all met (4 was closed that day by adding
+`prompt_assembly.skills_tokens`). The e2e flow of phase 6 exists as
+`e2e/specs/08-skills.flow.json` but stops at *attach*, not *run a review* — see
+the note under Open questions. **Open question 2 (delete vs archive) was never
+answered and `DELETE` shipped as a hard cascade delete anyway.**
 **Packages touched:** server, client, `@devdigest/shared`
 **Design:** [`design-mocks/src/14-screen_skills.jsx`](../design-mocks/src/14-screen_skills.jsx)
 (Skills Lab) · [`design-mocks/src/17-screen_agents.jsx`](../design-mocks/src/17-screen_agents.jsx)
@@ -446,4 +451,27 @@ phase 3. Seeding stays idempotent, like the rest of `db:seed`.
    silently loses a rule and old agent versions point at a row that no longer
    exists. Soft-delete would preserve replay. Not decided; blocks `DELETE`
    shipping in phase 2.
+
+   **Still open, and overtaken by events (audited 2026-08-10).** `DELETE` shipped
+   anyway, as a hard cascade delete: `skills/routes.ts:101` → `service.ts:123` →
+   `repository.ts:177`, with `onDelete: 'cascade'` on `skill_versions`
+   (`db/schema/skills.ts:32`) and `agent_skills` (`db/schema/agents.ts:59`). There
+   is no `deleted_at` or `archived` column. The client calls it behind a
+   `window.confirm` (`SkillEditor.tsx:53`). The consequence this question
+   predicted is real and visible in the code that absorbs it: a pinned reference
+   to a deleted skill is reported as `"<id> (deleted)"` and dropped
+   (`assembler.ts:132`, covered by `skills-assembly.it.test.ts`). So replay
+   degrades gracefully rather than crashing — but an old agent version can no
+   longer be reproduced exactly, which is the property the whole pinning design
+   exists to provide. **Decide: soft-delete, or accept and write it down.**
 3. ~~**Seeding.**~~ Decided — see *Seed fixtures* above.
+4. **The e2e flow stops short of the acceptance text** (added 2026-08-10).
+   `e2e/specs/08-skills.flow.json` covers create → attach, not → run a review →
+   see the skill in the Run Trace. The reason is structural, not laziness:
+   `run-executor.ts` resolves the agent's LLM provider *before* it resolves
+   skills, so in a genuinely key-free hermetic run the skills are never resolved
+   at all, and on a machine that does have keys the flow would make a real,
+   billed model call — which the same sentence of this spec forbids. Closing it
+   needs a server-side fixture (a seeded `agent_runs`/`run_traces` row for
+   `Test Quality Reviewer`) or an env-gated mock provider. Until then the wire is
+   proven by `skills-assembly.it.test.ts`, not by the browser.
