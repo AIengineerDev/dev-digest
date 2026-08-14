@@ -299,8 +299,11 @@ reference in every route.
   `expected 'running' to be 'done'` — which reads as a broken run executor. It
   was a 10s budget against a test that takes **8.3s on a dev machine**, so it
   passed locally and failed only on CI, twice, before the cause was visible.
-  Budget is now 30s and the deadline throws with the run ids and their statuses
-  in the message. When a wait helper feeds an assertion, make its timeout loud:
+  Budget is now **90s** — 10s then 30s both went red on CI — and the deadline
+  throws with the run ids and their statuses in the message. Size a wait budget
+  as a safety net, not near the observed runtime: the loop returns as soon as
+  the runs settle, so a generous budget costs nothing when things work and only
+  decides how long a genuine hang takes to report. When a wait helper feeds an assertion, make its timeout loud:
   a silent return costs a full CI round-trip to diagnose.
   `test/helpers/runs.ts:14`
 
