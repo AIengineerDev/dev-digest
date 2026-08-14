@@ -116,18 +116,24 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         headSha: 'a1b2c3d4e5f6',
         additions: 247,
         deletions: 38,
-        filesCount: 9,
+        filesCount: 8,
         status: 'needs_review',
         body: 'Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.',
       })
       .returning();
 
-    // pr_files (subset)
+    // pr_files — one file of each Smart Diff role, so the demo PR actually
+    // exercises the grouping: business logic, plumbing, and a lock file that
+    // must land in boilerplate and start collapsed.
     await db.insert(t.prFiles).values([
       { prId: pr!.id, path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
       { prId: pr!.id, path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
-      { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
       { prId: pr!.id, path: 'src/api/users.ts', additions: 7, deletions: 2 },
+      { prId: pr!.id, path: 'src/api/public/index.ts', additions: 12, deletions: 2 },
+      { prId: pr!.id, path: 'src/server.ts', additions: 8, deletions: 1 },
+      { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
+      { prId: pr!.id, path: 'package.json', additions: 3, deletions: 1 },
+      { prId: pr!.id, path: 'package-lock.json', additions: 92, deletions: 24 },
     ]);
 
     // pr_commits
