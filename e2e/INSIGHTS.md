@@ -99,6 +99,19 @@ _None yet._
   the UI is broken. Match the casing you SEE, and prefer a body string over a
   `SectionLabel` title when you have one.
   `specs/10-pr-blast-radius.flow.json:10`
+
+- **2026-08-14** — Same trap, second form: **a CSS-truncated string is not
+  matchable either.** The PR list ellipsises long titles, so
+  `find text "Add rate limiting to public API endpoints" click` matches nothing
+  even though the row is right there and `textContent` holds the full string —
+  the screenshot shows `Add rate limiti...`. It is layout-dependent, so it
+  passes until a column gets narrower, which is what made it look like a
+  merge-order regression when two flows were renumbered. Click the PR **number**
+  (`#482`) instead: short, never truncated, unique on the list. Flows `02` and
+  `05` still click the full title and are fragile for exactly this reason — fix
+  them when you are next in those files. Note the PR row is a bare `div` with an
+  `onClick`, so there is no role or accessible name to target instead.
+  `client/src/app/repos/[repoId]/pulls/_components/PrRow/PrRow.tsx:36`
 - **2026-08-10** — `agent-browser find text "<string>" click` (non-`--exact`)
   can match a `<script>` tag, not the visible element you meant. Next.js embeds
   every `next-intl` namespace as one large serialized hydration payload in an

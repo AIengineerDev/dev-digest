@@ -4,7 +4,7 @@
   "steps": [
     { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
     { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
-    { "cmd": ["find", "text", "Add rate limiting to public API endpoints", "click"], "label": "open the PR row" },
+    { "cmd": ["find", "text", "#482", "click"], "label": "open the PR row (by number — the title is CSS-truncated in the list)" },
     { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
     { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
     { "cmd": ["wait", "--text", "BLAST RADIUS"], "label": "the Blast Radius card renders on Overview (SectionLabel uppercases)" },
