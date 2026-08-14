@@ -268,6 +268,18 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
+- **2026-08-14** — `agent_runs.status = 'done'` used to be written **before**
+  the `run_traces` row, so a consumer that polls for a terminal status and then
+  fetches the trace — which is what the PR page's run drawer and the integration
+  helper `runAndTrace` both do — could read a completed run with no trace behind
+  it. It surfaced on CI as `TypeError: Cannot read properties of undefined
+  (reading 'skills')` in `skills-assembly.it.test.ts`, an error far from its
+  cause, and only on the slower runner. The executor now saves the trace first,
+  so `done` means "everything about this run is readable". Pinned by
+  `test/run-trace-ordering.it.test.ts`, which checks the trace on the FIRST tick
+  that reports terminal — a settling delay there would hide the whole window.
+  `src/modules/reviews/run-executor.ts:394`
+
 - **2026-08-14** — A poll-until-ready test helper that **returns** on timeout
   instead of throwing converts "we stopped waiting" into "the value is wrong",
   and the two need completely different fixes. `waitForPrRuns` returned the
