@@ -77,7 +77,8 @@ export function registerGetFindings(server: McpServer, { api, resolver }: Deps):
           selected = latestBatch(runs);
         }
         if (selected.length === 0) {
-          return text(`No review has been run on ${repo}#${pr}. Start one with run_agent_on_pr.`);
+          const addressed = repo ? `${repo}#${pr}` : pr;
+          return text(`No review has been run on ${addressed}. Start one with run_agent_on_pr.`);
         }
 
         // Only pay for the reviews call when something can actually be in it.

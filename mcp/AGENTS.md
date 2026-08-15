@@ -40,11 +40,15 @@ before the user types a word. Input schemas are 60–80% of that cost.
 
 - `tools/list` must serialise to **under 4000 characters** (≈ 900 tokens). Pinned
   by a test in `test/tools.test.ts`. Adding a tool means staying under it.
-  Measured 2026-08-13: **3910** — 90 chars of headroom, so the next schema field
-  is a real trade, not a rounding error. Making `get_blast_radius` real pushed it
-  to 4016 and the guard failed; three over-long descriptions were trimmed rather
-  than the limit raised. Trim descriptions first, and re-measure by temporarily
-  logging `len` in that test.
+  Measured 2026-08-15: **3754** — 246 chars of headroom, so the next schema
+  field is a real trade, not a rounding error. Method: `JSON.stringify(await
+  client.listTools())`, i.e. the in-process MCP SDK client's parsed
+  `tools/list` response (its envelope included), not a raw stdio byte count —
+  a raw probe over the wire measures smaller, so re-measure the same way or the
+  numbers aren't comparable. Making `get_blast_radius` real pushed an earlier
+  measurement to 4016 and the guard failed; three over-long descriptions were
+  trimmed rather than the limit raised. Trim descriptions first, and re-measure
+  by temporarily logging `len` in that test.
 - One-line descriptions. `.describe()` only where the model cannot guess.
 - **No `outputSchema`** — it is advertised in `tools/list` and would roughly
   double the static cost, and these results are read by a model, not a program.
