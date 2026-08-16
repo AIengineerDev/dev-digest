@@ -144,6 +144,48 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       author: 'marisa.koch',
     });
 
+    // A derived intent for the demo PR. Seeded, not derived: classification is
+    // the one step in this feature that costs a model call, and the seed — which
+    // the e2e stack and every fresh clone run — must never make one. The values
+    // are what the `review_intent` model returns for this body, recorded once by
+    // hand, including the sources that make the band defensible.
+    await db.insert(t.prIntent).values({
+      prId: pr!.id,
+      intent: 'Add rate limiting to the public API endpoints',
+      inScope: [
+        'src/middleware/ratelimit.ts — the token-bucket limiter itself',
+        'the public API routes it fronts',
+        'the config values that size the bucket',
+      ],
+      outOfScope: [
+        'authentication and session handling',
+        'the billing service',
+        'anything under src/admin/',
+      ],
+      category: 'feature',
+      summary:
+        'Adds a token-bucket rate limiter in front of the unauthenticated public API so a single client cannot exhaust the service.',
+      confidence: 0.82,
+      band: 'high',
+      sources: [
+        { kind: 'pr_body', ref: null, grade: 'documentation', used: true, note: null },
+        { kind: 'title', ref: null, grade: 'indirect', used: true, note: null },
+        { kind: 'branch', ref: 'feat/rate-limit-public', grade: 'indirect', used: true, note: null },
+        { kind: 'commit_subjects', ref: '1', grade: 'indirect', used: true, note: null },
+        {
+          kind: 'linked_issue',
+          ref: null,
+          grade: 'documentation',
+          used: false,
+          note: 'no issue referenced in the body',
+        },
+      ],
+      provider: 'seed',
+      model: 'seed',
+      fingerprint: 'seed-482',
+      derivedAt: new Date(),
+    });
+
     // a sample review + findings so the PR shows results before the first run
     const [review] = await db
       .insert(t.reviews)

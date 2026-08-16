@@ -184,6 +184,17 @@ out-of-scope bullets, ≤120 chars each.
   subjects"). A `low` card renders muted with the word **Inferred** instead of
   "Intent". Failed sources appear in the same list. `degraded:true` renders
   "Not derived — <error>" with a *Re-derive* button, never an empty card.
+- **The derived scope is shown, not just stored.** Two columns, **IN SCOPE** and
+  **OUT OF SCOPE**, under the summary — the model is asked for both fields and
+  they already reach the review prompt, so withholding them from the reviewer
+  reading the same PR is the one thing that makes the card decorative. An empty
+  column stays and reads "Nothing listed": dropping it makes "no boundary was
+  claimed" indistinguishable from "we never asked". Under a `low` band they
+  carry the same caution the low-band preamble gives the model — where to look
+  first, never grounds to call a finding out of scope.
+- **Recalculate** in the card header, `force: true` so it bypasses the
+  fingerprint cache; without `force` the same classification comes back and the
+  button reads as broken.
 - **Run trace:** one `PromptBlock` for `prompt_assembly.intent`, plus the
   **missing** `pr_description` block the trace has silently omitted since that
   field was added.
@@ -274,8 +285,9 @@ Ordered so the wire that makes the feature exist lands before any UI.
 6. A failing or timing-out intent leaves the run `done` with `prompt_assembly.intent`
    null and a prompt byte-identical to today's.
 7. `GET /pulls/:id/intent` returns 200 + `null` before first derivation.
-8. The PR Overview card renders the band, the source sentence, and *Re-derive* for
-   a degraded row — and never a bare confidence number.
+8. The PR Overview card renders the band, the source sentence, the in-scope and
+   out-of-scope columns, a *Recalculate* that bypasses the cache, and
+   *Re-derive* for a degraded row — and never a bare confidence number.
 9. Saving a `review_intent` model in Settings persists the provider shown in the UI.
 10. `pnpm arch` reports no new violations; `./scripts/check-shared.sh` is green;
     both typechecks, both existing test suites, and `client pnpm build` pass.

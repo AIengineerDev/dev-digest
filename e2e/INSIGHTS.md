@@ -98,7 +98,7 @@ _None yet._
   what proves that, so read it before assuming the UI is broken. Match the
   casing you SEE, and prefer a body string over a `SectionLabel` title when you
   have one.
-  `specs/08-pr-smart-diff.flow.json:13`
+  `specs/09-pr-smart-diff.flow.json:13`
 
 - **2026-08-14** — Same trap, second form: **a CSS-truncated string is not
   matchable either.** The PR list ellipsises long titles, so
