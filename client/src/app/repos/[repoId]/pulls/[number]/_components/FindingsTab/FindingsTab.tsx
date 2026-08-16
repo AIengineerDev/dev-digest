@@ -17,6 +17,9 @@ interface FindingsTabProps {
   liveRunIds: string[];
   reviewRunning: boolean;
   lethalTrifecta: FindingRecord[];
+  /** A finding jumped to from Smart Diff (`?finding=`): its run's accordion
+   *  opens, its card is revealed, and the current filters cannot hide it. */
+  focusFindingId?: string | null;
   runs: ReviewRecord[];
   prRuns: RunSummary[] | undefined;
   prCommits: PrCommit[];
@@ -34,6 +37,7 @@ export function FindingsTab({
   liveRunIds,
   reviewRunning,
   lethalTrifecta,
+  focusFindingId,
   runs,
   prRuns,
   prCommits,
@@ -100,6 +104,17 @@ export function FindingsTab({
     },
     [runs, headSha],
   );
+
+  // A jump from Smart Diff must land even when the run that produced the
+  // finding is one this list hides by default.
+  const focusReview = React.useMemo(
+    () =>
+      focusFindingId ? runs.find((r) => r.findings.some((f) => f.id === focusFindingId)) : undefined,
+    [runs, focusFindingId],
+  );
+  React.useEffect(() => {
+    if (focusReview && isStaleRun(focusReview.head_sha, headSha)) setOnlyCurrentHead(false);
+  }, [focusReview, headSha]);
 
   return (
     <section>
@@ -216,6 +231,7 @@ export function FindingsTab({
             headSha={headSha}
             targetRunId={target?.runId ?? null}
             targetNonce={target?.n ?? 0}
+            focusFindingId={focusFindingId}
           />
         ))
       )}

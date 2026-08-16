@@ -33,6 +33,7 @@ export function ReviewRunAccordion({
   headSha,
   targetRunId = null,
   targetNonce = 0,
+  focusFindingId = null,
 }: {
   review: ReviewRecord;
   prId: string;
@@ -43,8 +44,15 @@ export function ReviewRunAccordion({
    *  (driven from the Timeline: clicking an agent name navigates here). */
   targetRunId?: string | null;
   targetNonce?: number;
+  /** A finding jumped to from Smart Diff. The accordion holding it opens, even
+   *  when it is not the newest run — a collapsed card is not a destination. */
+  focusFindingId?: string | null;
 }) {
-  const [open, setOpen] = React.useState(defaultOpen);
+  const holdsFocus = !!focusFindingId && review.findings.some((f) => f.id === focusFindingId);
+  const [open, setOpen] = React.useState(defaultOpen || holdsFocus);
+  React.useEffect(() => {
+    if (holdsFocus) setOpen(true);
+  }, [holdsFocus]);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     if (review.run_id && review.run_id === targetRunId) {
@@ -161,6 +169,7 @@ export function ReviewRunAccordion({
           <FindingsPanel
             findings={findings}
             prId={prId}
+            focusFindingId={holdsFocus ? focusFindingId : null}
             repoFullName={repoFullName}
             headSha={headSha}
           />

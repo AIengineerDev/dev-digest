@@ -21,6 +21,7 @@ export function DiffViewer({
   defaultOpenFor,
   reveal = null,
   onRevealLine,
+  onOpenFinding,
 }: {
   files: PrFile[];
   commenting?: DiffCommentApi;
@@ -32,6 +33,9 @@ export function DiffViewer({
   defaultOpenFor?: (file: PrFile) => boolean;
   reveal?: DiffReveal | null;
   onRevealLine?: (path: string, line: number) => void;
+  /** Opens a finding's card in the Findings tab (Smart Diff). Absent = badges
+   *  stay inside the diff and only scroll to their line. */
+  onOpenFinding?: (findingId: string) => void;
 }) {
   const t = useTranslations("shell");
   if (!files || files.length === 0) {
@@ -48,6 +52,7 @@ export function DiffViewer({
           defaultOpen={defaultOpenFor?.(f)}
           reveal={reveal}
           onRevealLine={onRevealLine}
+          onOpenFinding={onOpenFinding}
         />
       ))}
     </div>

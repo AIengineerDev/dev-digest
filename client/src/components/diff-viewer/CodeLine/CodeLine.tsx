@@ -6,7 +6,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { commentTargetFor, type CommentThread, type DiffCommentApi, cs } from "../comments";
-import { diffLineDomId, worstSeverity, type DiffFindingMark } from "../annotations";
+import { diffLineDomId, primaryMark, worstSeverity, type DiffFindingMark } from "../annotations";
 import { type Line } from "../helpers";
 import { s, lineRowFor, lineSignFor, severityChipFor } from "../styles";
 import { CommentThreadView } from "../CommentThreadView";
@@ -19,6 +19,7 @@ export function CodeLine({
   commenting,
   marks = [],
   revealed = false,
+  onOpenFinding,
 }: {
   ln: Line;
   path: string;
@@ -28,6 +29,9 @@ export function CodeLine({
   marks?: readonly DiffFindingMark[];
   /** True for the one line a finding badge was clicked through to. */
   revealed?: boolean;
+  /** Opens this line's finding in the Findings tab. Absent = the chip is a
+   *  label, as it is in the plain (non-Smart) viewer. */
+  onOpenFinding?: (findingId: string) => void;
 }) {
   const t = useTranslations("prReview.smartDiff");
   const [hover, setHover] = React.useState(false);
@@ -45,6 +49,9 @@ export function CodeLine({
   const target = commenting?.canComment ? commentTargetFor(ln) : null;
   const showAdd = hover && !!target && !composing;
   const severity = worstSeverity(marks);
+  // The chip is clickable only when both halves exist: a card to open and a
+  // parent that knows how to open it.
+  const chipTarget = onOpenFinding ? primaryMark(marks)?.findingId ?? null : null;
 
   return (
     <div
@@ -78,12 +85,23 @@ export function CodeLine({
         <span className="mono" style={s.lineText}>
           {ln.text || " "}
         </span>
-        {severity && (
-          <span style={severityChipFor(severity)} title={marks.map((m) => m.title).join(" · ")}>
-            {t(`severity.${severity}`)}
-            {marks.length > 1 ? ` ×${marks.length}` : ""}
-          </span>
-        )}
+        {severity &&
+          (chipTarget ? (
+            <button
+              type="button"
+              style={severityChipFor(severity, true)}
+              title={[t("badgeHintOpen"), ...marks.map((m) => m.title)].join("\n")}
+              onClick={() => onOpenFinding?.(chipTarget)}
+            >
+              {t(`severity.${severity}`)}
+              {marks.length > 1 ? ` ×${marks.length}` : ""}
+            </button>
+          ) : (
+            <span style={severityChipFor(severity)} title={marks.map((m) => m.title).join(" · ")}>
+              {t(`severity.${severity}`)}
+              {marks.length > 1 ? ` ×${marks.length}` : ""}
+            </span>
+          ))}
       </div>
 
       {commenting &&

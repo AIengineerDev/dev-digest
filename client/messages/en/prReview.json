@@ -62,14 +62,41 @@
     "allHiddenBody": "Every stored review ran against an older commit. Run a review to check the code as it stands, or switch off “Only current head” to read the older ones."
   },
   "smartDiff": {
+    "smartOrder": "Smart order",
+    "originalOrder": "Original order",
+    "role": {
+      "core": {
+        "label": "Core logic",
+        "hint": "The substance of the change — review closely"
+      },
+      "wiring": {
+        "label": "Wiring",
+        "hint": "Hooks the core into the app"
+      },
+      "boilerplate": {
+        "label": "Boilerplate",
+        "hint": "Generated / mechanical — skim"
+      }
+    },
+    "severity": {
+      "CRITICAL": "blocker",
+      "WARNING": "warning",
+      "SUGGESTION": "suggestion"
+    },
+    "findingsBadge": "{count, plural, one {# finding} other {# findings}}",
+    "badgeHintOpen": "Open this finding in the Findings tab",
+    "badgeHintScroll": "Scroll to the flagged line",
     "coreLabel": "Core",
     "wiringLabel": "Wiring",
     "boilerplateLabel": "Boilerplate",
     "largeTitle": "This PR is large ({lines} changed lines)",
     "largeBody": "Consider splitting it into smaller, focused PRs for easier review:",
-    "filesCount": "{count} files",
+    "filesCount": "{count, plural, one {# file} other {# files}}",
     "findingLines": "{count} finding-lines",
-    "groupedByRole": "Smart Diff · grouped by role"
+    "groupedByRole": "Smart Diff · grouped by role",
+    "empty": "No changed files to order.",
+    "errorTitle": "Couldn't order this diff",
+    "errorBody": "Smart Diff could not be computed for this pull request."
   },
   "list": {
     "breadcrumb": "Pull Requests",

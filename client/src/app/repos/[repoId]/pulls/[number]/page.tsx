@@ -60,13 +60,22 @@ export default function PRDetailPage() {
 
   const tab = search.get("tab") ?? "overview";
   const traceRunId = search.get("trace");
-  const setParam = (key: string, val: string | null) => {
+  // The finding a Smart Diff badge was clicked through to. It lives in the URL
+  // rather than in state so the jump is one `router.replace` — same-page, no
+  // reload — and so the resulting view is linkable and survives a refresh.
+  const focusFindingId = search.get("finding");
+  const setParams = (patch: Record<string, string | null>) => {
     const sp = new URLSearchParams(search.toString());
-    if (val == null) sp.delete(key);
-    else sp.set(key, val);
+    for (const [key, val] of Object.entries(patch)) {
+      if (val == null) sp.delete(key);
+      else sp.set(key, val);
+    }
     router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
   };
-  const setTab = (t: string) => setParam("tab", t);
+  const setParam = (key: string, val: string | null) => setParams({ [key]: val });
+  // Leaving a tab by hand drops the focus target: the highlight belongs to the
+  // jump that set it, not to the tab.
+  const setTab = (t: string) => setParams({ tab: t, finding: null });
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
@@ -143,6 +152,7 @@ export default function PRDetailPage() {
             liveRunIds={liveRunIds}
             reviewRunning={reviewRunning}
             lethalTrifecta={lethalTrifecta}
+            focusFindingId={focusFindingId}
             runs={runs}
             prRuns={prRuns}
             prCommits={pr.commits}
@@ -158,6 +168,10 @@ export default function PRDetailPage() {
               invalidateActiveRuns();
               invalidateRunHistory();
               refetchReviews();
+              // Smart Diff's badges come from the review that just landed, and
+              // nothing else invalidates them — the endpoint is deterministic,
+              // so it is never polled.
+              if (prId) qc.invalidateQueries({ queryKey: ["smart-diff", prId] });
             }}
           />
         )}
@@ -167,7 +181,10 @@ export default function PRDetailPage() {
             prId={prId}
             filesCount={pr.files_count}
             files={pr.files}
+            reviews={reviews}
+            headSha={pr.head_sha}
             canComment={pr.status === "open"}
+            onOpenFinding={(findingId) => setParams({ tab: "findings", finding: findingId })}
           />
         )}
       </div>

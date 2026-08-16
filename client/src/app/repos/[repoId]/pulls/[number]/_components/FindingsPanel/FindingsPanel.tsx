@@ -9,7 +9,7 @@ import type { FindingRecord } from "@devdigest/shared";
 import { FindingCard } from "../FindingCard";
 import { useFindingAction } from "../../../../../../../lib/hooks/reviews";
 import { KEY_TO_ACTION, SEVERITIES } from "./constants";
-import { allSeveritiesOn, countBySeverity, visibleFindings } from "./helpers";
+import { allSeveritiesOn, countBySeverity, visibleFindings, withFocused } from "./helpers";
 import { s } from "./styles";
 
 export function FindingsPanel({
@@ -17,11 +17,15 @@ export function FindingsPanel({
   prId,
   repoFullName,
   headSha,
+  focusFindingId = null,
 }: {
   findings: FindingRecord[];
   prId: string;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** The finding a Smart Diff badge was clicked through to: shown whatever the
+   *  filters say, focused, expanded and scrolled to. */
+  focusFindingId?: string | null;
 }) {
   const t = useTranslations("prReview");
   const action = useFindingAction();
@@ -31,14 +35,22 @@ export function FindingsPanel({
 
   const counts = React.useMemo(() => countBySeverity(findings), [findings]);
   const shown = React.useMemo(
-    () => visibleFindings(findings, hideLow, severityFilter),
-    [findings, hideLow, severityFilter],
+    () => withFocused(visibleFindings(findings, hideLow, severityFilter), findings, focusFindingId),
+    [findings, hideLow, severityFilter, focusFindingId],
   );
 
   // Send focus back to the top whenever the visible set changes: j/k and the
   // a/d shortcuts address `shown` by index, so a stale index after filtering
   // would fire accept/dismiss against a different finding than the marked one.
   React.useEffect(() => setFocusIdx(0), [severityFilter, hideLow]);
+
+  // A jump from Smart Diff moves the j/k cursor onto the finding it asked for,
+  // so the keyboard picks up where the click left off rather than at the top.
+  React.useEffect(() => {
+    if (!focusFindingId) return;
+    const idx = shown.findIndex((f) => f.id === focusFindingId);
+    if (idx >= 0) setFocusIdx(idx);
+  }, [focusFindingId, shown]);
 
   // j/k navigation + a/d shortcuts on the focused finding (keyboard).
   React.useEffect(() => {
@@ -86,7 +98,8 @@ export function FindingsPanel({
               key={f.id}
               f={f}
               focused={i === focusIdx}
-              defaultExpanded={i === 0}
+              defaultExpanded={i === 0 || f.id === focusFindingId}
+              revealed={f.id === focusFindingId}
               pending={action.isPending}
               repoFullName={repoFullName}
               headSha={headSha}

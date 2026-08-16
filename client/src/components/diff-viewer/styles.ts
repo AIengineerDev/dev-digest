@@ -101,9 +101,16 @@ export function lineRowFor(
 }
 
 /** Severity pill rendered at the right edge of a line that carries findings. */
-export function severityChipFor(severity: string): CSSProperties {
+export function severityChipFor(severity: string, clickable = false): CSSProperties {
   const color = SEVERITY_COLOR[severity] ?? SEVERITY_COLOR_FALLBACK;
   return {
+    // Rendered as a <button> when it opens the finding, so the button's own
+    // background and font have to be reset back to the chip's.
+    // `font` would be a shorthand next to the `fontSize` longhand below, which
+    // is what triggers React's conflicting-style warning — set the family only.
+    background: "transparent",
+    fontFamily: "inherit",
+    cursor: clickable ? "pointer" : "default",
     display: "inline-flex",
     alignItems: "center",
     gap: 4,

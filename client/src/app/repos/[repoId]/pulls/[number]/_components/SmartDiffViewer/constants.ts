@@ -27,6 +27,16 @@ export const EXPANDED_ROLES: readonly SmartDiffRole[] = ["core"];
  */
 export const EXPAND_MAX_LINES = 200;
 
+/**
+ * Separator for the `path`+`line` index key.
+ *
+ * A NUL can never occur in a path, so the key is unambiguous — but written as a
+ * raw byte in the source it makes the whole file **binary to git**, which hides
+ * every future diff of it from review. Spelled as an escape, the file stays
+ * text and the key is byte-identical.
+ */
+export const KEY_SEP = "\u0000";
+
 /** Severity used for a flagged line the client cannot match to a finding —
  *  the server says the line is flagged, so the badge must still appear. */
 export const UNKNOWN_MARK_SEVERITY = "WARNING" as const;

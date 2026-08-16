@@ -9,10 +9,30 @@ import type { Line } from "./helpers";
 /** One finding anchored to a line of the new file. */
 export interface DiffFindingMark {
   id: string;
+  /**
+   * The finding row this mark stands for, when the flagged line could be
+   * matched to one — the id the Findings tab addresses a card by.
+   *
+   * `null` when the API reports a flagged line the loaded reviews do not
+   * explain. The mark is still drawn (the server's list is the claim), but
+   * there is no card to open, so such a mark reveals the line in place instead.
+   */
+  findingId: string | null;
   /** `Finding.start_line` — a line number in the NEW file. */
   line: number;
   severity: Severity;
   title: string;
+}
+
+/**
+ * The mark a badge click should act on: the first one, by line, that has a card
+ * behind it. Falls back to the topmost mark so a click is never inert.
+ */
+export function primaryMark(
+  marks: readonly DiffFindingMark[],
+): DiffFindingMark | undefined {
+  const byLine = [...marks].sort((a, b) => a.line - b.line);
+  return byLine.find((m) => m.findingId) ?? byLine[0];
 }
 
 /** Finding marks per file path. Empty map = the PR has not been reviewed. */

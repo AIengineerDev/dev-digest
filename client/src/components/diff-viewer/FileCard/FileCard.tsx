@@ -19,6 +19,7 @@ import {
 import {
   diffLineDomId,
   marksForLine,
+  primaryMark,
   worstSeverity,
   type DiffFindingMark,
   type DiffReveal,
@@ -45,6 +46,7 @@ export function FileCard({
   defaultOpen,
   reveal = null,
   onRevealLine,
+  onOpenFinding,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
@@ -55,8 +57,12 @@ export function FileCard({
   defaultOpen?: boolean;
   /** Set while this card is the target of a badge click. */
   reveal?: DiffReveal | null;
-  /** Clicking the "N findings" badge asks the parent to reveal a line. */
+  /** Clicking the "N findings" badge asks the parent to reveal a line. Used
+   *  only when the mark has no card behind it (`findingId: null`). */
   onRevealLine?: (path: string, line: number) => void;
+  /** Clicking a badge or a severity chip asks the parent to open that finding's
+   *  card in the Findings tab. Absent = this viewer does not navigate. */
+  onOpenFinding?: (findingId: string) => void;
 }) {
   const t = useTranslations("shell");
   const tSmart = useTranslations("prReview.smartDiff");
@@ -97,6 +103,17 @@ export function FileCard({
 
   const badgeSeverity = worstSeverity(marks);
 
+  // A badge is a way into the finding, not a decoration: it opens the card in
+  // the Findings tab. Only when the flagged line has no card behind it — the
+  // API reported a line the loaded reviews do not explain — does it fall back
+  // to scrolling the diff, which is all it can honestly offer.
+  const openPrimary = () => {
+    const first = primaryMark(marks);
+    if (!first) return;
+    if (first.findingId && onOpenFinding) onOpenFinding(first.findingId);
+    else onRevealLine?.(file.path, first.line);
+  };
+
   return (
     <div style={s.fileCard}>
       <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
@@ -109,13 +126,15 @@ export function FileCard({
           <button
             type="button"
             style={findingBadgeFor(badgeSeverity)}
-            title={marks.map((m) => `L${m.line} · ${m.title}`).join("\n")}
+            title={[
+              tSmart(onOpenFinding ? "badgeHintOpen" : "badgeHintScroll"),
+              ...marks.map((m) => `L${m.line} · ${m.title}`),
+            ].join("\n")}
             onClick={(e) => {
               // Without this the header's own toggle would collapse the card we
               // are about to scroll into.
               e.stopPropagation();
-              const first = [...marks].sort((a, b) => a.line - b.line)[0];
-              if (first) onRevealLine?.(file.path, first.line);
+              openPrimary();
             }}
           >
             {tSmart("findingsBadge", { count: marks.length })}
@@ -148,6 +167,7 @@ export function FileCard({
                 commenting={commenting}
                 marks={marksForLine(ln, marks)}
                 revealed={target != null && ln.newNo === target.line}
+                onOpenFinding={onOpenFinding}
               />
             ))
           )}

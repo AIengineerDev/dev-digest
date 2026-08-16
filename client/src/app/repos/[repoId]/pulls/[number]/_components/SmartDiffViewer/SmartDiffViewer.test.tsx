@@ -103,11 +103,20 @@ const REVIEWS: ReviewRecord[] = [
   },
 ];
 
-function renderViewer(reviews: ReviewRecord[] | undefined) {
+function renderViewer(
+  reviews: ReviewRecord[] | undefined,
+  onOpenFinding?: (findingId: string) => void,
+) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
       <div data-theme="dark">
-        <SmartDiffViewer prId="pr1" files={PR_FILES} reviews={reviews} headSha={HEAD} />
+        <SmartDiffViewer
+          prId="pr1"
+          files={PR_FILES}
+          reviews={reviews}
+          headSha={HEAD}
+          onOpenFinding={onOpenFinding}
+        />
       </div>
     </NextIntlClientProvider>,
   );
@@ -171,6 +180,38 @@ describe("SmartDiffViewer", () => {
     const line = document.getElementById("diff-line-src/api/public/webhooks.ts-L61");
     expect(line).not.toBeNull();
     expect(line!.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("a badge opens the finding's card instead of scrolling, when it can", () => {
+    // The badge is a way INTO the finding: with somewhere to go it navigates,
+    // and the diff is not scrolled at all.
+    const onOpenFinding = vi.fn();
+    renderViewer(REVIEWS, onOpenFinding);
+    fireEvent.click(screen.getByRole("button", { name: "2 findings" }));
+
+    expect(onOpenFinding).toHaveBeenCalledWith("f1");
+    const line = document.getElementById("diff-line-src/api/public/webhooks.ts-L61");
+    expect(line!.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("a line's severity chip opens that line's finding, not the file's first", () => {
+    const onOpenFinding = vi.fn();
+    renderViewer(REVIEWS, onOpenFinding);
+    fireEvent.click(screen.getByRole("button", { name: "warning" }));
+    expect(onOpenFinding).toHaveBeenCalledWith("f2");
+  });
+
+  it("falls back to scrolling for a flagged line no loaded review explains", () => {
+    // The API says the line is flagged and the badge must still appear — but
+    // there is no card to open, so the click stays inside the diff.
+    const onOpenFinding = vi.fn();
+    renderViewer(undefined, onOpenFinding);
+    fireEvent.click(screen.getByRole("button", { name: "2 findings" }));
+
+    expect(onOpenFinding).not.toHaveBeenCalled();
+    expect(
+      document.getElementById("diff-line-src/api/public/webhooks.ts-L61")!.scrollIntoView,
+    ).toHaveBeenCalled();
   });
 
   it("renders a severity chip per flagged line, worst severity per line", () => {
@@ -239,8 +280,8 @@ describe("helpers", () => {
   it("buildAnnotations produces exactly one mark per server-reported line", () => {
     const marks = buildAnnotations(SMART_DIFF.groups, findingsAtHead(REVIEWS, HEAD));
     expect(marks.get("src/api/public/webhooks.ts")).toEqual([
-      { id: "f1", line: 61, severity: "CRITICAL", title: "SSRF via caller-supplied callback_url" },
-      { id: "f2", line: 63, severity: "WARNING", title: "Account token forwarded to an arbitrary host" },
+      { id: "f1", findingId: "f1", line: 61, severity: "CRITICAL", title: "SSRF via caller-supplied callback_url" },
+      { id: "f2", findingId: "f2", line: 63, severity: "WARNING", title: "Account token forwarded to an arbitrary host" },
     ]);
     expect(marks.has("src/middleware/ratelimit.ts")).toBe(false);
   });
@@ -251,6 +292,9 @@ describe("helpers", () => {
     const marks = buildAnnotations(SMART_DIFF.groups, []);
     expect(marks.get("src/api/public/webhooks.ts")).toHaveLength(2);
     expect(marks.get("src/api/public/webhooks.ts")![0]!.severity).toBe("WARNING");
+    // …and it carries no card id, which is what makes the badge fall back to
+    // scrolling instead of navigating to a card that does not exist.
+    expect(marks.get("src/api/public/webhooks.ts")![0]!.findingId).toBeNull();
   });
 
   it("defaultOpenPredicate never opens boilerplate but always opens a flagged file", () => {

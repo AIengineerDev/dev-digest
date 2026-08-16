@@ -33,9 +33,18 @@ interface SmartDiffViewerProps {
    *  since changed, and must not badge the diff the reviewer is reading. */
   headSha: string | null;
   commenting?: DiffCommentApi;
+  /** Opens a finding's card in the Findings tab, without leaving the page. */
+  onOpenFinding?: (findingId: string) => void;
 }
 
-export function SmartDiffViewer({ prId, files, reviews, headSha, commenting }: SmartDiffViewerProps) {
+export function SmartDiffViewer({
+  prId,
+  files,
+  reviews,
+  headSha,
+  commenting,
+  onOpenFinding,
+}: SmartDiffViewerProps) {
   const t = useTranslations("prReview.smartDiff");
   const { data, isLoading, isError, error, refetch } = useSmartDiff(prId);
 
@@ -106,6 +115,7 @@ export function SmartDiffViewer({ prId, files, reviews, headSha, commenting }: S
           commenting={commenting}
           reveal={reveal}
           onRevealLine={revealLine}
+          onOpenFinding={onOpenFinding}
         />
       ))}
     </div>
@@ -119,6 +129,7 @@ function Group({
   commenting,
   reveal,
   onRevealLine,
+  onOpenFinding,
 }: {
   group: SmartDiffGroup;
   files: PrFile[];
@@ -126,6 +137,7 @@ function Group({
   commenting?: DiffCommentApi;
   reveal: DiffReveal | null;
   onRevealLine: (path: string, line: number) => void;
+  onOpenFinding?: (findingId: string) => void;
 }) {
   const t = useTranslations("prReview.smartDiff");
   const findingCount = groupFindingCount(group);
@@ -147,6 +159,7 @@ function Group({
         defaultOpenFor={defaultOpenPredicate(group)}
         reveal={reveal}
         onRevealLine={onRevealLine}
+        onOpenFinding={onOpenFinding}
       />
     </section>
   );

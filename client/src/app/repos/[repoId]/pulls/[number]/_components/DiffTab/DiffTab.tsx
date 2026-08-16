@@ -19,9 +19,19 @@ interface DiffTabProps {
   headSha: string | null;
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
+  /** Jumps to a finding's card in the Findings tab — same page, no reload. */
+  onOpenFinding?: (findingId: string) => void;
 }
 
-export function DiffTab({ prId, filesCount, files, reviews, headSha, canComment }: DiffTabProps) {
+export function DiffTab({
+  prId,
+  filesCount,
+  files,
+  reviews,
+  headSha,
+  canComment,
+  onOpenFinding,
+}: DiffTabProps) {
   const t = useTranslations("prReview.smartDiff");
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
@@ -92,6 +102,7 @@ export function DiffTab({ prId, filesCount, files, reviews, headSha, canComment 
           reviews={reviews}
           headSha={headSha}
           commenting={commenting}
+          onOpenFinding={onOpenFinding}
         />
       ) : (
         <DiffViewer files={files} commenting={commenting} />
