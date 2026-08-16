@@ -86,6 +86,8 @@
     "findingsBadge": "{count, plural, one {# finding} other {# findings}}",
     "badgeHintOpen": "Open this finding in the Findings tab",
     "badgeHintScroll": "Scroll to the flagged line",
+    "staleNotice": "{count, plural, one {# finding} other {# findings}} are not shown here: they come from a review of an older commit ({sha}), so they may point at lines this diff no longer has. Re-run the review to badge the current code.",
+    "staleNoticeAction": "Show them anyway",
     "coreLabel": "Core",
     "wiringLabel": "Wiring",
     "boilerplateLabel": "Boilerplate",

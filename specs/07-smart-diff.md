@@ -73,6 +73,15 @@ newest row is a single agent's opinion. A review with no recorded `head_sha`
 counts as current — the same tolerant rule `isStaleRun` uses in the UI. This is
 what makes the badges agree with the Findings tab.
 
+**When every review is stale.** The badges stay off — a finding about a line
+that has since changed must not mark the current diff — but the viewer says so
+in one line above the groups: how many findings it is holding back, which commit
+they describe, and a *Show them anyway* that jumps to the first of them in the
+Findings tab (revealing the stale run there, which that tab hides by default).
+Silence here is the failure mode: a diff with no markers and no explanation
+reads as "this code is clean", which is the opposite of what a stale critical
+finding means.
+
 **Where the numbers come from.** The API is the source of truth for *which*
 lines are flagged (`finding_lines`), so the badge count always matches it. The
 client looks up severity and title from the reviews it already has; a line it
@@ -98,6 +107,7 @@ All in one file each, per the task spec:
 | Badges appear after Run Review | `SmartDiffViewer.test.tsx`, `smart-diff.it.test.ts` |
 | A badge opens that finding's card in the Findings tab, same page | `SmartDiffViewer.test.tsx` (`onOpenFinding`), `FindingsPanel.test.tsx` (revealed, and unhidden by the filters) |
 | A flagged line with no loaded finding still scrolls in place | `SmartDiffViewer.test.tsx` (`scrollIntoView` on the line's DOM id) |
+| A diff whose findings are all stale says so, and offers a way through | `SmartDiffViewer.test.tsx` (notice + `Show them anyway` → `onOpenFinding`) |
 | No model call on view | `pnpm arch` rule `smart-diff-spends-nothing` |
 | Thresholds and patterns in constants | the two `constants.ts` above |
 

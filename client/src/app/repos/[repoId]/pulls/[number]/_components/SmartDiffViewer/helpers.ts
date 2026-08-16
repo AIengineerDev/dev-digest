@@ -34,6 +34,35 @@ export function findingsAtHead(
     .flatMap((r) => r.findings);
 }
 
+/**
+ * The findings the badges deliberately leave out: those of reviews that ran
+ * against an older head.
+ *
+ * They are not shown, and that is correct — they describe lines that may no
+ * longer exist. But a diff with no markers and no explanation reads as "this
+ * code is clean", which is the opposite of what a stale critical finding means.
+ * The viewer uses this to say so out loud.
+ */
+export function staleFindings(
+  reviews: readonly ReviewRecord[] | undefined,
+  headSha: string | null | undefined,
+): FindingRecord[] {
+  return (reviews ?? [])
+    .filter((r) => r.kind === "review" && isStaleRun(r.head_sha, headSha))
+    .flatMap((r) => r.findings);
+}
+
+/** The head the stale findings describe — for naming it in the notice. */
+export function staleHeadSha(
+  reviews: readonly ReviewRecord[] | undefined,
+  headSha: string | null | undefined,
+): string | null {
+  const review = (reviews ?? []).find(
+    (r) => r.kind === "review" && isStaleRun(r.head_sha, headSha) && r.findings.length > 0,
+  );
+  return review?.head_sha ?? null;
+}
+
 /** Findings keyed by `path<NUL>line`, so a lookup is O(1) per flagged line. */
 function indexFindings(findings: readonly FindingRecord[]): Map<string, FindingRecord[]> {
   const index = new Map<string, FindingRecord[]>();

@@ -15,6 +15,31 @@ export const s = {
   groupLabel: { fontSize: 13, fontWeight: 600, color: "var(--text-primary)" } satisfies CSSProperties,
   groupHint: { fontSize: 12, color: "var(--text-muted)", flex: 1, minWidth: 0 } satisfies CSSProperties,
   groupCount: { fontSize: 12, color: "var(--text-muted)", flexShrink: 0 } satisfies CSSProperties,
+  // Deliberately not the split banner's warning colour: nothing is wrong with
+  // the diff, the reviewer is just being told what this view cannot show.
+  staleBanner: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+    padding: "9px 12px",
+    borderRadius: 7,
+    border: "1px solid var(--border)",
+    background: "var(--bg-elevated)",
+  } satisfies CSSProperties,
+  staleText: { fontSize: 12.5, color: "var(--text-secondary)", flex: 1, minWidth: 0 } satisfies CSSProperties,
+  staleAction: {
+    flexShrink: 0,
+    padding: "2px 9px",
+    borderRadius: 6,
+    border: "1px solid var(--border)",
+    background: "transparent",
+    color: "var(--accent)",
+    fontFamily: "inherit",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+  } satisfies CSSProperties,
   splitBanner: {
     display: "flex",
     flexDirection: "column",

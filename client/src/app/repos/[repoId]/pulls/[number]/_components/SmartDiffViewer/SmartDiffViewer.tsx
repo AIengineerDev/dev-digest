@@ -20,8 +20,11 @@ import {
   defaultOpenPredicate,
   findingsAtHead,
   groupFindingCount,
+  staleFindings,
+  staleHeadSha,
   withPatches,
 } from "./helpers";
+import { shortSha } from "../staleness";
 import { s, groupMarkerFor } from "./styles";
 
 interface SmartDiffViewerProps {
@@ -60,6 +63,10 @@ export function SmartDiffViewer({
     () => buildAnnotations(data?.groups ?? [], findings),
     [data, findings],
   );
+  // Every review ran against an older head → nothing badges this diff. Correct,
+  // and indistinguishable from "no findings" unless the viewer says which.
+  const stale = React.useMemo(() => staleFindings(reviews, headSha), [reviews, headSha]);
+  const showStaleNotice = annotations.size === 0 && stale.length > 0;
 
   if (isLoading) {
     return (
@@ -102,6 +109,22 @@ export function SmartDiffViewer({
                 ))}
               </ul>
             </>
+          )}
+        </div>
+      )}
+
+      {showStaleNotice && (
+        <div style={s.staleBanner}>
+          <span style={s.staleText}>
+            {t("staleNotice", {
+              count: stale.length,
+              sha: shortSha(staleHeadSha(reviews, headSha)),
+            })}
+          </span>
+          {onOpenFinding && stale[0] && (
+            <button type="button" style={s.staleAction} onClick={() => onOpenFinding(stale[0]!.id)}>
+              {t("staleNoticeAction")}
+            </button>
           )}
         </div>
       )}

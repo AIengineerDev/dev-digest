@@ -220,6 +220,34 @@ describe("SmartDiffViewer", () => {
     expect(screen.getByText("warning")).toBeInTheDocument();
   });
 
+  it("says so when every finding it has comes from an older head", () => {
+    // The diff carries no markers, which is correct — and reads as "clean" if
+    // nothing explains it. This is the case the user hits after pushing.
+    smartDiffQuery.current = {
+      data: {
+        ...SMART_DIFF,
+        groups: SMART_DIFF.groups.map((g) => ({
+          ...g,
+          files: g.files.map((f) => ({ ...f, finding_lines: [] })),
+        })),
+      },
+      isLoading: false,
+      isError: false,
+    };
+    const onOpenFinding = vi.fn();
+    renderViewer(REVIEWS, onOpenFinding);
+
+    expect(screen.getByText(/not shown here/)).toBeInTheDocument();
+    expect(screen.getByText(/older commit \(old-hea\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show them anyway" }));
+    expect(onOpenFinding).toHaveBeenCalledWith("old");
+  });
+
+  it("stays quiet when the current head has findings of its own", () => {
+    renderViewer(REVIEWS);
+    expect(screen.queryByText(/not shown here/)).not.toBeInTheDocument();
+  });
+
   it("ignores findings from a review of an older head", () => {
     renderViewer(REVIEWS);
     // rv1 flagged ratelimit.ts:26 but ran against a head that has been pushed over.
