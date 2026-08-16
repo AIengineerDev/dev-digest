@@ -38,7 +38,7 @@ export default function PRDetailPage() {
 
   const isLoading = pullsLoading || (prId != null && detailLoading);
   const { data: reviews, refetch: refetchReviews } = usePrReviews(prId);
-  const { data: intent } = usePrIntent(prId);
+  const { data: intent, isLoading: intentLoading } = usePrIntent(prId);
 
   // Live run tracking is SERVER-SOURCED (agent_runs status='running'): survives
   // navigation AND reload, and self-clears via polling when runs finish.
@@ -144,7 +144,7 @@ export default function PRDetailPage() {
       />
 
       <div style={{ padding: "24px 32px 44px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 1080, margin: "0 auto" }}>
-        {tab === "overview" && <OverviewTab prId={prId} prBody={pr.body} intent={intent} />}
+        {tab === "overview" && <OverviewTab prId={prId} prBody={pr.body} intent={intent} intentLoading={intentLoading} />}
 
         {tab === "findings" && (
           <FindingsTab

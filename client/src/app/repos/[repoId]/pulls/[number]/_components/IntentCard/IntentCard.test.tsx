@@ -4,7 +4,12 @@ import { NextIntlClientProvider } from "next-intl";
 import type { PrIntentRecord } from "@devdigest/shared";
 import messages from "../../../../../../../../messages/en/prReview.json";
 
-const derive = vi.hoisted(() => ({ mutate: vi.fn(), isPending: false }));
+const derive = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  isPending: false,
+  isError: false,
+  error: null as Error | null,
+}));
 vi.mock("../../../../../../../lib/hooks", () => ({
   useDeriveIntent: () => derive,
 }));
@@ -14,6 +19,8 @@ import { IntentCard } from "./IntentCard";
 afterEach(() => {
   cleanup();
   derive.mutate.mockClear();
+  derive.isError = false;
+  derive.error = null;
 });
 
 function intent(over: Partial<PrIntentRecord> = {}): PrIntentRecord {
@@ -38,19 +45,36 @@ function intent(over: Partial<PrIntentRecord> = {}): PrIntentRecord {
   } as PrIntentRecord;
 }
 
-function renderCard(value: PrIntentRecord | null | undefined) {
+function renderCard(value: PrIntentRecord | null | undefined, loading = false) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview: messages }}>
-      <IntentCard prId="pr1" intent={value} />
+      <IntentCard prId="pr1" intent={value} loading={loading} />
     </NextIntlClientProvider>,
   );
 }
 
 describe("IntentCard", () => {
-  it("renders nothing before the intent has been derived", () => {
-    // `null` is a state, not an error: an empty card would claim the step ran.
-    const { container } = renderCard(null);
+  it("renders nothing while the intent query is still in flight", () => {
+    // Otherwise the card flashes "not derived yet" on its way to a filled one.
+    const { container } = renderCard(undefined, true);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("offers to derive when there is no intent yet", () => {
+    // `null` is a state, not an error — but a blank page cannot say that, and
+    // Recalculate only exists once a row does, so this is the only way in.
+    renderCard(null);
+    expect(screen.getByText(/No intent derived for this pull request yet/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Derive intent/ }));
+    // `false`, not `true`: there is nothing cached to force past.
+    expect(derive.mutate).toHaveBeenCalledWith(false);
+  });
+
+  it("says why deriving failed instead of silently doing nothing", () => {
+    derive.isError = true;
+    derive.error = new Error("no provider key configured");
+    renderCard(null);
+    expect(screen.getByText(/no provider key configured/)).toBeInTheDocument();
   });
 
   it("renders both scope columns with their entries", () => {

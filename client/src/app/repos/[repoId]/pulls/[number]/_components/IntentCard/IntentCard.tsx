@@ -19,16 +19,61 @@ const BAND_COLOR: Record<PrIntentRecord["band"], string> = {
  * Description section: the derived summary is read first, the raw claim
  * second — same ordering the reviewer prompt uses.
  *
- * Three states: not yet derived (nothing rendered — `usePrIntent` returning
- * `null` is a normal state, not an error), degraded (never an empty card —
- * "Not derived — <error>" + Re-derive), and derived (band badge + honest
+ * Four states: still loading (nothing, so the card does not flash an empty
+ * state on its way to a filled one), not yet derived (an offer to derive —
+ * `usePrIntent` returning `null` is a normal state, not an error, but a blank
+ * page cannot say that and leaves no way to start), degraded (never an empty
+ * card — "Not derived — <error>" + Re-derive), and derived (band badge + honest
  * "why" sentence, never a bare confidence number).
  */
-export function IntentCard({ prId, intent }: { prId: string; intent: PrIntentRecord | null | undefined }) {
+export function IntentCard({
+  prId,
+  intent,
+  loading,
+}: {
+  prId: string;
+  intent: PrIntentRecord | null | undefined;
+  /** The intent query is in flight. Nothing is rendered while it is. */
+  loading?: boolean;
+}) {
   const t = useTranslations("prReview.intent");
   const deriveIntent = useDeriveIntent(prId);
 
-  if (!intent) return null;
+  if (loading) return null;
+
+  // Not derived yet. Until this state existed, a PR that had never been
+  // reviewed showed no Intent section at all, and there was no way to start
+  // one: Recalculate only exists once a row does, so the first derivation was
+  // reachable only by running a full review or by calling the API by hand.
+  if (!intent) {
+    return (
+      <section>
+        <SectionLabel icon="Target">{t("title")}</SectionLabel>
+        <div style={s.wrap(true)}>
+          <div style={s.degradedRow}>
+            <p style={s.why}>{t("notDerivedYet")}</p>
+            <Button
+              kind="secondary"
+              size="sm"
+              icon="Sparkles"
+              loading={deriveIntent.isPending}
+              onClick={() => deriveIntent.mutate(false)}
+            >
+              {t("derive")}
+            </Button>
+          </div>
+          {deriveIntent.isError && (
+            <p style={s.degradedText}>
+              {t("deriveFailed", {
+                error:
+                  deriveIntent.error instanceof Error ? deriveIntent.error.message : "",
+              })}
+            </p>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   if (intent.degraded) {
     return (

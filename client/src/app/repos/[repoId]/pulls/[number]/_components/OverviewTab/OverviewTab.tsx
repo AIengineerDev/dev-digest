@@ -10,12 +10,15 @@ interface OverviewTabProps {
   prId: string | null | undefined;
   prBody: string | null | undefined;
   intent: PrIntentRecord | null | undefined;
+  /** The intent query is still in flight — the card waits rather than offering
+   *  to derive something that may already exist. */
+  intentLoading?: boolean;
 }
 
-export function OverviewTab({ prId, prBody, intent }: OverviewTabProps) {
+export function OverviewTab({ prId, prBody, intent, intentLoading }: OverviewTabProps) {
   return (
     <>
-      {prId && <IntentCard prId={prId} intent={intent} />}
+      {prId && <IntentCard prId={prId} intent={intent} loading={intentLoading} />}
       {prBody && (
         <section>
           <SectionLabel icon="MessageSquare">Description</SectionLabel>

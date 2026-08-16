@@ -184,6 +184,15 @@ out-of-scope bullets, ≤120 chars each.
   subjects"). A `low` card renders muted with the word **Inferred** instead of
   "Intent". Failed sources appear in the same list. `degraded:true` renders
   "Not derived — <error>" with a *Re-derive* button, never an empty card.
+- **"Not derived yet" is a state the card states, and offers to leave.** A PR
+  whose intent has never been derived renders the card with one line of
+  explanation and a *Derive intent* button (`force:false` — there is nothing
+  cached to force past). Rendering nothing there, as this spec originally said,
+  makes an unreviewed PR indistinguishable from a broken feature, and leaves the
+  first derivation reachable only by running a full review or calling the API by
+  hand: *Recalculate* exists only once a row does. Nothing is rendered while the
+  query is still in flight, so the card never flashes the offer on its way to a
+  filled state.
 - **The derived scope is shown, not just stored.** Two columns, **IN SCOPE** and
   **OUT OF SCOPE**, under the summary — the model is asked for both fields and
   they already reach the review prompt, so withholding them from the reviewer
@@ -284,7 +293,8 @@ Ordered so the wire that makes the feature exist lands before any UI.
    bypasses the cache; a `degraded` row is never served from cache.
 6. A failing or timing-out intent leaves the run `done` with `prompt_assembly.intent`
    null and a prompt byte-identical to today's.
-7. `GET /pulls/:id/intent` returns 200 + `null` before first derivation.
+7. `GET /pulls/:id/intent` returns 200 + `null` before first derivation, and the
+   card turns that into an offer to derive rather than into a blank page.
 8. The PR Overview card renders the band, the source sentence, the in-scope and
    out-of-scope columns, a *Recalculate* that bypasses the cache, and
    *Re-derive* for a degraded row — and never a bare confidence number.
