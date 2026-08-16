@@ -185,7 +185,20 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
-_None yet._
+- **2026-08-16** — A feature can look complete in its own commit and be **inert**,
+  because the handful of lines that integrate it sit in files every other feature
+  also edits — and those merge cleanly from whichever branch happens to touch
+  them last. Smart Diff shipped its module, viewer and tests in one commit, while
+  the route registration in `server/src/modules/index.ts`, the `useSmartDiff`
+  hook, every `prReview.smartDiff` message key and its `pnpm arch` rule arrived
+  later in the **Blast Radius** commit on the integration branch. On the
+  integration branch everything passed; rebuilt on its own, `GET
+  /pulls/:id/smart-diff` returned **404** (`smart-diff.it.test.ts` fails 5/6 with
+  `expected 404 to be 200`) and `cd client && pnpm typecheck` failed outright.
+  Nothing catches this while branches are only ever merged together. Before
+  calling a feature branch done, verify it **alone** on top of `main`: the
+  registry entry, the hook + its barrel export, the message keys, and the arch
+  rule its spec claims as enforcement. `server/src/modules/index.ts:20`
 
 ## Open Questions
 

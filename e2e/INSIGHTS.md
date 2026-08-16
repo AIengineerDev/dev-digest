@@ -136,7 +136,16 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
-_None yet._
+- **2026-08-16** — Step order in a flow is not free: **anything the app scrolls
+  can put an earlier control out of reach for the rest of the flow.** Clicking a
+  Smart Diff finding badge navigates to the Findings tab and calls
+  `scrollIntoView` on the card, leaving the page scrolled down; the next step,
+  `find role button click --name "Original order"`, then failed with the toggle
+  visibly present in the DOM — the failure screenshot shows the diff rendered
+  correctly with the toolbar simply off-screen above. There is no scroll command
+  to undo it. Order a flow so scroll-inducing interactions come **last**, or
+  re-`open` the route before reaching back up the page.
+  `specs/09-pr-smart-diff.flow.json:19`
 
 ## Open Questions
 
