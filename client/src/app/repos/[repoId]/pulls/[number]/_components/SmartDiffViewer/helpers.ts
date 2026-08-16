@@ -112,6 +112,41 @@ export function buildAnnotations(
 }
 
 /**
+ * Marks for findings of an OLDER head, anchored client-side.
+ *
+ * The server never reports these: `finding_lines` is the current head's answer
+ * by design. So the anchor is the finding's own `start_line`, which belonged to
+ * a different revision of the file — it may land on an unrelated line, or on no
+ * rendered line at all. That is exactly why they are off by default, marked
+ * `stale`, and drawn differently: this is "here is roughly where the last
+ * review was looking", not "this line is flagged".
+ *
+ * Only files the current diff actually contains get marks; a finding about a
+ * file that is no longer in the PR has nowhere to go.
+ */
+export function buildStaleAnnotations(
+  groups: readonly SmartDiffGroup[],
+  findings: readonly FindingRecord[],
+): DiffAnnotations {
+  const paths = new Set(groups.flatMap((g) => g.files.map((f) => f.path)));
+  const out = new Map<string, DiffFindingMark[]>();
+  for (const f of findings) {
+    if (!paths.has(f.file)) continue;
+    const marks = out.get(f.file) ?? [];
+    marks.push({
+      id: f.id,
+      findingId: f.id,
+      line: f.start_line,
+      severity: f.severity,
+      title: f.title,
+      stale: true,
+    });
+    out.set(f.file, marks);
+  }
+  return out;
+}
+
+/**
  * Attach each classified file to the patch text the PR detail already holds.
  *
  * `smart-diff` returns paths and counts, never patches — the diff text is
@@ -134,8 +169,11 @@ export function withPatches(files: readonly SmartDiffFile[], prFiles: readonly P
  */
 export function defaultOpenPredicate(
   group: SmartDiffGroup,
+  alsoOpen?: ReadonlySet<string>,
 ): (file: PrFile) => boolean {
   const flagged = new Set(group.files.filter((f) => f.finding_lines.length > 0).map((f) => f.path));
+  // A revealed stale mark is useless inside a collapsed card.
+  if (alsoOpen) for (const path of alsoOpen) flagged.add(path);
   const expandRole = EXPANDED_ROLES.includes(group.role);
   return (file: PrFile) => {
     if (flagged.has(file.path)) return true;

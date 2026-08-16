@@ -52,6 +52,7 @@ export function CodeLine({
   // The chip is clickable only when both halves exist: a card to open and a
   // parent that knows how to open it.
   const chipTarget = onOpenFinding ? primaryMark(marks)?.findingId ?? null : null;
+  const chipIsStale = !!marks[0]?.stale;
 
   return (
     <div
@@ -89,15 +90,21 @@ export function CodeLine({
           (chipTarget ? (
             <button
               type="button"
-              style={severityChipFor(severity, true)}
-              title={[t("badgeHintOpen"), ...marks.map((m) => m.title)].join("\n")}
+              style={severityChipFor(severity, true, chipIsStale)}
+              title={[
+                t(chipIsStale ? "badgeHintStale" : "badgeHintOpen"),
+                ...marks.map((m) => m.title),
+              ].join("\n")}
               onClick={() => onOpenFinding?.(chipTarget)}
             >
               {t(`severity.${severity}`)}
               {marks.length > 1 ? ` ×${marks.length}` : ""}
             </button>
           ) : (
-            <span style={severityChipFor(severity)} title={marks.map((m) => m.title).join(" · ")}>
+            <span
+              style={severityChipFor(severity, false, chipIsStale)}
+              title={marks.map((m) => m.title).join(" · ")}
+            >
               {t(`severity.${severity}`)}
               {marks.length > 1 ? ` ×${marks.length}` : ""}
             </span>

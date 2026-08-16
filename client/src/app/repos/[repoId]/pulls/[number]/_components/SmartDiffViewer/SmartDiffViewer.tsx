@@ -17,6 +17,7 @@ import { useSmartDiff } from "@/lib/hooks";
 import { ApiError } from "@/lib/api";
 import {
   buildAnnotations,
+  buildStaleAnnotations,
   defaultOpenPredicate,
   findingsAtHead,
   groupFindingCount,
@@ -67,6 +68,14 @@ export function SmartDiffViewer({
   // and indistinguishable from "no findings" unless the viewer says which.
   const stale = React.useMemo(() => staleFindings(reviews, headSha), [reviews, headSha]);
   const showStaleNotice = annotations.size === 0 && stale.length > 0;
+  // Off by default, and asked for explicitly — these marks are anchored to line
+  // numbers from a revision this diff is not.
+  const [showStale, setShowStale] = React.useState(false);
+  const staleAnnotations = React.useMemo(
+    () => (showStale ? buildStaleAnnotations(data?.groups ?? [], stale) : null),
+    [showStale, data, stale],
+  );
+  const shownAnnotations = staleAnnotations ?? annotations;
 
   if (isLoading) {
     return (
@@ -121,11 +130,13 @@ export function SmartDiffViewer({
               sha: shortSha(staleHeadSha(reviews, headSha)),
             })}
           </span>
-          {onOpenFinding && stale[0] && (
-            <button type="button" style={s.staleAction} onClick={() => onOpenFinding(stale[0]!.id)}>
-              {t("staleNoticeAction")}
-            </button>
-          )}
+          <button
+            type="button"
+            style={s.staleAction}
+            onClick={() => setShowStale((v) => !v)}
+          >
+            {t(showStale ? "staleNoticeHide" : "staleNoticeAction")}
+          </button>
         </div>
       )}
 
@@ -134,7 +145,8 @@ export function SmartDiffViewer({
           key={group.role}
           group={group}
           files={files}
-          annotations={annotations}
+          annotations={shownAnnotations}
+          openPaths={staleAnnotations ? new Set(staleAnnotations.keys()) : undefined}
           commenting={commenting}
           reveal={reveal}
           onRevealLine={revealLine}
@@ -149,6 +161,7 @@ function Group({
   group,
   files,
   annotations,
+  openPaths,
   commenting,
   reveal,
   onRevealLine,
@@ -157,6 +170,9 @@ function Group({
   group: SmartDiffGroup;
   files: PrFile[];
   annotations: ReturnType<typeof buildAnnotations>;
+  /** Files to expand beyond the role heuristic — the ones holding revealed
+   *  stale marks. */
+  openPaths?: ReadonlySet<string>;
   commenting?: DiffCommentApi;
   reveal: DiffReveal | null;
   onRevealLine: (path: string, line: number) => void;
@@ -179,7 +195,7 @@ function Group({
         files={withPatches(group.files, files)}
         commenting={commenting}
         annotations={annotations}
-        defaultOpenFor={defaultOpenPredicate(group)}
+        defaultOpenFor={defaultOpenPredicate(group, openPaths)}
         reveal={reveal}
         onRevealLine={onRevealLine}
         onOpenFinding={onOpenFinding}

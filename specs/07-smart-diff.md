@@ -75,12 +75,19 @@ what makes the badges agree with the Findings tab.
 
 **When every review is stale.** The badges stay off — a finding about a line
 that has since changed must not mark the current diff — but the viewer says so
-in one line above the groups: how many findings it is holding back, which commit
-they describe, and a *Show them anyway* that jumps to the first of them in the
-Findings tab (revealing the stale run there, which that tab hides by default).
-Silence here is the failure mode: a diff with no markers and no explanation
-reads as "this code is clean", which is the opposite of what a stale critical
-finding means.
+in one line above the groups: how many findings it is holding back and which
+commit they describe. Silence here is the failure mode: a diff with no markers
+and no explanation reads as "this code is clean", which is the opposite of what
+a stale critical finding means.
+
+*Show them anyway* draws them **on the diff**, and this is the one place the
+client anchors marks itself: the server reports `finding_lines` for the current
+head only, so a stale mark is placed at the finding's own `start_line`, from a
+revision this diff is not. It may land on an unrelated line, or on none. That is
+why they are off by default, why they render dashed and faded rather than as
+solid chips, and why their tooltip says which commit they came from. Files
+carrying revealed marks expand, since a mark inside a collapsed card is a mark
+nobody can see. Clicking one still opens its card in the Findings tab.
 
 **Where the numbers come from.** The API is the source of truth for *which*
 lines are flagged (`finding_lines`), so the badge count always matches it. The
@@ -107,7 +114,8 @@ All in one file each, per the task spec:
 | Badges appear after Run Review | `SmartDiffViewer.test.tsx`, `smart-diff.it.test.ts` |
 | A badge opens that finding's card in the Findings tab, same page | `SmartDiffViewer.test.tsx` (`onOpenFinding`), `FindingsPanel.test.tsx` (revealed, and unhidden by the filters) |
 | A flagged line with no loaded finding still scrolls in place | `SmartDiffViewer.test.tsx` (`scrollIntoView` on the line's DOM id) |
-| A diff whose findings are all stale says so, and offers a way through | `SmartDiffViewer.test.tsx` (notice + `Show them anyway` → `onOpenFinding`) |
+| A diff whose findings are all stale says so | `SmartDiffViewer.test.tsx` (notice names the count and the commit) |
+| Stale findings can be drawn on the diff, marked as stale, and taken back | `SmartDiffViewer.test.tsx` (`Show them anyway` → badge → `onOpenFinding`; `Hide them`) |
 | No model call on view | `pnpm arch` rule `smart-diff-spends-nothing` |
 | Thresholds and patterns in constants | the two `constants.ts` above |
 

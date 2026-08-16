@@ -239,8 +239,35 @@ describe("SmartDiffViewer", () => {
 
     expect(screen.getByText(/not shown here/)).toBeInTheDocument();
     expect(screen.getByText(/older commit \(old-hea\)/)).toBeInTheDocument();
+  });
+
+  it("shows the stale findings on the diff when asked, and takes them back", () => {
+    // Anchored to the OLD head's line numbers, so they are off by default and
+    // drawn as a dashed hint rather than as a claim about this line.
+    smartDiffQuery.current = {
+      data: {
+        ...SMART_DIFF,
+        groups: SMART_DIFF.groups.map((g) => ({
+          ...g,
+          files: g.files.map((f) => ({ ...f, finding_lines: [] })),
+        })),
+      },
+      isLoading: false,
+      isError: false,
+    };
+    const onOpenFinding = vi.fn();
+    renderViewer(REVIEWS, onOpenFinding);
+    expect(screen.queryByRole("button", { name: /finding/ })).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Show them anyway" }));
+    const badge = screen.getByRole("button", { name: "1 finding" });
+    expect(badge).toBeInTheDocument();
+    // Still a way into the card it names.
+    fireEvent.click(badge);
     expect(onOpenFinding).toHaveBeenCalledWith("old");
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide them" }));
+    expect(screen.queryByRole("button", { name: /finding/ })).not.toBeInTheDocument();
   });
 
   it("stays quiet when the current head has findings of its own", () => {

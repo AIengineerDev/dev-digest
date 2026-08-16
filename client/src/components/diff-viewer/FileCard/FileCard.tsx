@@ -69,6 +69,13 @@ export function FileCard({
   const [open, setOpen] = React.useState(
     defaultOpen ?? (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
+  // `defaultOpen` is an initial value, but it can flip after mount — revealing
+  // the stale findings marks files that were collapsed a moment ago, and a mark
+  // inside a collapsed card is a mark nobody can see. Only ever opens: a card
+  // the reader expanded by hand is never closed out from under them.
+  React.useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
 
   // Group this file's comments into threads, then split into ones we can anchor
@@ -102,6 +109,9 @@ export function FileCard({
   }, [target?.line, target?.nonce, file.path]);
 
   const badgeSeverity = worstSeverity(marks);
+  // Every mark in a file is either current or stale — they are built from one
+  // source per render — so the first one settles how the badge is drawn.
+  const badgeIsStale = !!marks[0]?.stale;
 
   // A badge is a way into the finding, not a decoration: it opens the card in
   // the Findings tab. Only when the flagged line has no card behind it — the
@@ -125,9 +135,15 @@ export function FileCard({
         {badgeSeverity && (
           <button
             type="button"
-            style={findingBadgeFor(badgeSeverity)}
+            style={findingBadgeFor(badgeSeverity, badgeIsStale)}
             title={[
-              tSmart(onOpenFinding ? "badgeHintOpen" : "badgeHintScroll"),
+              tSmart(
+                badgeIsStale
+                  ? "badgeHintStale"
+                  : onOpenFinding
+                    ? "badgeHintOpen"
+                    : "badgeHintScroll",
+              ),
               ...marks.map((m) => `L${m.line} · ${m.title}`),
             ].join("\n")}
             onClick={(e) => {

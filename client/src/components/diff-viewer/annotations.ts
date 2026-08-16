@@ -22,6 +22,13 @@ export interface DiffFindingMark {
   line: number;
   severity: Severity;
   title: string;
+  /**
+   * This mark comes from a review of an OLDER head, shown only because the
+   * reader asked for it. The line number is that review's, so it may name a
+   * line this diff no longer has — which is why these render differently and
+   * are never on by default.
+   */
+  stale?: boolean;
 }
 
 /**

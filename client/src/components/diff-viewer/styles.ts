@@ -101,9 +101,17 @@ export function lineRowFor(
 }
 
 /** Severity pill rendered at the right edge of a line that carries findings. */
-export function severityChipFor(severity: string, clickable = false): CSSProperties {
+export function severityChipFor(
+  severity: string,
+  clickable = false,
+  stale = false,
+): CSSProperties {
   const color = SEVERITY_COLOR[severity] ?? SEVERITY_COLOR_FALLBACK;
   return {
+    // A stale mark is a hint about where the last review looked, not a claim
+    // about this line — dashed and faded so the two are never confused.
+    borderStyle: stale ? "dashed" : "solid",
+    opacity: stale ? 0.65 : 1,
     // Rendered as a <button> when it opens the finding, so the button's own
     // background and font have to be reset back to the chip's.
     // `font` would be a shorthand next to the `fontSize` longhand below, which
@@ -119,7 +127,10 @@ export function severityChipFor(severity: string, clickable = false): CSSPropert
     marginRight: 10,
     padding: "0 6px",
     borderRadius: 4,
-    border: `1px solid ${color}`,
+    // Longhands, not the `border` shorthand: it would come after `borderStyle`
+    // above and quietly undo the dashed edge that marks a stale hint.
+    borderWidth: 1,
+    borderColor: color,
     color,
     fontSize: 11,
     lineHeight: "16px",
@@ -128,15 +139,18 @@ export function severityChipFor(severity: string, clickable = false): CSSPropert
 }
 
 /** "N findings" button in a file header — clickable, so it looks it. */
-export function findingBadgeFor(severity: string): CSSProperties {
+export function findingBadgeFor(severity: string, stale = false): CSSProperties {
   const color = SEVERITY_COLOR[severity] ?? SEVERITY_COLOR_FALLBACK;
   return {
+    borderStyle: stale ? "dashed" : "solid",
+    opacity: stale ? 0.65 : 1,
     display: "inline-flex",
     alignItems: "center",
     gap: 4,
     padding: "1px 7px",
     borderRadius: 999,
-    border: `1px solid ${color}`,
+    borderWidth: 1,
+    borderColor: color,
     background: "transparent",
     color,
     fontSize: 11,
