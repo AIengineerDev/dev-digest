@@ -226,7 +226,12 @@ export function FindingsTab({
             key={review.id}
             review={review}
             prId={prId}
-            defaultOpen={i === 0}
+            // Arriving with a finding to show, the newest run is not the one
+            // being asked for: opening it too puts an unrelated (often empty)
+            // panel between the reader and the card they clicked, and shifts
+            // the card out from under the scroll. The run that holds the
+            // finding opens itself.
+            defaultOpen={focusFindingId ? false : i === 0}
             repoFullName={repoFullName}
             headSha={headSha}
             targetRunId={target?.runId ?? null}

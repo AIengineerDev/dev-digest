@@ -18,7 +18,7 @@ import {
   type Category,
 } from "@devdigest/ui";
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
-import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
+import { REVEAL_RETRY_DELAYS_MS, SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "./helpers";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
 import { s } from "./styles";
@@ -54,10 +54,25 @@ export function FindingCard({
   React.useEffect(() => {
     if (!revealed) return;
     setExpanded(true);
-    const frame = requestAnimationFrame(() =>
-      rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
-    );
-    return () => cancelAnimationFrame(frame);
+    // Scrolled more than once on purpose. The Findings tab mounts a lot after
+    // this card does — sibling accordions, verdict banners, rendered markdown —
+    // and every one of them changes how far down the card sits. A single
+    // rAF-then-scroll lands on the right coordinates of a page that is still
+    // growing, which is what put the reader on an unrelated run the first time
+    // they clicked a badge and on the right card the second. Re-aiming a few
+    // times over ~600ms costs nothing and survives the settling.
+    let frame = 0;
+    const aim = () => {
+      frame = requestAnimationFrame(() =>
+        rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      );
+    };
+    aim();
+    const timers = REVEAL_RETRY_DELAYS_MS.map((delay) => window.setTimeout(aim, delay));
+    return () => {
+      timers.forEach(window.clearTimeout);
+      cancelAnimationFrame(frame);
+    };
   }, [revealed]);
   const sevColor = SEV_COLOR[f.severity] ?? SEV_COLOR_FALLBACK;
   const fileHref =
