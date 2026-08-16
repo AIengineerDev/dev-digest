@@ -69,7 +69,20 @@ export function IntentCard({ prId, intent }: { prId: string; intent: PrIntentRec
 
   return (
     <section>
-      <SectionLabel icon={isLow ? "Info" : "Target"}>
+      <SectionLabel
+        icon={isLow ? "Info" : "Target"}
+        right={
+          <Button
+            kind="ghost"
+            size="sm"
+            icon="RefreshCw"
+            loading={deriveIntent.isPending}
+            onClick={() => deriveIntent.mutate(true)}
+          >
+            {t("recalculate")}
+          </Button>
+        }
+      >
         {isLow ? t("inferredTitle") : t("title")}
       </SectionLabel>
       <div style={s.wrap(isLow)}>
@@ -81,6 +94,21 @@ export function IntentCard({ prId, intent }: { prId: string; intent: PrIntentRec
         </div>
         {intent.summary && <p style={s.summary}>{intent.summary}</p>}
         <p style={s.why}>{why}</p>
+
+        <div style={s.scopeGrid}>
+          <ScopeColumn title={t("inScope")} tone="in" items={intent.in_scope} empty={t("scopeEmpty")} />
+          <ScopeColumn
+            title={t("outOfScope")}
+            tone="out"
+            items={intent.out_of_scope}
+            empty={t("scopeEmpty")}
+          />
+        </div>
+        {/* The `low` band's whole point is that nothing here is documented, so
+            the two columns are a guess about where to look — never a licence to
+            call a finding out of scope. Said in the card, as it is said in the
+            prompt's low-band preamble. */}
+        {isLow && <p style={s.scopeCaution}>{t("scopeInferredNote")}</p>}
         {unused.length > 0 && (
           <details>
             <summary style={s.why}>{t("failedSourcesTitle")}</summary>
@@ -96,5 +124,39 @@ export function IntentCard({ prId, intent }: { prId: string; intent: PrIntentRec
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * One half of the scope pair. Renders even when the model listed nothing:
+ * "the model claimed no boundary here" and "we did not ask" look identical if
+ * the column disappears, and only the first is true.
+ */
+function ScopeColumn({
+  title,
+  tone,
+  items,
+  empty,
+}: {
+  title: string;
+  tone: "in" | "out";
+  items: string[];
+  empty: string;
+}) {
+  return (
+    <div style={s.scopeCol}>
+      <div style={s.scopeTitle(tone)}>{title}</div>
+      {items.length === 0 ? (
+        <p style={s.scopeEmpty}>{empty}</p>
+      ) : (
+        <ul style={s.scopeList}>
+          {items.map((item, i) => (
+            <li key={i} style={s.scopeItem}>
+              {item}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
