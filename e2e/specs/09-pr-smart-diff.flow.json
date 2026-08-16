@@ -4,6 +4,7 @@
   "steps": [
     { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
     { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["wait", "--text", "#482"], "label": "the PR list has finished loading — the first fetch syncs from GitHub and is slow" },
     { "cmd": ["find", "text", "#482", "click"], "label": "open the PR row (by number — the title is CSS-truncated in the list)" },
     { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
     { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
@@ -15,6 +16,8 @@
     { "cmd": ["wait", "--text", "src/middleware/ratelimit.ts"], "label": "business logic is on the page" },
     { "cmd": ["wait", "--text", "Boilerplate"], "label": "the boilerplate group renders" },
     { "cmd": ["wait", "--text", "package-lock.json"], "label": "the lock file is classified as boilerplate" },
+    { "cmd": ["wait", "--text", "const key = bucketKey(req);"], "label": "the diff body renders — the seeded files carry real patch text" },
+    { "cmd": ["wait", "--text", "blocker"], "label": "the flagged line carries its severity marker (CRITICAL renders as 'blocker')" },
     { "cmd": ["find", "role", "button", "click", "--name", "Original order"], "label": "switch back to the unordered diff" },
     { "cmd": ["wait", "--text", "src/middleware/ratelimit.ts"], "label": "the flat viewer still lists the changed files" },
     { "cmd": ["find", "role", "button", "click", "--name", "Smart order"], "label": "back to the reviewer order" },
