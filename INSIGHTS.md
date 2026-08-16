@@ -58,8 +58,7 @@ as stale would flag a repo's entire history. `client/src/app/repos/[repoId]/pull
 
 ### 2026-07-31 — Standalone packages instead of a workspace
 
-**What:** standalone packages (four at the time; `mcp/` made five on 2026-08-11),
-each with its own `package.json` and lockfile; sharing
+**What:** four packages, each with its own `package.json` and lockfile; sharing
 happens through tsconfig path aliases, not published modules. Each suite is
 gated by its own CI workflow with a path filter.
 **Why:** _rationale not recorded anywhere in the repo — fill this in._ Do not
@@ -150,36 +149,6 @@ _None yet._
   request. `reviewer-core/src/review/run.ts:216`
 
 ## Tool & Library Notes
-
-- **2026-08-11** — A package whose tsconfig `paths` alias `@devdigest/shared` to
-  `../server/src/vendor/shared` **cannot emit JS**, even when every import from it
-  is `import type`. Path-mapped `.ts` files join the program, tsc emits them too,
-  and the common root shifts: `outDir: "dist"` produced `dist/mcp/src/index.js`
-  *and* `dist/server/src/vendor/shared/**`, breaking any `bin` path. This is why
-  `reviewer-core` and `mcp` are consumed as source and their `build` is a
-  typecheck. If an aliased package needs an executable, register tsx's ESM loader
-  in a `.mjs` shim and import the `.ts` entry — one process, no build step.
-  `mcp/bin/devdigest-mcp.mjs:1`
-
-- **2026-08-11** — With `@modelcontextprotocol/server` v2, `ctx.mcpReq.signal`
-  really does abort when a client cancels `callTool({ signal })` mid-request —
-  verified against the in-process `StreamableHTTPClientTransport` +
-  `createMcpHandler` test harness (`mcp/test/tools.test.ts`'s `connect()`),
-  which bridges the two over a synthetic `fetch`, not a real socket. Same for
-  progress: the client only stamps `_meta.progressToken` on the request when
-  `callTool` is given an `onprogress` callback, so a handler gating on
-  `ctx.mcpReq._meta?.progressToken !== undefined` sends zero notifications to a
-  caller that never asked — no separate opt-out needed.
-  `mcp/src/tools/run-agent.ts:78`
-
-- **2026-08-11** — With `@modelcontextprotocol/server` v2, type a tool handler's
-  return as the SDK's exported `CallToolResult`, never as your own `interface`.
-  The SDK's result union carries an index signature and an `interface` is never
-  assignable to one, so tsc reports the failure against whichever union member it
-  tried last — `Property 'resultType' is missing … but required in type
-  'InputRequiredResult'`, which names a feature the code does not use and sends
-  you looking in the wrong place. A `type` alias works; an `interface` does not.
-  `mcp/src/tools/shared.ts:14`
 
 - **2026-08-09** — The "edit each vendored copy by hand" advice below stopped
   holding: `./scripts/check-shared.sh` now diffs the two `@devdigest/shared`
