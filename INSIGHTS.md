@@ -76,6 +76,22 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Works
 
+- **2026-08-15** — A documented invariant with no test is not an invariant. An
+  audit of `mcp/AGENTS.md`'s 14 documented practices found all 14 still held in
+  code, but 5 were unpinned — nothing would fail if a future edit broke them —
+  and one of those five, `run_agent_on_pr`'s wait wall staying under the MCP
+  SDK client's 60s default, was the one that had **already regressed in
+  production**: it was raised to 120s, the host killed the call at 60s and
+  discarded the whole result, and the partial-result path never ran. Being
+  written down in a `README`/`AGENTS.md` did not stop the regression; only
+  `mcp/test/tools.test.ts`'s `WAIT_MS < 60_000` assertion (env-guarded since
+  `constants.ts` reads `process.env` at module load) makes it durable. Applies
+  generally: when auditing a package against its own documented conventions,
+  check which ones are asserted by a test versus merely asserted in prose, and
+  pin the gap rather than re-confirming the prose is still accurate.
+  `mcp/src/constants.ts:20-36`, `mcp/test/tools.test.ts` (`waits less than the
+  host default of 60s`).
+
 - **2026-08-09** — When a spec's contract field list and its acceptance
   criteria disagree, the acceptance criteria win, not the literal enumeration.
   `specs/04-intent-layer.md` §4 spells `DerivedIntent` as `Intent.extend({
@@ -185,6 +201,18 @@ _None yet._
   place the parsed values live. Any fail-fast startup validation in a
   path-aliased, no-emit package needs this shape; a top-level `try` around the
   import does nothing. `mcp/src/index.ts:17`
+
+- **2026-08-15** — Two "measurements" of the same budget guard are only
+  comparable if they serialize the same bytes. `mcp/test/tools.test.ts`'s
+  `tools/list` guard measures `JSON.stringify(await client.listTools())` — the
+  in-process MCP SDK client's *parsed* response, envelope included — not the
+  raw JSON-RPC bytes on the wire. Three different numbers had been reported for
+  the same package (3910, 3635, 3754) because a raw stdio probe and the SDK
+  client parse/re-serialize differently; only the client-side number is
+  comparable to the pinned `<4000` guard, because that is what the test itself
+  checks. Re-measure by temporarily logging `len` inside that guard, never by
+  piping JSON-RPC into the binary by hand. `mcp/test/tools.test.ts:206-210`,
+  `mcp/AGENTS.md:41-49`.
 
 - **2026-08-11** — A package whose tsconfig `paths` alias `@devdigest/shared` to
   `../server/src/vendor/shared` **cannot emit JS**, even when every import from it
