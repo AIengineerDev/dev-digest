@@ -66,6 +66,20 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-10** — Do not act on 2026-era "React Compiler made `useMemo`
+  obsolete, delete it" advice here: **the compiler is not enabled**. React is
+  19.0 and `next.config.mjs` sets only `reactStrictMode` and the API-base env
+  var — no `experimental.reactCompiler`, and the two `react-compiler` hits in
+  `pnpm-lock.yaml` are an optional peer of another package, not an install.
+  The measured shape (2026-08-10, `src/**` excluding `vendor/`, 86 `.tsx`) is
+  the trap: **11 `useMemo` + 9 `useCallback` but 0 `React.memo`** and 0
+  `useTransition`/`useDeferredValue`. A `useCallback` exists to keep a prop
+  referentially stable, and nothing here is comparing props — so most of those
+  are paying a dependency-array cost to stop a re-render that no `memo` boundary
+  would have stopped anyway. Neither "delete them all" nor "add more" is right
+  cold: enabling the compiler is an ADR, and until then the only honest rule is
+  to profile before touching either. `client/next.config.mjs:7`
+
 - **2026-08-10** — The entry below stopped holding: `NAV` in
   `src/vendor/ui/nav.ts` was edited deliberately and now carries a **SKILLS LAB**
   group (Skills, Agents, Conventions) alongside WORKSPACE (Pull Requests), so
@@ -163,6 +177,42 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-10** — `eslint-plugin-react-hooks` v7 exposes **two** config shapes
+  and the obvious one is the wrong one: `configs.recommended` and
+  `configs['recommended-latest']` are still eslintrc-shaped (`plugins` is an
+  array), while the flat-config versions live one level down under
+  `configs.flat['recommended-latest']`. Passing the top-level one to
+  `tseslint.config()` fails with *"A config object has a 'plugins' key defined
+  as an array of strings"*, which reads like a bug in your own config rather
+  than a wrong import. Same trap will apply on the next major. Note also that
+  v7's recommended set is much wider than v5's — it ships `set-state-in-effect`,
+  which flags 8 files here that `exhaustive-deps` alone never touched.
+  `client/eslint.config.mjs:45`
+
+- **2026-08-10** — Do not add a `middleware.ts` here without a hard reason, and
+  treat any blog post about one as version-fragile: **Next 16 deprecates the
+  `middleware` convention and renames it to `proxy`** (the exported function too;
+  codemod `npx @next/codemod@canary middleware-to-proxy .`), and Vercel's own
+  wording in that doc is *"avoid relying on Middleware unless no other options
+  exist"*. We are on Next 15.1 with **zero** middleware, which is the direction
+  the framework is heading, not a gap. Two traps if one is ever added: without a
+  `matcher` it runs on every request including `_next/static`, and a matcher that
+  excludes a path also skips **Server Functions** on that path — so auth checked
+  only there is not checked at all. The one legitimate reason we might have had
+  is locale negotiation, and `src/i18n/request.ts` deliberately avoids it by
+  pinning a single `LOCALE`. `client/src/i18n/request.ts:14`
+
+- **2026-08-10** — `client/` has **no ESLint at all** — no `eslint.config.*`, no
+  `.eslintrc*`, no `lint` script, and no eslint dependency in `package.json`;
+  the only gates are `pnpm typecheck` and `pnpm test`. This is unusual for a
+  Next 15 app (there is no `eslint-config-next` either), so every rule that
+  other React codebases get mechanically is unenforced here: `react-hooks`
+  (`exhaustive-deps`, rules of hooks), `jsx-a11y`, and unused-var hygiene. Two
+  consequences: do not assume a lint gate will catch a hook-order or dependency
+  mistake before review, and do not add a `pnpm lint` to a CI workflow or a
+  pre-push step without first adding the config — the script does not exist and
+  the step will fail, not no-op. `client/package.json:6`
+
 - **2026-08-09** — In a `next-intl` message, a bare `{count}` placeholder is
   **string interpolation, not number formatting**: passing `8000` renders
   `8000`, never `8,000`. Only the explicit `{count, number}` form goes through
@@ -211,4 +261,16 @@ _None yet._
 
 ## Open Questions
 
-_None yet._
+- **2026-08-10** — There are **zero error boundaries** in the client (0
+  `componentDidCatch`, 0 `ErrorBoundary`, 1 `Suspense` across 86 `.tsx`), and
+  the existing safety net does not cover the gap: the `QueryCache.onError` /
+  `MutationCache.onError` toasts at `src/lib/providers.tsx:35-43` catch
+  **rejected requests**, not **render throws**. So a component that throws while
+  rendering — a bad `.map` over a nullish field, an undefined enum key — unmounts
+  the tree to a blank page with no toast and no fallback. Open: at what
+  granularity to add them. The consensus in the field is one boundary per
+  independently recoverable widget, which for this app would be the page shell
+  plus each panel that owns a query, but nothing is decided and Next's
+  `error.tsx` convention is deliberately unused here (see
+  `frontend-ui-architecture` SKILL.md). Do not scatter per-component boundaries
+  as a first move. `src/lib/providers.tsx:35`

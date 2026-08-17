@@ -26,3 +26,8 @@ export function formatSeconds(ms: number): string {
 export function formatTokens(tokensIn: number, tokensOut: number): string {
   return `${(tokensIn / 1000).toFixed(0)}k→${(tokensOut / 1000).toFixed(1)}k`;
 }
+
+/** Single slot's token count (e.g. "1.2k tok", "340 tok"). */
+export function formatSlotTokens(tokens: number): string {
+  return `${tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens)} tok`;
+}

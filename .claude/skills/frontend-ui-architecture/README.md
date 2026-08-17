@@ -144,6 +144,162 @@ ownership of data, placement of boundaries, and what a route is.
 | [App Router in Production: Layouts, Loading, Error Boundaries](https://www.iamraghuveer.com/posts/nextjs-app-router-production/) | S | The three mechanisms as one picture. |
 | [Upsun — App Router common mistakes](https://upsun.com/blog/avoid-common-mistakes-with-next-js-app-router/) | T | Negative checklist. |
 
+---
+
+# Addendum — collected 2026-08-10, shipped in skill v1.1.0
+
+Sections 7d–7i below extend §7. They cover the App Router mechanisms the first
+pass never reached, all of them **architecture, not performance** — bundle size,
+prefetching cost and FCP stay out of scope as before.
+
+These are the sources behind the routing rules added to `SKILL.md` in **v1.1.0**:
+when a section earns a `layout.tsx` (7d), why no `middleware.ts` (7e), overlays
+as state rather than routes (7f), the single-locale decision (7g), and
+`Link` vs `router.push` (7h). §7i (metadata) was researched and deliberately
+**not** promoted into a rule.
+
+## Measured baseline (2026-08-10)
+
+Second measurement, `client/src` excluding `vendor/`. The 2026-08-09 table above
+still stands; this one covers routing only.
+
+| Fact | Count | Reading |
+| --- | --- | --- |
+| `page.tsx` | 9 | across 5 top-level sections |
+| `layout.tsx` | **1** | root only — no section owns its own chrome |
+| `template.tsx` / `default.tsx` | 0 / 0 | |
+| `loading.tsx` / `error.tsx` / `global-error.tsx` / `not-found.tsx` | 0 / 0 / 0 / 0 | consistent with §7c's recorded decision |
+| `route.ts` | 0 | consistent — nothing but our React app calls us |
+| `middleware.ts` | **0** | none at root, none in `src/` |
+| Route groups `(name)` | **0** | every folder is a URL segment |
+| Parallel `@slot` / intercepting `(.)` routes | **0 / 0** | despite the app having drawers |
+| Dynamic segments | 4 | `[repoId]`, `[number]`, `[id]`, `[section]` |
+| `export const metadata` | **1** | root layout only; no page sets a title |
+| `next/link` | **2 modules** | one screen + one shell hook |
+| `useRouter` | 15 files, 20 `push`/`replace` call sites | navigation is overwhelmingly programmatic |
+| `next/headers`, `next/server`, `next/dynamic`, `next/image` | 0 each | |
+
+The two facts worth a rule: **nine pages share one layout**, and **navigation is
+programmatic almost everywhere** — 20 `router.push` calls against 2 modules that
+import `Link`.
+
+## 7d. Nested layouts — when a section earns one
+
+The question the skill cannot currently answer: `/repos`, `/agents`,
+`/settings`, `/skills` and `/onboarding` all render inside the single root
+layout, so any section-level chrome is re-mounted by each page instead of
+persisting across navigation within the section.
+
+| Source | Tier | What it settles |
+| --- | --- | --- |
+| [Next.js — `layout.js` file convention](https://nextjs.org/docs/app/api-reference/file-conventions/layout) | P | One layout per segment; nesting is automatic; layouts **do not re-render** when navigating between their own children — that persistence is the whole reason to add one. |
+| [Vercel Academy — Nested Layouts](https://vercel.com/academy/nextjs-foundations/nested-layouts) | P | The teaching version of the same hierarchy. |
+| [Next.js Learn — Creating Layouts and Pages](https://nextjs.org/learn/dashboard-app/creating-layouts-and-pages) | P | Partial rendering: only the page segment changes on navigation within a layout. |
+| [LogRocket — Guide to Next.js layouts and nested layouts](https://blog.logrocket.com/guide-next-js-layouts-nested-layouts/) | S | Section-specific sub-navigation as the canonical trigger for a nested layout. |
+| [Effectively placing layout and page components](https://medium.com/@kkts9308/effectively-placing-layout-and-page-components-in-next-js-app-router-4698478bb339) | T | Placement heuristics. |
+
+Candidate rule, matching the existing promotion-threshold style: **a section
+earns a `layout.tsx` when two or more of its pages share chrome that must
+survive navigation between them** — sub-nav, a persistent filter rail, a tab
+strip. Shared UI that may remount is just a component. This is the routing
+analogue of "promote on the second route", so it should read the same way.
+
+## 7e. `middleware.ts` — and why the answer is "do not add one"
+
+✓ Read in full. This turned out to be the highest-value item in the addendum,
+because the framework has moved against the whole mechanism.
+
+| Source | Tier | What it settles |
+| --- | --- | --- |
+| ✓ [Next.js — `proxy.js` file convention](https://nextjs.org/docs/app/api-reference/file-conventions/proxy) | P | **In Next 16 `middleware` is deprecated and renamed to `proxy`** (function renamed too; codemod `npx @next/codemod@canary middleware-to-proxy .`). Vercel's own stated position: *"We recommend users avoid relying on Middleware unless no other options exist."* Also: proxy now defaults to the **Node.js** runtime (16.0), the `runtime` config option throws, and without a `matcher` it runs on **every** request including `_next/static`. |
+| [Next.js — Data Security: authentication and authorization](https://nextjs.org/docs/app/guides/data-security#authentication-and-authorization) | P | Auth must be verified at each data access point, never delegated to the edge layer alone. |
+| [WorkOS — Next.js App Router authentication, 2026](https://workos.com/blog/nextjs-app-router-authentication-guide-2026) | S | The same rule from an auth vendor: middleware redirects are UX, not a security boundary. |
+| [Authgear — Next.js security best practices](https://www.authgear.com/post/nextjs-security-best-practices/) | S | |
+| [Auth.js — Edge compatibility](https://authjs.dev/guides/edge-compatibility) | P | Why an ORM or a DB call in middleware is a mistake. |
+| [Next.js Middleware in 2026: beyond auth](https://dev.to/bean_bean/nextjs-middleware-in-2026-beyond-auth-advanced-patterns-most-developers-miss-2d5k) | T | Catalogue of what people put there; useful mostly as a list of things we should not. |
+
+Two consequences for us, both worth stating as rules rather than research:
+having **zero** middleware is not a gap to close but the direction the framework
+itself is heading; and any advice written for `middleware.ts` has a **version
+cliff** at Next 16 — we are on 15.1, so a future upgrade renames the file if one
+ever exists. There is also a subtle trap recorded in the doc: a matcher that
+excludes a path also skips Server Functions on it, which is precisely why auth
+cannot live there.
+
+## 7f. Parallel and intercepting routes — the drawer question
+
+Zero slots and zero interceptors, while the app has at least one drawer
+(`RunTraceDrawer`) and a modal-shaped agent editor. That is the textbook use
+case, so the absence should be a recorded decision rather than an oversight.
+
+| Source | Tier | What it settles |
+| --- | --- | --- |
+| [Next.js — Parallel Routes](https://nextjs.org/docs/app/api-reference/file-conventions/parallel-routes) | P | `@slot` folders, partial rendering, `default.tsx` and what happens on reload. |
+| [Next.js — Intercepting Routes](https://nextjs.org/docs/app/api-reference/file-conventions/intercepting-routes) | P | `(.)` / `(..)` conventions and the soft-vs-hard navigation split. |
+| [vercel/next.js discussion #71586 — Parallel and intercepting route modals](https://github.com/vercel/next.js/discussions/71586) | P | Maintainers and users on the rough edges: modal-to-modal links, and the modal surviving a link to the parent URL. |
+| [Using modals with parallel routes, route groups and interceptors](https://medium.com/@bashaus/using-modals-in-next-js-with-parallel-routes-slots-route-groups-and-interceptors-0873e173c96d) | S | The most complete worked example. |
+| [One practical application: better UX with modals](https://dev.to/adityabhattad/one-practical-application-of-nextjs-parallel-and-intercepting-routes-better-ux-with-modals-36i0) | T | |
+
+What the mechanism actually buys: a shareable URL for the open overlay, surviving
+reload, closing on Back and reopening on Forward. What it costs here: our
+overlays open over a client-rendered page whose data comes from TanStack Query,
+so the interceptor would have to re-fetch on hard navigation — and the SPA
+decision in §7b means there is no server render to intercept in the first place.
+**Recommended framing for the skill: overlay state stays component state, and
+the exception is an overlay a user would reasonably paste into Slack.** That is
+the same "URL is state" test the skill already applies to filters and tabs, so
+it costs no new concept.
+
+## 7g. i18n without a locale segment
+
+The setup is deliberate and undocumented in the skill: single locale, no
+`[locale]` segment, messages split per feature namespace.
+`src/i18n/request.ts` returns `locale: "en"` from a `LOCALE` constant and merges
+`messages/en/*.json` by filename into namespaces — which is what lets a feature
+agent add `messages/en/<feature>.json` without touching shared code.
+
+| Source | Tier | What it settles |
+| --- | --- | --- |
+| [next-intl — App Router setup](https://next-intl.dev/docs/getting-started/app-router) | P | The two supported shapes: with and without i18n routing. |
+| [next-intl — Request configuration](https://next-intl.dev/docs/usage/configuration) | P | `getRequestConfig` **must** return an explicit `locale` in the no-routing setup — which ours does. |
+| [next-intl — example: App Router without i18n routing](https://github.com/amannn/next-intl/tree/main/examples/example-app-router-without-i18n-routing) | P | Reference implementation of exactly our shape. |
+| [Discussion #1081 — App Router setup without i18n routing](https://github.com/amannn/next-intl/discussions/1081) | P | The author's own answer on locale sources when the URL carries none. |
+| [next-intl — Proxy / middleware](https://next-intl.dev/docs/routing/middleware) | P | What we are opting out of — locale negotiation is the main legitimate reason to add middleware, and we have no second locale. |
+
+Rule candidate: adding a second locale is **not** a message-file change — it
+forces a decision between a cookie/header source and a `[locale]` segment, and
+the segment version reshapes every route in `app/`. Record it as an ADR-sized
+change, not a feature.
+
+## 7h. Navigation: `Link` vs `router.push`
+
+20 `push`/`replace` call sites against 2 modules importing `Link` is a real
+imbalance, and it is an architecture question, not a performance one: a
+programmatic push renders as a non-link element, so it is invisible to
+right-click, middle-click, Cmd-click and to assistive technology.
+
+| Source | Tier | What it settles |
+| --- | --- | --- |
+| [Next.js — `useRouter`](https://nextjs.org/docs/app/api-reference/functions/use-router) | P | The docs' own line: use `<Link>` unless you have a specific reason not to. `next/router` is deprecated in 15 — `next/navigation` only, which we already follow everywhere. |
+| [Next.js — `<Link>`](https://nextjs.org/docs/app/api-reference/components/link) | P | The component's contract. |
+| [useRouter vs Link — when to navigate programmatically](https://medium.com/codetodeploy/userouter-vs-link-in-next-js-when-to-navigate-programmatically-3ef832d992cb) | T | The split most people use: declarative for links, programmatic for post-action redirects. |
+| [Link vs useRouter](https://www.geeksforgeeks.org/reactjs/difference-between-nextjs-link-vs-userouter-in-navigating/) | T | |
+
+The rule writes itself, and it ties into the a11y work in the sibling skill:
+**if the user is choosing where to go, it is a `Link`; if code is deciding after
+an event, it is `router.push`.** A row or card that navigates on click needs a
+real anchor, not an `onClick`. Worth auditing the 20 call sites before stating
+it as settled — some are genuine post-mutation redirects.
+
+## 7i. Metadata ownership — noted, low priority
+
+One `export const metadata`, in the root layout, so every one of the nine pages
+shares the title "DevDigest". For a local-first tool with no SEO surface this is
+close to harmless, which is why it is recorded here rather than promoted into a
+rule. [Next.js — `generateMetadata`](https://nextjs.org/docs/app/api-reference/functions/generate-metadata) (**P**) is the reference if it is ever picked up; the argument for doing so is browser-tab and history legibility, not search.
+
+---
+
 ## 8. React Native — researched, not adopted
 
 There is no React Native in this repository: no `package.json` outside

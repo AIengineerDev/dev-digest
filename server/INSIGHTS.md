@@ -30,6 +30,28 @@ a contract change reaches every package.
 
 ## Decisions
 
+### 2026-08-10 — Token counting for the run trace is unconditional; only the verbose LOG stays gated
+
+**What:** `run-executor.ts` now always passes a `countTokens` fn into
+`describePromptSections`, so every populated prompt section — including
+`skills` — gets a `tokens` figure on every run, not just when
+`config.promptLogVerbose` is on. `config.promptLogVerbose` still gates only the
+per-section `runLog.info(formatSectionLine(...))` lines (`run-executor.ts:294-313`).
+The `skills` figure is copied onto the persisted trace as
+`prompt_assembly.skills_tokens` (`trace.ts:PromptAssembly`), which is what
+closed `specs/02-skills.md` acceptance #4 — the Run Trace's `skills` slot
+attributing a token count, not just showing a non-null block.
+**Why:** the Run Trace needs a real count on every run to answer "how many
+tokens did the skills block cost", and `prompt-log.ts`'s own doc comment says
+tokens are "only populated in verbose mode (tokenising every section is not
+free)" — that comment now describes the LOG's behaviour, not the counting
+function's, so do not re-read it as still gating `describePromptSections`
+itself; the function always tokenises whatever `countTokens` you hand it.
+**Rejected:** a second, cheaper token estimator just for the trace field. The
+repo has exactly one counter (`this.container.tokenizer.count`, wired through
+`describePromptSections`) and duplicating it would mean two token numbers that
+can silently disagree.
+
 ### 2026-08-09 — Skill trust follows `source`, and extraction is trusted
 
 **What:** the assembler wraps a skill body in `<untrusted>` when its `source` is
@@ -104,7 +126,19 @@ reference in every route.
 
 ## What Doesn't Work
 
-_None yet._
+- **2026-08-13** — **The seeded demo repo cannot exercise `repo-intel` at all**,
+  so no amount of `pnpm test` verifies a feature built on it. `acme/payments-api`
+  is inserted by `db/seed.ts` with no `clone_path` and is never cloned, and every
+  facade read starts with `getRepoBasics(repoId)` → no clone → the degraded
+  empty result. The seeded PR therefore returns "index unavailable" from
+  `GET /pulls/:id/blast` forever, and `e2e` flow `09` can only assert the
+  *degraded* copy. 283 green server tests said nothing about whether blast radius
+  worked; the first real answer came from `curl`-ing an imported repo that had
+  actually been indexed (`AIengineerDev/dev-digest`, `repo_index_state` populated)
+  — which is also where the flat-slice caller-cap bug below surfaced. Verify any
+  repo-intel-backed feature against a real imported+indexed repo before calling
+  it done, and never read a passing suite as coverage of the indexed path.
+  `src/db/seed.ts` · `src/modules/repo-intel/service.ts:220`
 
 ## Codebase Patterns
 
@@ -245,6 +279,48 @@ _None yet._
 
 
 ## Recurring Errors & Fixes
+
+- **2026-08-14** — `agent_runs.status = 'done'` used to be written **before**
+  the `run_traces` row, so a consumer that polls for a terminal status and then
+  fetches the trace — which is what the PR page's run drawer and the integration
+  helper `runAndTrace` both do — could read a completed run with no trace behind
+  it. It surfaced on CI as `TypeError: Cannot read properties of undefined
+  (reading 'skills')` in `skills-assembly.it.test.ts`, an error far from its
+  cause, and only on the slower runner. The executor now saves the trace first,
+  so `done` means "everything about this run is readable". Pinned by
+  `test/run-trace-ordering.it.test.ts`, which checks the trace on the FIRST tick
+  that reports terminal — a settling delay there would hide the whole window.
+  `src/modules/reviews/run-executor.ts:394`
+
+- **2026-08-14** — A poll-until-ready test helper that **returns** on timeout
+  instead of throwing converts "we stopped waiting" into "the value is wrong",
+  and the two need completely different fixes. `waitForPrRuns` returned the
+  half-settled rows at its deadline, so the caller's next line failed as
+  `expected 'running' to be 'done'` — which reads as a broken run executor. It
+  was a 10s budget against a test that takes **8.3s on a dev machine**, so it
+  passed locally and failed only on CI, twice, before the cause was visible.
+  Budget is now **90s** — 10s then 30s both went red on CI — and the deadline
+  throws with the run ids and their statuses in the message. Size a wait budget
+  as a safety net, not near the observed runtime: the loop returns as soon as
+  the runs settle, so a generous budget costs nothing when things work and only
+  decides how long a genuine hang takes to report. When a wait helper feeds an assertion, make its timeout loud:
+  a silent return costs a full CI round-trip to diagnose.
+  `test/helpers/runs.ts:14`
+
+- **2026-08-13** — A cap named `MAX_<THING>_PER_<GROUP>` applied with a flat
+  `.slice(0, N)` is wrong in a way no small test catches. `tryPersistentBlast`
+  ended with `callers.slice(0, MAX_CALLERS_PER_SYMBOL)` over the whole
+  rank-sorted list, so a PR touching more symbols than the cap spent the entire
+  budget on the first few and **every other changed symbol reported zero
+  callers** — which reads as "nothing depends on this", the opposite of the
+  truth. Invisible below the cap, and no fixture in the suite was that big. It
+  surfaced only against a real indexed repo: two unrelated PRs (85 and 51
+  changed symbols) both reported *exactly* 20 callers. After the fix, 54 and 21.
+  The grouping is now `capCallersPerSymbol`, a named helper with the trap in its
+  doc comment, and `test/repo-intel-caller-cap.test.ts` fails if it reverts.
+  When a per-group cap exists, check the granularity it is actually applied at,
+  and size at least one fixture above it.
+  `src/modules/repo-intel/helpers.ts:22` · `src/modules/repo-intel/service.ts:378`
 
 - **2026-08-09** — `GET /skills` is the **first** route in the server with a
   `querystring` schema (`grep -rn querystring src` returned nothing before it),

@@ -32,8 +32,13 @@ A spec lives in `specs/NN-name.flow.json`:
 - Locators are deterministic only (`--url`, `--text`, `find role|text|label`).
   We never use the AI `chat` command, so runs are stable and key-free.
 
-Flows target **read-only seeded data** (the demo repo `acme/payments-api`, PR
-#482, the seeded agents), so nothing triggers a model call.
+Flows mostly target **read-only seeded data** (the demo repo `acme/payments-api`,
+PR #482, the seeded agents), so nothing triggers a model call. `08-skills` is the
+one deliberate exception — it creates a skill and links it to a seeded agent
+through the UI, both real writes, but still never calls an LLM: see
+`INSIGHTS.md` for why a full "run a review, see the skill in the Run Trace"
+flow (as `specs/02-skills.md` phase 6 originally asked for) is not achievable
+hermetically today.
 
 > **Precondition: a freshly-seeded DB.** Flow `02` follows the home redirect to
 > the *first* repo, so it assumes the seeded demo repo is the only one. CI
@@ -100,3 +105,6 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `05-pr-diff` | PR #482 → Files changed tab → seeded file renders in the diff viewer |
 | `06-onboarding` | `/onboarding` → add-repository form renders (no submit) |
 | `07-settings` | `/settings/api-keys` + `/settings/models` → section titles render |
+| `08-skills` | Create a skill in the Skills Lab, attach it to the seeded `Test Quality Reviewer` agent — confirmed by `aria-checked` flipping on its row checkbox. Real writes (`POST /skills`, agent skill-link save), no LLM call. Does **not** run a review — see `INSIGHTS.md`. |
+| `09-pr-smart-diff` | PR #482 → Files changed → Smart Diff groups, lock file in boilerplate, finding badge, Original-order fallback |
+| `10-pr-blast-radius` | PR #482 → Overview → Blast Radius card, counts + the degraded-index summary |

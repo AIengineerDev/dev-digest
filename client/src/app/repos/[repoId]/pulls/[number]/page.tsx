@@ -158,6 +158,10 @@ export default function PRDetailPage() {
               invalidateActiveRuns();
               invalidateRunHistory();
               refetchReviews();
+              // Smart Diff's badges come from the review that just landed, and
+              // nothing else invalidates them — the endpoint is deterministic,
+              // so it is never polled.
+              if (prId) qc.invalidateQueries({ queryKey: ["smart-diff", prId] });
             }}
           />
         )}
@@ -167,6 +171,8 @@ export default function PRDetailPage() {
             prId={prId}
             filesCount={pr.files_count}
             files={pr.files}
+            reviews={reviews}
+            headSha={pr.head_sha}
             canComment={pr.status === "open"}
           />
         )}

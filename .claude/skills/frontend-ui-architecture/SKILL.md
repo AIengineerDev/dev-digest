@@ -1,7 +1,7 @@
 ---
 name: frontend-ui-architecture
-description: Decide where frontend code goes in client/ — which folder a component belongs in, when to split it, where constants, styles, helpers, and business logic live, and where the server/client boundary sits. Use BEFORE creating any file under client/src, when a component grows past one responsibility, when something looks reusable enough to move up, or on "where should this go", "how do I split this", "where do constants go". Records architecture only — not styling taste, not performance, not test strategy.
-version: 1.0.0
+description: Decide where frontend code goes in client/ — which folder a component belongs in, when to split it, where constants, styles, helpers, and business logic live, where the server/client boundary sits, and how routes are structured (layouts, overlays, navigation, middleware, i18n). Use BEFORE creating any file under client/src or any folder under app/, when a component grows past one responsibility, when something looks reusable enough to move up, or on "where should this go", "how do I split this", "where do constants go", "should this be a route", "do we need a layout here", "should this open as a modal". Records architecture only — not styling taste, not performance, not test strategy.
+version: 1.1.0
 ---
 
 # Frontend UI architecture
@@ -109,7 +109,7 @@ These are settled. An agent that "fixes" one of them without an ADR is making
 the codebase worse, not better.
 
 **This client is a SPA inside the App Router, by design.** The backend is a
-separate Fastify service; data flows through TanStack Query. All seven pages are
+separate Fastify service; data flows through TanStack Query. All nine pages are
 Client Components and that is correct, not debt. Do not convert a page to an
 async Server Component to "modernize" it — it cannot fetch through our hooks,
 and the API base is a client-side concern.
@@ -123,6 +123,10 @@ Consequences that follow, and that you must not import advice against:
 | Server Actions | Not used | Mutations go to Fastify through `api.ts` |
 | Route Handlers (`route.ts`) | Only for callers that are not our React app | Nothing currently qualifies |
 | `error.tsx` / `loading.tsx` | Not used | `isLoading` / `isError` sit next to the query, which is more granular |
+| `middleware.ts` | Not used, and not to be added | Deprecated in Next 16 (renamed `proxy`); Vercel's own advice is to avoid it. See below |
+| Parallel (`@slot`) / intercepting (`(.)`) routes | Not used | Overlays are component state here, not routes. See below |
+| Route groups (`(name)`) | Not used | Every `app/` folder is currently a real URL segment; nothing needs regrouping yet |
+| i18n routing | No `[locale]` segment | Single locale, pinned in `src/i18n/request.ts` |
 
 **Loading and error states are the component's job.** Every component that
 consumes a data hook handles both, beside the query that produces them. A
@@ -136,6 +140,78 @@ that a layout needs to read is a signal the filter is in the wrong place.
 Route structure: `_components/` is not optional decoration. It keeps colocated
 UI out of the router's namespace and marks the folder as private to that route.
 
+## When a section earns a `layout.tsx`
+
+There is exactly **one** layout today — the root — for nine pages across five
+sections. That is the starting position, not a rule to preserve.
+
+**A section earns its own `layout.tsx` when two or more of its pages share
+chrome that must survive navigation between them.** A layout does not re-render
+when you move between its children; that persistence is the only thing it buys
+that a component does not. Sub-navigation, a tab strip, a filter rail that must
+not reset — those are layouts. Shared UI that may remount is just a component,
+and belongs in `_components/` per the table above.
+
+This is the same promotion threshold as the rest of this skill, applied to
+routes: the second page, not the second idea.
+
+Do not reach for a route group `(name)` to organise folders that are already
+fine. It exists to regroup URLs or to give a subtree its own root layout, and we
+need neither yet.
+
+## Overlays are state, not routes
+
+Drawers, modals and the agent editor stay **component state**. We do not use
+parallel (`@slot`) or intercepting (`(.)`) routes, and the reason is not
+ignorance of them: they buy a shareable URL, survival across reload, and
+Back-to-close — and our overlays sit on client-rendered pages whose data comes
+from TanStack Query, so there is no server render to intercept.
+
+The exception is the same test this skill already applies to filters and tabs:
+**if a user would reasonably paste the open overlay into Slack, it is a route.**
+Until one is, an overlay that reads a URL param is the middle ground — cheap,
+and no new routing concept.
+
+## Navigation: `Link` or `router.push`
+
+**If the user is choosing where to go, it is a `Link`. If code decides after an
+event, it is `router.push`.** A programmatic push renders as a non-link element,
+so it is invisible to Cmd-click, middle-click and to assistive technology —
+which makes this a structural rule, not a preference.
+
+Correct uses of the router, measured against the current 20 call sites:
+
+- `router.replace` to sync `searchParams` — the URL-is-state pattern above. Five
+  sites, all correct. Use `replace`, not `push`, so a filter change does not
+  fill the history stack.
+- A redirect after a mutation succeeds, or a guard redirect on load.
+
+Everything else — a row, a card, a list item, a CTA that names its destination —
+wants an anchor.
+
+**The known constraint:** the vendored `Button` and menu primitives take no
+`href`, and `src/vendor/ui` is off-limits. So a menu item or a `Button` that
+navigates stays a `router.push` until the primitive changes; do not wrap a
+`Button` in a `Link` to satisfy the rule, since that nests interactive elements
+and is worse than what it replaces. Rows and cards are **our** markup and have
+no such excuse.
+
+## Two routing things not to touch
+
+**Do not add `middleware.ts`.** Having none is the direction of travel, not a
+gap: Next 16 deprecates the convention and renames it `proxy`, and Vercel's own
+guidance is to avoid it unless nothing else works. If a future task seems to
+need one, two traps make it worse than it looks — without a `matcher` it runs on
+every request including `_next/static`, and a matcher that excludes a path also
+skips **Server Functions** on that path, so auth checked only there is not
+checked at all. Auth belongs at the data access point regardless.
+
+**Adding a second locale is an ADR, not a feature.** `src/i18n/request.ts` pins
+a single `LOCALE` and merges `messages/en/*.json` by filename into namespaces —
+which is what lets a feature add `messages/en/<feature>.json` without touching
+shared code. A second locale forces a choice between a cookie/header source and
+a `[locale]` segment, and the segment reshapes every route in `app/`.
+
 ## Known deviations
 
 Do not treat these as precedent; fix them opportunistically when you are already
@@ -146,6 +222,11 @@ in the file.
   should become named re-exports; `lib/hooks/index.ts` is an aggregating barrel
   that should not exist.
 - `src/vendor/**` follows none of this and is out of scope — it is vendored.
+- Thirteen of the twenty `router.push` sites are user-chosen destinations that
+  should be anchors. The two worth fixing first are our own markup, not vendored:
+  the PR row (`app/repos/[repoId]/pulls/_components/PRRow/PRRow.tsx:36`) and the
+  agents list item (`app/agents/_components/AgentsListView/AgentsListView.tsx:89`).
+  The rest sit inside vendored `Button`s and menus — leave them.
 
 ## Before you finish
 
@@ -158,6 +239,10 @@ Check the change against these, in order:
 4. No `useEffect` was added that does not touch an external system.
 5. No API type was redeclared that `@devdigest/shared` already exports.
 6. Every new data-consuming component renders a loading and an error state.
+7. No new `layout.tsx` that only one page uses.
+8. Nothing the user clicks to choose a destination was built as a `router.push`
+   on our own markup.
+9. No `middleware.ts`, no `@slot`, no `(.)` interceptor was introduced.
 
 ---
 
@@ -165,4 +250,5 @@ Check the change against these, in order:
 
 | Version | Change |
 | --- | --- |
+| 1.1.0 | Adds routing architecture, measured in `client/src` on 2026-08-10: when a section earns a `layout.tsx`, overlays as state rather than parallel/intercepting routes, the `Link`-vs-`router.push` rule and its vendored-primitive exception, and the two standing "do not touch" items (`middleware.ts`, second locale). |
 | 1.0.0 | First version. Codifies the conventions measured in `client/src` on 2026-08-09: component folder shape, the second-route promotion threshold, the four homes for logic, and the SPA-inside-App-Router decision. |

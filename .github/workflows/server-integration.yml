@@ -1,0 +1,48 @@
+name: server-integration
+
+# The *.it.test.ts lane: each test starts a real pgvector Postgres through
+# testcontainers, migrates, seeds, and drives Fastify routes end to end.
+# Docker is present on ubuntu-latest runners; the tests self-skip without it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "reviewer-core/**"
+      - ".github/workflows/server-integration.yml"
+  pull_request:
+    paths:
+      - "server/**"
+      - "reviewer-core/**"
+      - ".github/workflows/server-integration.yml"
+
+concurrency:
+  group: server-integration-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    # Containers are pulled and migrated per test file; the local run takes
+    # ~25s, so this is generous rather than tight.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm exec vitest run .it.test

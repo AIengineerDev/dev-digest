@@ -1,0 +1,105 @@
+name: server-unit
+
+# reviewer-core/** is in the path filter because server/tsconfig.json aliases
+# @devdigest/reviewer-core to ../reviewer-core/src — the server type-checks
+# against that source, so a change there can break this suite.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "reviewer-core/**"
+      - ".github/workflows/server-unit.yml"
+  pull_request:
+    paths:
+      - "server/**"
+      - "reviewer-core/**"
+      - ".github/workflows/server-unit.yml"
+
+concurrency:
+  group: server-unit-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  # Also runs on Windows: install fails there when the @ast-grep/napi win32
+  # prebuilt is missing, so this job doubles as the prebuilt gate (TESTING.md).
+  typecheck:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # server/tsconfig.json aliases @devdigest/reviewer-core to
+      # ../reviewer-core/src, so tsc pulls those files into THIS program — and
+      # resolves their bare imports (`openai`, `zod`) against reviewer-core's
+      # own node_modules, which nothing else here installs. Without this the
+      # job fails with "Cannot find module 'openai'" while passing locally,
+      # where every package's node_modules already exists. npm, not pnpm:
+      # reviewer-core carries its own package-lock.json.
+      - name: install reviewer-core deps (path-aliased source)
+        run: npm ci
+        working-directory: reviewer-core
+
+      - run: pnpm typecheck
+
+  # Onion layering ratchet. `pnpm arch` ignores the recorded baseline and fails
+  # only on NEW violations; never switch this to arch:all until the baseline in
+  # .dependency-cruiser-known-violations.json is cleared.
+  arch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm arch
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      # The hermetic lane. The integration lane lives in server-integration.yml;
+      # invoked through `pnpm exec` rather than a package script, per TESTING.md.
+      - run: pnpm exec vitest run --exclude '**/*.it.test.ts'

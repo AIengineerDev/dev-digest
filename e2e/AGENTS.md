@@ -21,7 +21,11 @@ npm run typecheck
 - **Deterministic locators only**: `--url`, `--text`, `find role|text|label`.
   Never use the AI `chat` command — runs must stay stable and key-free.
 - Flows target read-only seeded data (`acme/payments-api`, PR #482, seeded
-  agents) so nothing triggers a model call. Do not add a flow that writes.
+  agents) so nothing triggers a model call. Do not add a flow that writes,
+  **except** to reach a state a spec's acceptance criteria explicitly requires
+  and no seeded fixture covers — `08-skills` (create a skill, attach it to an
+  agent) is the one instance; see `INSIGHTS.md`. Never add a flow that calls
+  the LLM, full stop — there is no exception to that one.
 
 ## Gotchas
 

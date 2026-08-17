@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Line } from "./helpers";
+import { SEVERITY_COLOR, SEVERITY_COLOR_FALLBACK } from "./constants";
 
 /** Co-located styles for the DiffViewer (extracted from inline styles). */
 export const s = {
@@ -75,10 +76,66 @@ export function chevronFor(open: boolean): CSSProperties {
   };
 }
 
-/** Row background per line kind (add/del tinted, others transparent). */
-export function lineRowFor(kind: Line["kind"]): CSSProperties {
+/** Row background per line kind (add/del tinted, others transparent).
+ *  `severity` (a finding anchored here) adds the severity-coloured left rule;
+ *  `revealed` is the line a finding badge was just clicked through to. */
+export function lineRowFor(
+  kind: Line["kind"],
+  opts?: { severity?: string | null; revealed?: boolean },
+): CSSProperties {
   const background = kind === "add" ? "var(--code-add)" : kind === "del" ? "var(--code-del)" : "transparent";
-  return { display: "flex", alignItems: "stretch", fontSize: 13, lineHeight: "20px", background };
+  const color = opts?.severity ? (SEVERITY_COLOR[opts.severity] ?? SEVERITY_COLOR_FALLBACK) : null;
+  return {
+    display: "flex",
+    alignItems: "stretch",
+    fontSize: 13,
+    lineHeight: "20px",
+    background,
+    // 3px of colour in the gutter, and 3px of transparent border everywhere
+    // else, so a marked line does not shift the text of its neighbours.
+    borderLeft: `3px solid ${color ?? "transparent"}`,
+    ...(opts?.revealed
+      ? { outline: "1px solid var(--accent)", outlineOffset: -1, background: "var(--accent-bg)" }
+      : {}),
+  };
+}
+
+/** Severity pill rendered at the right edge of a line that carries findings. */
+export function severityChipFor(severity: string): CSSProperties {
+  const color = SEVERITY_COLOR[severity] ?? SEVERITY_COLOR_FALLBACK;
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    flexShrink: 0,
+    alignSelf: "center",
+    marginRight: 10,
+    padding: "0 6px",
+    borderRadius: 4,
+    border: `1px solid ${color}`,
+    color,
+    fontSize: 11,
+    lineHeight: "16px",
+    whiteSpace: "nowrap",
+  };
+}
+
+/** "N findings" button in a file header — clickable, so it looks it. */
+export function findingBadgeFor(severity: string): CSSProperties {
+  const color = SEVERITY_COLOR[severity] ?? SEVERITY_COLOR_FALLBACK;
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    padding: "1px 7px",
+    borderRadius: 999,
+    border: `1px solid ${color}`,
+    background: "transparent",
+    color,
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
 }
 
 /** Gutter sign colour per line kind. */
