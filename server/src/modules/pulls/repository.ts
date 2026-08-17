@@ -123,9 +123,19 @@ export class PullsRepository {
     await exec.update(t.pullRequests).set(stats).where(eq(t.pullRequests.id, prId));
   }
 
+  /**
+   * Persist what a detail refresh learned about the PR.
+   *
+   * `headSha` belongs in here with the files, not in a later write: the files
+   * being replaced ARE that head's files, and Smart Diff picks which findings
+   * badge them by comparing `pull_requests.head_sha` to each review's. Written
+   * apart — or not at all — the row can hold the new head's patches while
+   * still naming the old head, and the previous commit's findings then attach
+   * to a diff they never saw.
+   */
   async updateDetail(
     prId: string,
-    detail: DiffStats & { body: string | null },
+    detail: DiffStats & { body: string | null; headSha?: string },
     exec: Executor = this.db,
   ): Promise<void> {
     await exec.update(t.pullRequests).set(detail).where(eq(t.pullRequests.id, prId));

@@ -117,6 +117,11 @@ export class PullsService {
             additions: detail.additions,
             deletions: detail.deletions,
             filesCount: detail.files_count,
+            // In the SAME transaction as the files it describes. This path is
+            // the only one that can replace a PR's diff without going through
+            // the list sync, so leaving the head behind here is what lets a
+            // refreshed diff be badged with the previous commit's findings.
+            headSha: detail.head_sha,
           },
           tx,
         );

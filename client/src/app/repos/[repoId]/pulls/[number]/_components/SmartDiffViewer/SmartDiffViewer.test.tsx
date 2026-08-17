@@ -349,6 +349,29 @@ describe("helpers", () => {
     expect(marks.has("src/middleware/ratelimit.ts")).toBe(false);
   });
 
+  it("a line two agents flagged speaks for the worse of them", () => {
+    // One "run all agents" pass writes one review per agent, so this is the
+    // ordinary case. Taking whichever came first let a SUGGESTION mask a
+    // CRITICAL on the same line, and sent the click to the milder card.
+    const suggestion = {
+      ...REVIEWS[0]!.findings[0]!,
+      id: "mild",
+      severity: "SUGGESTION" as const,
+      title: "Prefer const",
+      file: "src/api/public/webhooks.ts",
+      start_line: 61,
+    };
+    const marks = buildAnnotations(SMART_DIFF.groups, [
+      suggestion,
+      ...findingsAtHead(REVIEWS, HEAD),
+    ]);
+    const line61 = marks.get("src/api/public/webhooks.ts")![0]!;
+    expect(line61.severity).toBe("CRITICAL");
+    expect(line61.findingId).toBe("f1");
+    // …and the milder one is not lost from view.
+    expect(line61.title).toContain("Prefer const");
+  });
+
   it("buildAnnotations still marks a line it cannot match to a finding", () => {
     // The server is the source of truth for WHICH lines are flagged; dropping
     // an unmatched one would render a flagged file as clean.

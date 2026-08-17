@@ -40,3 +40,16 @@ export const KEY_SEP = "\u0000";
 /** Severity used for a flagged line the client cannot match to a finding —
  *  the server says the line is flagged, so the badge must still appear. */
 export const UNKNOWN_MARK_SEVERITY = "WARNING" as const;
+
+/**
+ * Severity precedence for a line several findings landed on.
+ *
+ * Kept here rather than reused from the diff-viewer's own ranking because this
+ * one answers a different question — which FINDING the mark stands for, not
+ * which colour a set of marks takes — and the two may diverge.
+ */
+export const SEVERITY_RANK: Record<string, number> = {
+  CRITICAL: 3,
+  WARNING: 2,
+  SUGGESTION: 1,
+};

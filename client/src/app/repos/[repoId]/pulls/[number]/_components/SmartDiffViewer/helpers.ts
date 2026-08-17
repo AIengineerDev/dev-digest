@@ -14,7 +14,13 @@ import type {
 } from "@devdigest/shared";
 import type { DiffAnnotations, DiffFindingMark } from "@/components/diff-viewer";
 import { isStaleRun } from "../staleness";
-import { EXPAND_MAX_LINES, EXPANDED_ROLES, KEY_SEP, UNKNOWN_MARK_SEVERITY } from "./constants";
+import {
+  EXPAND_MAX_LINES,
+  EXPANDED_ROLES,
+  KEY_SEP,
+  SEVERITY_RANK,
+  UNKNOWN_MARK_SEVERITY,
+} from "./constants";
 
 /**
  * The findings the badges describe: every review of the PR's CURRENT head.
@@ -63,6 +69,18 @@ export function staleHeadSha(
   return review?.head_sha ?? null;
 }
 
+/** CRITICAL beats WARNING beats SUGGESTION — which of several findings on one
+ *  line the mark speaks for. Ties keep the first, so the order is stable. */
+function worstOf(findings: readonly FindingRecord[]): FindingRecord | undefined {
+  let worst: FindingRecord | undefined;
+  for (const f of findings) {
+    if (!worst || (SEVERITY_RANK[f.severity] ?? 0) > (SEVERITY_RANK[worst.severity] ?? 0)) {
+      worst = f;
+    }
+  }
+  return worst;
+}
+
 /** Findings keyed by `path<NUL>line`, so a lookup is O(1) per flagged line. */
 function indexFindings(findings: readonly FindingRecord[]): Map<string, FindingRecord[]> {
   const index = new Map<string, FindingRecord[]>();
@@ -95,14 +113,20 @@ export function buildAnnotations(
       out.set(
         file.path,
         file.finding_lines.map((line): DiffFindingMark => {
-          const match = index.get(`${file.path}${KEY_SEP}${line}`)?.[0];
+          // A "run all agents" pass writes one review per agent, so two of them
+          // flagging the same line is ordinary, not exotic. Taking `[0]` made
+          // the mark's severity and its card depend on review order: a
+          // SUGGESTION could mask a CRITICAL on the same line. The mark speaks
+          // for the worst of them, and its title names the rest.
+          const matches = index.get(`${file.path}${KEY_SEP}${line}`) ?? [];
+          const worst = worstOf(matches);
           return {
-            id: match?.id ?? `${file.path}:${line}`,
+            id: worst?.id ?? `${file.path}:${line}`,
             // Only a matched line has a card in the Findings tab to jump to.
-            findingId: match?.id ?? null,
+            findingId: worst?.id ?? null,
             line,
-            severity: match?.severity ?? UNKNOWN_MARK_SEVERITY,
-            title: match?.title ?? "",
+            severity: worst?.severity ?? UNKNOWN_MARK_SEVERITY,
+            title: matches.map((f) => f.title).join(" · "),
           };
         }),
       );
