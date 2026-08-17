@@ -18,7 +18,7 @@ import {
   type Category,
 } from "@devdigest/ui";
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
-import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
+import { REVEAL_RETRY_DELAYS_MS, SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "./helpers";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
 import { s } from "./styles";
@@ -27,6 +27,7 @@ export function FindingCard({
   f,
   focused,
   defaultExpanded,
+  revealed,
   onAction,
   pending,
   repoFullName,
@@ -35,6 +36,9 @@ export function FindingCard({
   f: FindingRecord;
   focused?: boolean;
   defaultExpanded?: boolean;
+  /** This card is the target of a jump from Smart Diff: expand and scroll to
+   *  it. Distinct from `focused`, which is only where the j/k cursor sits. */
+  revealed?: boolean;
   onAction?: (action: FindingActionKind, reply?: string) => void;
   pending?: boolean;
   repoFullName?: string | null;
@@ -42,6 +46,34 @@ export function FindingCard({
 }) {
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  // Scrolling is a DOM operation on a node the tab switch has only just
+  // committed, which is what this effect is for. It runs on `revealed` alone:
+  // arriving at the same card twice is the same landing, and re-scrolling a
+  // card the reader has since scrolled away from would fight them.
+  React.useEffect(() => {
+    if (!revealed) return;
+    setExpanded(true);
+    // Scrolled more than once on purpose. The Findings tab mounts a lot after
+    // this card does — sibling accordions, verdict banners, rendered markdown —
+    // and every one of them changes how far down the card sits. A single
+    // rAF-then-scroll lands on the right coordinates of a page that is still
+    // growing, which is what put the reader on an unrelated run the first time
+    // they clicked a badge and on the right card the second. Re-aiming a few
+    // times over ~600ms costs nothing and survives the settling.
+    let frame = 0;
+    const aim = () => {
+      frame = requestAnimationFrame(() =>
+        rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }),
+      );
+    };
+    aim();
+    const timers = REVEAL_RETRY_DELAYS_MS.map((delay) => window.setTimeout(aim, delay));
+    return () => {
+      timers.forEach(window.clearTimeout);
+      cancelAnimationFrame(frame);
+    };
+  }, [revealed]);
   const sevColor = SEV_COLOR[f.severity] ?? SEV_COLOR_FALLBACK;
   const fileHref =
     repoFullName && headSha
@@ -52,7 +84,11 @@ export function FindingCard({
   const muted = accepted || dismissed;
 
   return (
-    <div data-finding-id={f.id} style={s.card(!!focused, sevColor, muted)}>
+    <div
+      ref={rootRef}
+      data-finding-id={f.id}
+      style={{ ...s.card(!!focused || !!revealed, sevColor, muted), scrollMarginTop: 16 }}
+    >
       <div onClick={() => setExpanded((e) => !e)} style={s.header}>
         <div style={s.badgeWrap}>
           <SeverityBadge severity={f.severity as Severity} compact />

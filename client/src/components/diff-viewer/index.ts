@@ -5,3 +5,4 @@
 export { DiffViewer } from "./DiffViewer";
 export type { DiffCommentApi } from "./comments";
 export type { DiffAnnotations, DiffFindingMark, DiffReveal } from "./annotations";
+export { primaryMark } from "./annotations";

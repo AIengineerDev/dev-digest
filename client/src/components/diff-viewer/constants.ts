@@ -16,3 +16,13 @@ export const SEVERITY_COLOR: Record<string, string> = {
 
 /** Fallback colour for a severity the client does not know yet. */
 export const SEVERITY_COLOR_FALLBACK = "var(--text-muted)";
+
+/**
+ * When to re-aim the scroll at a revealed line, in ms after the first attempt.
+ *
+ * Revealing the stale findings expands every file that carries one, so the page
+ * keeps growing under a scroll that has already run — the target ends up above
+ * or below the viewport. Same reason the Findings tab re-aims at a revealed
+ * card (`FindingCard/constants.ts`).
+ */
+export const REVEAL_RETRY_DELAYS_MS = [120, 600] as const;

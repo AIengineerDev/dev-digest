@@ -1,0 +1,18 @@
+{
+  "name": "PR Overview shows the derived intent with both scope columns",
+  "description": "From PR #482's Overview tab, confirm the Intent card renders what was derived: the confidence band, the summary, and the two scope columns — IN SCOPE and OUT OF SCOPE — plus the Recalculate control. The intent is SEEDED, not derived here: classification is the one step of that feature that costs a model call, and no flow may make one. Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["wait", "--text", "#482"], "label": "the PR list has finished loading — the first fetch syncs from GitHub and is slow" },
+    { "cmd": ["find", "text", "#482", "click"], "label": "open the PR row (by number — the title is CSS-truncated in the list)" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["wait", "--text", "High confidence"], "label": "the band badge renders — never a bare confidence number" },
+    { "cmd": ["wait", "--text", "Adds a token-bucket rate limiter"], "label": "the derived summary is on the page" },
+    { "cmd": ["wait", "--text", "IN SCOPE"], "label": "the in-scope column renders (uppercased by CSS, see INSIGHTS.md)" },
+    { "cmd": ["wait", "--text", "OUT OF SCOPE"], "label": "the out-of-scope column renders" },
+    { "cmd": ["wait", "--text", "the billing service"], "label": "an out-of-scope entry is listed, not just the heading" },
+    { "cmd": ["wait", "--text", "Recalculate"], "label": "Recalculate is offered (deliberately not clicked — it would spend a model call)" }
+  ]
+}

@@ -33,6 +33,24 @@ export function countBySeverity(findings: FindingRecord[]): Record<FilterableSev
   return counts;
 }
 
+/**
+ * Keep a jumped-to finding visible whatever the filters say.
+ *
+ * Clicking its badge in Smart Diff is an explicit request for THAT card, so a
+ * severity chip switched off — or "hide low confidence" — must not answer the
+ * click with an empty list. It goes first because it is the reason the list is
+ * being looked at; the rest keeps its severity order.
+ */
+export function withFocused(
+  shown: FindingRecord[],
+  all: FindingRecord[],
+  focusFindingId: string | null | undefined,
+): FindingRecord[] {
+  if (!focusFindingId || shown.some((f) => f.id === focusFindingId)) return shown;
+  const focused = all.find((f) => f.id === focusFindingId);
+  return focused ? [focused, ...shown] : shown;
+}
+
 /** Drop severities the user switched off, optionally drop low-confidence, then sort. */
 export function visibleFindings(
   findings: FindingRecord[],

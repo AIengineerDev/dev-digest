@@ -9,7 +9,7 @@ vi.mock("../../../../../../../lib/hooks/reviews", () => ({
 }));
 
 import { FindingsPanel } from "./FindingsPanel";
-import { countBySeverity } from "./helpers";
+import { countBySeverity, withFocused } from "./helpers";
 
 afterEach(cleanup);
 
@@ -110,6 +110,45 @@ describe("FindingsPanel severity counters", () => {
     fireEvent.click(chip("Warning"));
     fireEvent.click(chip("Suggestion"));
     expect(screen.getByText("No findings match")).toBeInTheDocument();
+  });
+});
+
+describe("FindingsPanel — arriving from a Smart Diff badge", () => {
+  it("reveals the requested finding: expanded, and first in the list", () => {
+    // jsdom has no layout, so neither of these exists on its own.
+    Element.prototype.scrollIntoView = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" focusFindingId="f3" />);
+
+    // Expanded — its rationale is on screen without a click.
+    const card = document.querySelector('[data-finding-id="f3"]')!;
+    expect(card).toBeInTheDocument();
+    expect(card.textContent).toContain("A secret is committed.");
+    expect(card.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("shows it even when the current filter would hide it", () => {
+    // Clicking a badge is a request for THAT card. Answering it with an empty
+    // list because a chip happens to be off is the failure this prevents.
+    Element.prototype.scrollIntoView = vi.fn();
+    renderWithIntl(<FindingsPanel findings={FINDINGS} prId="pr1" focusFindingId="f3" />);
+    fireEvent.click(chip("Warning"));
+    expect(screen.getByText("N+1 query in user list")).toBeInTheDocument();
+  });
+});
+
+describe("withFocused", () => {
+  it("puts a filtered-out finding back, at the front", () => {
+    expect(withFocused([FINDINGS[0]!], FINDINGS, "f3").map((f) => f.id)).toEqual(["f3", "f1"]);
+  });
+
+  it("leaves the list alone when the finding is already shown, or is unknown", () => {
+    expect(withFocused(FINDINGS, FINDINGS, "f3")).toBe(FINDINGS);
+    expect(withFocused(FINDINGS, FINDINGS, "nope")).toBe(FINDINGS);
+    expect(withFocused(FINDINGS, FINDINGS, null)).toBe(FINDINGS);
   });
 });
 

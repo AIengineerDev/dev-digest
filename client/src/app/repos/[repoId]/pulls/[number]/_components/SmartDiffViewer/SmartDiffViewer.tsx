@@ -11,46 +11,49 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Skeleton, ErrorState } from "@devdigest/ui";
-import type { PrFile, ReviewRecord, SmartDiffGroup } from "@devdigest/shared";
-import { DiffViewer, type DiffCommentApi, type DiffReveal } from "@/components/diff-viewer";
-import { useSmartDiff } from "@/lib/hooks";
+import type { PrFile, SmartDiffGroup } from "@devdigest/shared";
+import type { DiffAnnotations, DiffReveal } from "@/components/diff-viewer";
+import { DiffViewer, type DiffCommentApi } from "@/components/diff-viewer";
 import { ApiError } from "@/lib/api";
-import {
-  buildAnnotations,
-  defaultOpenPredicate,
-  findingsAtHead,
-  groupFindingCount,
-  withPatches,
-} from "./helpers";
+import type { FindingMarks } from "../DiffTab/useFindingMarks";
+import { defaultOpenPredicate, groupFindingCount, withPatches } from "./helpers";
+import { shortSha } from "../staleness";
 import { s, groupMarkerFor } from "./styles";
 
 interface SmartDiffViewerProps {
-  prId: string | null;
   /** The PR's files, with patch text — smart-diff returns paths, not patches. */
   files: PrFile[];
-  reviews: ReviewRecord[] | undefined;
-  /** The PR's current head — reviews of an older head describe code that has
-   *  since changed, and must not badge the diff the reviewer is reading. */
-  headSha: string | null;
+  /** Marks, stale state and the reveal target, owned by `DiffTab` so that the
+   *  Original-order viewer shows exactly the same findings. */
+  marks: FindingMarks;
   commenting?: DiffCommentApi;
+  /** Opens a finding's card in the Findings tab, without leaving the page. */
+  onOpenFinding?: (findingId: string) => void;
 }
 
-export function SmartDiffViewer({ prId, files, reviews, headSha, commenting }: SmartDiffViewerProps) {
+export function SmartDiffViewer({
+  files,
+  marks,
+  commenting,
+  onOpenFinding,
+}: SmartDiffViewerProps) {
   const t = useTranslations("prReview.smartDiff");
-  const { data, isLoading, isError, error, refetch } = useSmartDiff(prId);
-
-  // One reveal target for the whole viewer: clicking a badge in one group must
-  // clear the highlight in another.
-  const [reveal, setReveal] = React.useState<DiffReveal | null>(null);
-  const revealLine = React.useCallback((path: string, line: number) => {
-    setReveal((prev) => ({ path, line, nonce: (prev?.nonce ?? 0) + 1 }));
-  }, []);
-
-  const findings = React.useMemo(() => findingsAtHead(reviews, headSha), [reviews, headSha]);
-  const annotations = React.useMemo(
-    () => buildAnnotations(data?.groups ?? [], findings),
-    [data, findings],
-  );
+  const {
+    annotations: shownAnnotations,
+    smartDiff: data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+    staleCount,
+    staleHead,
+    staleOnly,
+    showStale,
+    staleExpanded,
+    toggleStale,
+    reveal,
+    revealLine,
+  } = marks;
 
   if (isLoading) {
     return (
@@ -97,15 +100,36 @@ export function SmartDiffViewer({ prId, files, reviews, headSha, commenting }: S
         </div>
       )}
 
+      {staleOnly && (
+        <div style={s.staleBanner}>
+          <span style={s.staleText}>
+            {t("staleNotice", { count: staleCount, sha: shortSha(staleHead) })}
+          </span>
+          <button
+            type="button"
+            style={s.staleAction}
+            onClick={toggleStale}
+          >
+            {t(showStale ? "staleNoticeHide" : "staleNoticeAction")}
+          </button>
+        </div>
+      )}
+
       {nonEmpty.map((group) => (
         <Group
           key={group.role}
           group={group}
           files={files}
-          annotations={annotations}
+          annotations={shownAnnotations}
+          // Only when the reader asked for them by hand. On the default reveal
+          // this would expand every file carrying a stale mark — on a 90-file
+          // PR that is tens of thousands of rendered lines, and the page grinds
+          // before it helps. The file badges are visible either way.
+          openPaths={staleExpanded ? new Set(shownAnnotations.keys()) : undefined}
           commenting={commenting}
           reveal={reveal}
           onRevealLine={revealLine}
+          onOpenFinding={onOpenFinding}
         />
       ))}
     </div>
@@ -116,16 +140,22 @@ function Group({
   group,
   files,
   annotations,
+  openPaths,
   commenting,
   reveal,
   onRevealLine,
+  onOpenFinding,
 }: {
   group: SmartDiffGroup;
   files: PrFile[];
-  annotations: ReturnType<typeof buildAnnotations>;
+  annotations: DiffAnnotations;
+  /** Files to expand beyond the role heuristic — the ones holding revealed
+   *  stale marks. */
+  openPaths?: ReadonlySet<string>;
   commenting?: DiffCommentApi;
   reveal: DiffReveal | null;
   onRevealLine: (path: string, line: number) => void;
+  onOpenFinding?: (findingId: string) => void;
 }) {
   const t = useTranslations("prReview.smartDiff");
   const findingCount = groupFindingCount(group);
@@ -144,9 +174,10 @@ function Group({
         files={withPatches(group.files, files)}
         commenting={commenting}
         annotations={annotations}
-        defaultOpenFor={defaultOpenPredicate(group)}
+        defaultOpenFor={defaultOpenPredicate(group, openPaths)}
         reveal={reveal}
         onRevealLine={onRevealLine}
+        onOpenFinding={onOpenFinding}
       />
     </section>
   );

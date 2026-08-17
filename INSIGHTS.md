@@ -76,6 +76,22 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Works
 
+- **2026-08-15** — A documented invariant with no test is not an invariant. An
+  audit of `mcp/AGENTS.md`'s 14 documented practices found all 14 still held in
+  code, but 5 were unpinned — nothing would fail if a future edit broke them —
+  and one of those five, `run_agent_on_pr`'s wait wall staying under the MCP
+  SDK client's 60s default, was the one that had **already regressed in
+  production**: it was raised to 120s, the host killed the call at 60s and
+  discarded the whole result, and the partial-result path never ran. Being
+  written down in a `README`/`AGENTS.md` did not stop the regression; only
+  `mcp/test/tools.test.ts`'s `WAIT_MS < 60_000` assertion (env-guarded since
+  `constants.ts` reads `process.env` at module load) makes it durable. Applies
+  generally: when auditing a package against its own documented conventions,
+  check which ones are asserted by a test versus merely asserted in prose, and
+  pin the gap rather than re-confirming the prose is still accurate.
+  `mcp/src/constants.ts:20-36`, `mcp/test/tools.test.ts` (`waits less than the
+  host default of 60s`).
+
 - **2026-08-09** — When a spec's contract field list and its acceptance
   criteria disagree, the acceptance criteria win, not the literal enumeration.
   `specs/04-intent-layer.md` §4 spells `DerivedIntent` as `Intent.extend({
@@ -186,6 +202,18 @@ _None yet._
   path-aliased, no-emit package needs this shape; a top-level `try` around the
   import does nothing. `mcp/src/index.ts:17`
 
+- **2026-08-15** — Two "measurements" of the same budget guard are only
+  comparable if they serialize the same bytes. `mcp/test/tools.test.ts`'s
+  `tools/list` guard measures `JSON.stringify(await client.listTools())` — the
+  in-process MCP SDK client's *parsed* response, envelope included — not the
+  raw JSON-RPC bytes on the wire. Three different numbers had been reported for
+  the same package (3910, 3635, 3754) because a raw stdio probe and the SDK
+  client parse/re-serialize differently; only the client-side number is
+  comparable to the pinned `<4000` guard, because that is what the test itself
+  checks. Re-measure by temporarily logging `len` inside that guard, never by
+  piping JSON-RPC into the binary by hand. `mcp/test/tools.test.ts:206-210`,
+  `mcp/AGENTS.md:41-49`.
+
 - **2026-08-11** — A package whose tsconfig `paths` alias `@devdigest/shared` to
   `../server/src/vendor/shared` **cannot emit JS**, even when every import from it
   is `import type`. Path-mapped `.ts` files join the program, tsc emits them too,
@@ -251,18 +279,20 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
-- **2026-08-17** — A **literal NUL byte in a source file makes git treat it as
-  binary**, and a binary file is invisible to every diff-based review — ours
-  included. `client/.../SmartDiffViewer/helpers.ts` used `\0` as a composite-key
-  separator (`` `${f.file}\0${f.start_line}` ``) written as the raw byte rather
-  than the escape, so it landed on the branch as `Bin 0 -> 4536 bytes` in
-  `git diff --stat`, `git diff` said "Binary files differ", and 113 lines of new
-  logic were never read by a human or by DevDigest, which builds its prompt from
-  the diff. TypeScript, ESLint and vitest all pass on it — nothing but git
-  notices. Write the escape (`\0`); it has the same runtime value and keeps the
-  file text. Detect with `git diff --stat <base>...HEAD | grep Bin`, or
-  `file <path>` reporting `data`.
-  `client/src/app/repos/[repoId]/pulls/[number]/_components/SmartDiffViewer/helpers.ts:41`
+- **2026-08-16** — A feature can look complete in its own commit and be **inert**,
+  because the handful of lines that integrate it sit in files every other feature
+  also edits — and those merge cleanly from whichever branch happens to touch
+  them last. Smart Diff shipped its module, viewer and tests in one commit, while
+  the route registration in `server/src/modules/index.ts`, the `useSmartDiff`
+  hook, every `prReview.smartDiff` message key and its `pnpm arch` rule arrived
+  later in the **Blast Radius** commit on the integration branch. On the
+  integration branch everything passed; rebuilt on its own, `GET
+  /pulls/:id/smart-diff` returned **404** (`smart-diff.it.test.ts` fails 5/6 with
+  `expected 404 to be 200`) and `cd client && pnpm typecheck` failed outright.
+  Nothing catches this while branches are only ever merged together. Before
+  calling a feature branch done, verify it **alone** on top of `main`: the
+  registry entry, the hook + its barrel export, the message keys, and the arch
+  rule its spec claims as enforcement. `server/src/modules/index.ts:20`
 
 ## Open Questions
 

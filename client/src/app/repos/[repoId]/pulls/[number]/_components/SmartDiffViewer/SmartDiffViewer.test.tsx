@@ -14,7 +14,9 @@ vi.mock("@/lib/hooks", () => ({
   useSmartDiff: () => ({ ...smartDiffQuery.current, error: null, refetch: vi.fn() }),
 }));
 
+import { DiffViewer } from "@/components/diff-viewer";
 import { SmartDiffViewer } from "./SmartDiffViewer";
+import { useFindingMarks } from "../DiffTab/useFindingMarks";
 import { buildAnnotations, defaultOpenPredicate, findingsAtHead, withPatches } from "./helpers";
 
 afterEach(cleanup);
@@ -103,11 +105,50 @@ const REVIEWS: ReviewRecord[] = [
   },
 ];
 
-function renderViewer(reviews: ReviewRecord[] | undefined) {
+/** The pair as `DiffTab` composes them: one `useFindingMarks` feeding the
+ *  reviewer-ordered viewer, and — when `flat` — the plain one beside it. */
+function Harness({
+  reviews,
+  onOpenFinding,
+  flat = false,
+}: {
+  reviews: ReviewRecord[] | undefined;
+  onOpenFinding?: (findingId: string) => void;
+  flat?: boolean;
+}) {
+  const marks = useFindingMarks("pr1", reviews, HEAD);
+  return flat ? (
+    <DiffViewer
+      files={PR_FILES}
+      annotations={marks.annotations}
+      reveal={marks.reveal}
+      onRevealLine={marks.revealLine}
+      onOpenFinding={onOpenFinding}
+    />
+  ) : (
+    <SmartDiffViewer files={PR_FILES} marks={marks} onOpenFinding={onOpenFinding} />
+  );
+}
+
+function renderViewer(
+  reviews: ReviewRecord[] | undefined,
+  onOpenFinding?: (findingId: string) => void,
+) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
       <div data-theme="dark">
-        <SmartDiffViewer prId="pr1" files={PR_FILES} reviews={reviews} headSha={HEAD} />
+        <Harness reviews={reviews} onOpenFinding={onOpenFinding} />
+      </div>
+    </NextIntlClientProvider>,
+  );
+}
+
+/** The same findings, rendered by the Original-order viewer. */
+function renderFlat(reviews: ReviewRecord[] | undefined) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
+      <div data-theme="dark">
+        <Harness reviews={reviews} flat />
       </div>
     </NextIntlClientProvider>,
   );
@@ -173,10 +214,114 @@ describe("SmartDiffViewer", () => {
     expect(line!.scrollIntoView).toHaveBeenCalled();
   });
 
+  it("a badge opens the finding's card instead of scrolling, when it can", () => {
+    // The badge is a way INTO the finding: with somewhere to go it navigates,
+    // and the diff is not scrolled at all.
+    const onOpenFinding = vi.fn();
+    renderViewer(REVIEWS, onOpenFinding);
+    fireEvent.click(screen.getByRole("button", { name: "2 findings" }));
+
+    expect(onOpenFinding).toHaveBeenCalledWith("f1");
+    const line = document.getElementById("diff-line-src/api/public/webhooks.ts-L61");
+    expect(line!.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("a line's severity chip opens that line's finding, not the file's first", () => {
+    const onOpenFinding = vi.fn();
+    renderViewer(REVIEWS, onOpenFinding);
+    fireEvent.click(screen.getByRole("button", { name: "warning" }));
+    expect(onOpenFinding).toHaveBeenCalledWith("f2");
+  });
+
+  it("falls back to scrolling for a flagged line no loaded review explains", () => {
+    // The API says the line is flagged and the badge must still appear — but
+    // there is no card to open, so the click stays inside the diff.
+    const onOpenFinding = vi.fn();
+    renderViewer(undefined, onOpenFinding);
+    fireEvent.click(screen.getByRole("button", { name: "2 findings" }));
+
+    expect(onOpenFinding).not.toHaveBeenCalled();
+    expect(
+      document.getElementById("diff-line-src/api/public/webhooks.ts-L61")!.scrollIntoView,
+    ).toHaveBeenCalled();
+  });
+
+  it("badges the same files in Original order — the toggle is about order only", () => {
+    // Reported from the app: Smart order showed "1 finding" on a file and
+    // Original order showed nothing, because the flat viewer was rendered with
+    // no annotations at all. Switching how files are sorted cannot decide
+    // whether the reviewer is told they are flagged.
+    renderFlat(REVIEWS);
+    expect(screen.getByRole("button", { name: "2 findings" })).toBeInTheDocument();
+  });
+
   it("renders a severity chip per flagged line, worst severity per line", () => {
     renderViewer(REVIEWS);
     expect(screen.getByText("blocker")).toBeInTheDocument();
     expect(screen.getByText("warning")).toBeInTheDocument();
+  });
+
+  it("says so when every finding it has comes from an older head", () => {
+    // The diff carries no markers, which is correct — and reads as "clean" if
+    // nothing explains it. This is the case the user hits after pushing.
+    smartDiffQuery.current = {
+      data: {
+        ...SMART_DIFF,
+        groups: SMART_DIFF.groups.map((g) => ({
+          ...g,
+          files: g.files.map((f) => ({ ...f, finding_lines: [] })),
+        })),
+      },
+      isLoading: false,
+      isError: false,
+    };
+    const onOpenFinding = vi.fn();
+    renderViewer(REVIEWS, onOpenFinding);
+
+    expect(screen.getByText(/shown from a review of an/)).toBeInTheDocument();
+    expect(screen.getByText(/older commit \(old-hea\)/)).toBeInTheDocument();
+  });
+
+  it("marks the stale findings on the diff, and lets the reader put them away", () => {
+    // Anchored to the OLD head's line numbers, so they are drawn as a dashed
+    // hint rather than as a claim about the line below them.
+    smartDiffQuery.current = {
+      data: {
+        ...SMART_DIFF,
+        groups: SMART_DIFF.groups.map((g) => ({
+          ...g,
+          files: g.files.map((f) => ({ ...f, finding_lines: [] })),
+        })),
+      },
+      isLoading: false,
+      isError: false,
+    };
+    const onOpenFinding = vi.fn();
+    renderViewer(REVIEWS, onOpenFinding);
+    // Shown by default: an empty diff plus a sentence explaining the emptiness
+    // is honest and useless. The reader can still put them away.
+    expect(screen.getByRole("button", { name: "1 finding" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hide them" }));
+    expect(screen.queryByRole("button", { name: /finding/ })).not.toBeInTheDocument();
+
+    // Bringing them back takes the reader TO the first mark — otherwise they are left at
+    // the top of a 90-file diff hunting for a line 100 rows inside one card.
+    // The prototype spy is shared, so clear it and attribute the next call.
+    (Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Show them" }));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(document.getElementById("diff-line-src/middleware/ratelimit.ts-L26")).not.toBeNull();
+
+    const badge = screen.getByRole("button", { name: "1 finding" });
+    expect(badge).toBeInTheDocument();
+    // Still a way into the card it names.
+    fireEvent.click(badge);
+    expect(onOpenFinding).toHaveBeenCalledWith("old");
+  });
+
+  it("stays quiet when the current head has findings of its own", () => {
+    renderViewer(REVIEWS);
+    expect(screen.queryByText(/shown from a review of an/)).not.toBeInTheDocument();
   });
 
   it("ignores findings from a review of an older head", () => {
@@ -239,10 +384,33 @@ describe("helpers", () => {
   it("buildAnnotations produces exactly one mark per server-reported line", () => {
     const marks = buildAnnotations(SMART_DIFF.groups, findingsAtHead(REVIEWS, HEAD));
     expect(marks.get("src/api/public/webhooks.ts")).toEqual([
-      { id: "f1", line: 61, severity: "CRITICAL", title: "SSRF via caller-supplied callback_url" },
-      { id: "f2", line: 63, severity: "WARNING", title: "Account token forwarded to an arbitrary host" },
+      { id: "f1", findingId: "f1", line: 61, severity: "CRITICAL", title: "SSRF via caller-supplied callback_url" },
+      { id: "f2", findingId: "f2", line: 63, severity: "WARNING", title: "Account token forwarded to an arbitrary host" },
     ]);
     expect(marks.has("src/middleware/ratelimit.ts")).toBe(false);
+  });
+
+  it("a line two agents flagged speaks for the worse of them", () => {
+    // One "run all agents" pass writes one review per agent, so this is the
+    // ordinary case. Taking whichever came first let a SUGGESTION mask a
+    // CRITICAL on the same line, and sent the click to the milder card.
+    const suggestion = {
+      ...REVIEWS[0]!.findings[0]!,
+      id: "mild",
+      severity: "SUGGESTION" as const,
+      title: "Prefer const",
+      file: "src/api/public/webhooks.ts",
+      start_line: 61,
+    };
+    const marks = buildAnnotations(SMART_DIFF.groups, [
+      suggestion,
+      ...findingsAtHead(REVIEWS, HEAD),
+    ]);
+    const line61 = marks.get("src/api/public/webhooks.ts")![0]!;
+    expect(line61.severity).toBe("CRITICAL");
+    expect(line61.findingId).toBe("f1");
+    // …and the milder one is not lost from view.
+    expect(line61.title).toContain("Prefer const");
   });
 
   it("buildAnnotations still marks a line it cannot match to a finding", () => {
@@ -251,6 +419,9 @@ describe("helpers", () => {
     const marks = buildAnnotations(SMART_DIFF.groups, []);
     expect(marks.get("src/api/public/webhooks.ts")).toHaveLength(2);
     expect(marks.get("src/api/public/webhooks.ts")![0]!.severity).toBe("WARNING");
+    // …and it carries no card id, which is what makes the badge fall back to
+    // scrolling instead of navigating to a card that does not exist.
+    expect(marks.get("src/api/public/webhooks.ts")![0]!.findingId).toBeNull();
   });
 
   it("defaultOpenPredicate never opens boilerplate but always opens a flagged file", () => {

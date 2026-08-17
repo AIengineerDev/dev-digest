@@ -7,7 +7,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
 import type { PrFile } from "@/lib/types";
-import { AUTO_EXPAND_MAX_LINES } from "../constants";
+import { AUTO_EXPAND_MAX_LINES, REVEAL_RETRY_DELAYS_MS } from "../constants";
 import { parsePatch, type Line } from "../helpers";
 import {
   buildThreads,
@@ -19,6 +19,7 @@ import {
 import {
   diffLineDomId,
   marksForLine,
+  primaryMark,
   worstSeverity,
   type DiffFindingMark,
   type DiffReveal,
@@ -45,6 +46,7 @@ export function FileCard({
   defaultOpen,
   reveal = null,
   onRevealLine,
+  onOpenFinding,
 }: {
   file: PrFile;
   commenting?: DiffCommentApi;
@@ -55,14 +57,25 @@ export function FileCard({
   defaultOpen?: boolean;
   /** Set while this card is the target of a badge click. */
   reveal?: DiffReveal | null;
-  /** Clicking the "N findings" badge asks the parent to reveal a line. */
+  /** Clicking the "N findings" badge asks the parent to reveal a line. Used
+   *  only when the mark has no card behind it (`findingId: null`). */
   onRevealLine?: (path: string, line: number) => void;
+  /** Clicking a badge or a severity chip asks the parent to open that finding's
+   *  card in the Findings tab. Absent = this viewer does not navigate. */
+  onOpenFinding?: (findingId: string) => void;
 }) {
   const t = useTranslations("shell");
   const tSmart = useTranslations("prReview.smartDiff");
   const [open, setOpen] = React.useState(
     defaultOpen ?? (file.additions ?? 0) + (file.deletions ?? 0) <= AUTO_EXPAND_MAX_LINES
   );
+  // `defaultOpen` is an initial value, but it can flip after mount — revealing
+  // the stale findings marks files that were collapsed a moment ago, and a mark
+  // inside a collapsed card is a mark nobody can see. Only ever opens: a card
+  // the reader expanded by hand is never closed out from under them.
+  React.useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
   const lines = React.useMemo(() => parsePatch(file.patch), [file.patch]);
 
   // Group this file's comments into threads, then split into ones we can anchor
@@ -86,16 +99,40 @@ export function FileCard({
   React.useEffect(() => {
     if (!target) return;
     setOpen(true);
-    // One frame: React has to commit the expansion before the line has a node.
-    const frame = requestAnimationFrame(() => {
-      document
-        .getElementById(diffLineDomId(file.path, target.line))
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-    return () => cancelAnimationFrame(frame);
+    // One frame so React can commit the expansion before the line has a node —
+    // then twice more, because sibling cards expanding alongside this one keep
+    // moving it until the page settles.
+    let frame = 0;
+    const aim = () => {
+      frame = requestAnimationFrame(() => {
+        document
+          .getElementById(diffLineDomId(file.path, target.line))
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    };
+    aim();
+    const timers = REVEAL_RETRY_DELAYS_MS.map((delay) => window.setTimeout(aim, delay));
+    return () => {
+      timers.forEach(window.clearTimeout);
+      cancelAnimationFrame(frame);
+    };
   }, [target?.line, target?.nonce, file.path]);
 
   const badgeSeverity = worstSeverity(marks);
+  // Every mark in a file is either current or stale — they are built from one
+  // source per render — so the first one settles how the badge is drawn.
+  const badgeIsStale = !!marks[0]?.stale;
+
+  // A badge is a way into the finding, not a decoration: it opens the card in
+  // the Findings tab. Only when the flagged line has no card behind it — the
+  // API reported a line the loaded reviews do not explain — does it fall back
+  // to scrolling the diff, which is all it can honestly offer.
+  const openPrimary = () => {
+    const first = primaryMark(marks);
+    if (!first) return;
+    if (first.findingId && onOpenFinding) onOpenFinding(first.findingId);
+    else onRevealLine?.(file.path, first.line);
+  };
 
   return (
     <div style={s.fileCard}>
@@ -108,14 +145,22 @@ export function FileCard({
         {badgeSeverity && (
           <button
             type="button"
-            style={findingBadgeFor(badgeSeverity)}
-            title={marks.map((m) => `L${m.line} · ${m.title}`).join("\n")}
+            style={findingBadgeFor(badgeSeverity, badgeIsStale)}
+            title={[
+              tSmart(
+                badgeIsStale
+                  ? "badgeHintStale"
+                  : onOpenFinding
+                    ? "badgeHintOpen"
+                    : "badgeHintScroll",
+              ),
+              ...marks.map((m) => `L${m.line} · ${m.title}`),
+            ].join("\n")}
             onClick={(e) => {
               // Without this the header's own toggle would collapse the card we
               // are about to scroll into.
               e.stopPropagation();
-              const first = [...marks].sort((a, b) => a.line - b.line)[0];
-              if (first) onRevealLine?.(file.path, first.line);
+              openPrimary();
             }}
           >
             {tSmart("findingsBadge", { count: marks.length })}
@@ -148,6 +193,7 @@ export function FileCard({
                 commenting={commenting}
                 marks={marksForLine(ln, marks)}
                 revealed={target != null && ln.newNo === target.line}
+                onOpenFinding={onOpenFinding}
               />
             ))
           )}

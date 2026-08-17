@@ -27,6 +27,29 @@ export const EXPANDED_ROLES: readonly SmartDiffRole[] = ["core"];
  */
 export const EXPAND_MAX_LINES = 200;
 
+/**
+ * Separator for the `path`+`line` index key.
+ *
+ * A NUL can never occur in a path, so the key is unambiguous — but written as a
+ * raw byte in the source it makes the whole file **binary to git**, which hides
+ * every future diff of it from review. Spelled as an escape, the file stays
+ * text and the key is byte-identical.
+ */
+export const KEY_SEP = "\u0000";
+
 /** Severity used for a flagged line the client cannot match to a finding —
  *  the server says the line is flagged, so the badge must still appear. */
 export const UNKNOWN_MARK_SEVERITY = "WARNING" as const;
+
+/**
+ * Severity precedence for a line several findings landed on.
+ *
+ * Kept here rather than reused from the diff-viewer's own ranking because this
+ * one answers a different question — which FINDING the mark stands for, not
+ * which colour a set of marks takes — and the two may diverge.
+ */
+export const SEVERITY_RANK: Record<string, number> = {
+  CRITICAL: 3,
+  WARNING: 2,
+  SUGGESTION: 1,
+};

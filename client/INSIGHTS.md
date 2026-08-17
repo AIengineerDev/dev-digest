@@ -177,6 +177,17 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-16** — A **raw NUL byte written into a `.ts` source** — the natural
+  separator for a `"path" + line` map key, since no path can contain one — makes
+  git classify the whole file as binary. `git diff` then prints `Bin 0 -> 4536
+  bytes` and shows nothing, and `grep` goes silent on it, so the file becomes
+  invisible to review while still compiling and passing its tests. Found in
+  `SmartDiffViewer/helpers.ts`, in a product whose purpose is reviewing diffs.
+  Spell it as the escape `"\u0000"` in a named constant instead: same key bytes
+  at runtime, file stays text. The same applies to any control character used as
+  a delimiter, and to commit messages — git rejects a NUL there outright.
+  `src/app/repos/[repoId]/pulls/[number]/_components/SmartDiffViewer/constants.ts:38`
+
 - **2026-08-10** — `eslint-plugin-react-hooks` v7 exposes **two** config shapes
   and the obvious one is the wrong one: `configs.recommended` and
   `configs['recommended-latest']` are still eslintrc-shaped (`plugins` is an

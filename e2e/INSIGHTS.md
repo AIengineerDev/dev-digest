@@ -92,13 +92,13 @@ _None yet._
 - **2026-08-13** — `wait --text` matches the **rendered** text, not
   `textContent`, so a CSS `text-transform` defeats it. `SectionLabel` uppercases
   its children, which means every card title in the app is asserted as
-  `"BLAST RADIUS"` / `"PR BRIEF"` / `"INTENT"` and never as the string the JSX
-  actually contains. Asserting `"Blast radius"` failed the whole flow while the
-  card was on screen and correct — the failure screenshot in
-  `test-results/NN-*-fail.png` is what proves that, so read it before assuming
-  the UI is broken. Match the casing you SEE, and prefer a body string over a
-  `SectionLabel` title when you have one.
-  `specs/10-pr-blast-radius.flow.json:10`
+  `"BLAST RADIUS"` / `"PR BRIEF"` / `"INTENT"` / `"FILES CHANGED"` and never as
+  the string the JSX actually contains. Asserting `"Blast radius"` — or
+  `"Intent"` — failed the whole flow while the card was on screen and correct;
+  the failure screenshot in `test-results/NN-*-fail.png` is what proves that, so
+  read it before assuming the UI is broken. Match the casing you SEE, and prefer
+  a body string over a `SectionLabel` title when you have one.
+  `specs/10-pr-blast-radius.flow.json:10` · `specs/09-pr-smart-diff.flow.json:13`
 
 - **2026-08-14** — Same trap, second form: **a CSS-truncated string is not
   matchable either.** The PR list ellipsises long titles, so
@@ -112,6 +112,7 @@ _None yet._
   them when you are next in those files. Note the PR row is a bare `div` with an
   `onClick`, so there is no role or accessible name to target instead.
   `client/src/app/repos/[repoId]/pulls/_components/PrRow/PrRow.tsx:36`
+
 - **2026-08-10** — `agent-browser find text "<string>" click` (non-`--exact`)
   can match a `<script>` tag, not the visible element you meant. Next.js embeds
   every `next-intl` namespace as one large serialized hydration payload in an
@@ -125,6 +126,7 @@ _None yet._
   (buttons, checkboxes) — it ignores non-interactive elements. Add `--exact`
   when the accessible name is a substring of another visible label on the same
   page (e.g. a "Skills" tab button vs. a "Skills Lab" breadcrumb crumb).
+
 - **2026-08-10** — After a client-side navigation click (`router.push`), a
   `wait --text` on content that also exists on the page you're navigating
   *from* (e.g. an agent's name, present in both the list card and the detail
@@ -135,7 +137,16 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
-_None yet._
+- **2026-08-16** — Step order in a flow is not free: **anything the app scrolls
+  can put an earlier control out of reach for the rest of the flow.** Clicking a
+  Smart Diff finding badge navigates to the Findings tab and calls
+  `scrollIntoView` on the card, leaving the page scrolled down; the next step,
+  `find role button click --name "Original order"`, then failed with the toggle
+  visibly present in the DOM — the failure screenshot shows the diff rendered
+  correctly with the toolbar simply off-screen above. There is no scroll command
+  to undo it. Order a flow so scroll-inducing interactions come **last**, or
+  re-`open` the route before reaching back up the page.
+  `specs/09-pr-smart-diff.flow.json:19`
 
 ## Open Questions
 

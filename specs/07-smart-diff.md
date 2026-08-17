@@ -21,7 +21,8 @@ which lines it flagged. Nothing joined them.
 - A deterministic path classifier: `core` / `wiring` / `boilerplate`.
 - `GET /pulls/:id/smart-diff` returning the existing `SmartDiff` contract.
 - A grouped viewer in the Files changed tab: risk-ordered, boilerplate
-  collapsed, per-file findings badges, click-to-line.
+  collapsed, per-file findings badges that open the finding's card in the
+  Findings tab.
 - A split suggestion for PRs too large to review in one sitting.
 
 **Out**
@@ -31,7 +32,9 @@ which lines it flagged. Nothing joined them.
   served as `null`, for the brief pipeline that does have one.
 - Any change to how findings are produced, stored, or graded.
 - Per-user ordering preferences. The toggle is Smart / Original, in component
-  state, and is not persisted.
+  state, and is not persisted. It changes the **order only**: both viewers are
+  fed the same marks from one `useFindingMarks` in `DiffTab`, so switching to
+  Original cannot quietly un-flag a file.
 
 ## Contract changes
 
@@ -56,11 +59,41 @@ and a pure fold. Enforced, not merely intended — `pnpm arch`'s
 `smart-diff-spends-nothing` rule fails the build if `modules/smart-diff/` ever
 imports the LLM adapter, `reviewer-core`, or the reviews module.
 
+**Where a badge leads.** To the finding, not to the line: clicking one — or a
+line's severity chip — sets `?tab=findings&finding=<id>` with a single
+`router.replace`, so the tab switch is same-page and the resulting view is
+linkable. The Findings tab opens the accordion of the run that produced it,
+expands and scrolls to the card, and suspends the severity filters for it: the
+click asked for that card, and answering with an empty list because a chip
+happens to be off is a bug, not a filter working. A flagged line the loaded
+reviews cannot explain (`findingId: null`) has no card, and keeps the
+scroll-in-place behaviour instead of pretending to navigate.
+
 **Which findings badge a file.** Every review of the PR's *current head*, not
 the newest review row: one "run all agents" writes one review per agent, so the
 newest row is a single agent's opinion. A review with no recorded `head_sha`
 counts as current — the same tolerant rule `isStaleRun` uses in the UI. This is
 what makes the badges agree with the Findings tab.
+
+**When every review is stale.** The badges stay off — a finding about a line
+that has since changed must not mark the current diff — but the viewer says so
+in one line above the groups: how many findings it is holding back and which
+commit they describe. Silence here is the failure mode: a diff with no markers
+and no explanation reads as "this code is clean", which is the opposite of what
+a stale critical finding means.
+
+They are drawn **on the diff by default**, because a reviewer opening Files
+changed wants to see where the problems are and an empty diff with a sentence
+under it is not that. *Hide them* puts them away. This is the one place the
+client anchors marks itself: the server reports `finding_lines` for the current
+head only, so a stale mark is placed at the finding's own `start_line`, from a
+revision this diff is not. It may land on an unrelated line, or on none. That is
+why they are off by default, why they render dashed and faded rather than as
+solid chips, and why their tooltip says which commit they came from. Turning them back on scrolls to the first mark, and only then expands the files
+that carry them — on the default reveal that would be tens of thousands of
+rendered lines on a large PR, and the file-header badges already make the
+problem files findable. Clicking a mark still opens its card in the Findings
+tab.
 
 **Where the numbers come from.** The API is the source of truth for *which*
 lines are flagged (`finding_lines`), so the badge count always matches it. The
@@ -83,9 +116,14 @@ All in one file each, per the task spec:
 | --- | --- |
 | Core first, boilerplate last | `test/smart-diff.it.test.ts`, `smart-diff-helpers.test.ts` |
 | A lock file is *always* boilerplate | `smart-diff-helpers.test.ts` (six lock formats + role precedence) |
-| Boilerplate starts collapsed | `SmartDiffViewer.test.tsx`, `e2e/specs/08-pr-smart-diff.flow.json` |
+| Boilerplate starts collapsed | `SmartDiffViewer.test.tsx`, `e2e/specs/09-pr-smart-diff.flow.json` |
 | Badges appear after Run Review | `SmartDiffViewer.test.tsx`, `smart-diff.it.test.ts` |
-| Badges are clickable and scroll to the line | `SmartDiffViewer.test.tsx` (`scrollIntoView` on the line's DOM id) |
+| A badge opens that finding's card in the Findings tab, same page | `SmartDiffViewer.test.tsx` (`onOpenFinding`), `FindingsPanel.test.tsx` (revealed, and unhidden by the filters) |
+| A flagged line with no loaded finding still scrolls in place | `SmartDiffViewer.test.tsx` (`scrollIntoView` on the line's DOM id) |
+| A diff whose findings are all stale says so | `SmartDiffViewer.test.tsx` (notice names the count and the commit) |
+| Stale findings mark the diff by default, drawn as stale, and can be put away | `SmartDiffViewer.test.tsx` (badge present on load; `Hide them` / `Show them` → scroll to the first) |
+| Original order carries the same badges as Smart order | `SmartDiffViewer.test.tsx` (the flat viewer, fed from the same hook) |
+| A line two agents flagged shows the worse of them | `SmartDiffViewer.test.tsx` (`buildAnnotations` precedence) |
 | No model call on view | `pnpm arch` rule `smart-diff-spends-nothing` |
 | Thresholds and patterns in constants | the two `constants.ts` above |
 

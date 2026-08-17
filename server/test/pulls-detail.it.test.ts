@@ -105,6 +105,30 @@ d('PR detail refresh (Testcontainers pg)', () => {
     expect(row!.body).toContain('rate limiting');
   });
 
+  it('persists the head the refreshed files belong to, in the same write', async () => {
+    // The bug this pins: the refresh replaced pr_files with the NEW head's
+    // patches while `pull_requests.head_sha` kept naming the old one. Smart
+    // Diff picks which findings badge a diff by comparing that column to each
+    // review's head, so the previous commit's findings attached to a diff they
+    // had never seen — and rendered as marks on lines nobody had reviewed.
+    const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
+    await pg.handle.db
+      .update(t.pullRequests)
+      .set({ headSha: 'stale-head' })
+      .where(eq(t.pullRequests.id, pr.id));
+
+    const res = await getDetail(pg.handle.db, pr.id, new MockGitHubClient());
+    const body = res.json() as PrDetail;
+
+    const [row] = await pg.handle.db
+      .select()
+      .from(t.pullRequests)
+      .where(eq(t.pullRequests.id, pr.id));
+    // What the caller was told and what the row says must be the same head.
+    expect(row!.headSha).toBe(body.head_sha);
+    expect(row!.headSha).toBe('a1b2c3d4');
+  });
+
   it('replaces the previous files wholesale rather than appending', async () => {
     const { pr } = await setupRepoAndPr(pg.handle.db, workspaceId);
     await pg.handle.db.insert(t.prFiles).values({

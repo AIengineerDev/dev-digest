@@ -1,12 +1,13 @@
 import 'dotenv/config';
 import { createDb, type Db } from './client.js';
 import * as t from './schema.js';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import {
   API_CONTRACT_AGENT_NAME,
   API_CONTRACT_REVIEWER_PROMPT,
   API_CONTRACT_SKILLS,
 } from './seed-api-contract.js';
+import { DEMO_PR_PATCHES } from './seed-pr-patches.js';
 import {
   GENERAL_REVIEWER_PROMPT,
   SECURITY_REVIEWER_PROMPT,
@@ -125,16 +126,21 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
     // pr_files — one file of each Smart Diff role, so the demo PR actually
     // exercises the grouping: business logic, plumbing, and a lock file that
     // must land in boilerplate and start collapsed.
-    await db.insert(t.prFiles).values([
-      { prId: pr!.id, path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
-      { prId: pr!.id, path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
-      { prId: pr!.id, path: 'src/api/users.ts', additions: 7, deletions: 2 },
-      { prId: pr!.id, path: 'src/api/public/index.ts', additions: 12, deletions: 2 },
-      { prId: pr!.id, path: 'src/server.ts', additions: 8, deletions: 1 },
-      { prId: pr!.id, path: 'src/config.ts', additions: 4, deletions: 0 },
-      { prId: pr!.id, path: 'package.json', additions: 3, deletions: 1 },
-      { prId: pr!.id, path: 'package-lock.json', additions: 92, deletions: 24 },
-    ]);
+    // Each row carries its unified diff (`seed-pr-patches.ts`): without a patch
+    // the viewer renders "No diff text available" and no finding can show a
+    // severity marker, since a marker anchors to a rendered line.
+    await db.insert(t.prFiles).values(
+      [
+        { path: 'src/middleware/ratelimit.ts', additions: 84, deletions: 0 },
+        { path: 'src/api/public/webhooks.ts', additions: 31, deletions: 6 },
+        { path: 'src/api/users.ts', additions: 7, deletions: 2 },
+        { path: 'src/api/public/index.ts', additions: 12, deletions: 2 },
+        { path: 'src/server.ts', additions: 8, deletions: 1 },
+        { path: 'src/config.ts', additions: 4, deletions: 0 },
+        { path: 'package.json', additions: 3, deletions: 1 },
+        { path: 'package-lock.json', additions: 92, deletions: 24 },
+      ].map((f) => ({ ...f, prId: pr!.id, patch: DEMO_PR_PATCHES[f.path] ?? null })),
+    );
 
     // pr_commits
     await db.insert(t.prCommits).values({
@@ -142,6 +148,48 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       sha: 'a1b2c3d4e5f6',
       message: 'Add token-bucket rate limiter',
       author: 'marisa.koch',
+    });
+
+    // A derived intent for the demo PR. Seeded, not derived: classification is
+    // the one step in this feature that costs a model call, and the seed — which
+    // the e2e stack and every fresh clone run — must never make one. The values
+    // are what the `review_intent` model returns for this body, recorded once by
+    // hand, including the sources that make the band defensible.
+    await db.insert(t.prIntent).values({
+      prId: pr!.id,
+      intent: 'Add rate limiting to the public API endpoints',
+      inScope: [
+        'src/middleware/ratelimit.ts — the token-bucket limiter itself',
+        'the public API routes it fronts',
+        'the config values that size the bucket',
+      ],
+      outOfScope: [
+        'authentication and session handling',
+        'the billing service',
+        'anything under src/admin/',
+      ],
+      category: 'feature',
+      summary:
+        'Adds a token-bucket rate limiter in front of the unauthenticated public API so a single client cannot exhaust the service.',
+      confidence: 0.82,
+      band: 'high',
+      sources: [
+        { kind: 'pr_body', ref: null, grade: 'documentation', used: true, note: null },
+        { kind: 'title', ref: null, grade: 'indirect', used: true, note: null },
+        { kind: 'branch', ref: 'feat/rate-limit-public', grade: 'indirect', used: true, note: null },
+        { kind: 'commit_subjects', ref: '1', grade: 'indirect', used: true, note: null },
+        {
+          kind: 'linked_issue',
+          ref: null,
+          grade: 'documentation',
+          used: false,
+          note: 'no issue referenced in the body',
+        },
+      ],
+      provider: 'seed',
+      model: 'seed',
+      fingerprint: 'seed-482',
+      derivedAt: new Date(),
     });
 
     // a sample review + findings so the PR shows results before the first run
@@ -185,6 +233,18 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
         confidence: 0.86,
       },
     ]);
+  }
+
+  // Backfill the demo PR's diff bodies on databases seeded before they existed.
+  // Outside the `if (!pr)` guard on purpose: the block above never runs again
+  // once the PR row exists, so an already-seeded database would keep reading
+  // "No diff text available" forever and could never show a line-level finding
+  // marker. Only fills nulls, so a real patch is never overwritten.
+  for (const [path, patch] of Object.entries(DEMO_PR_PATCHES)) {
+    await db
+      .update(t.prFiles)
+      .set({ patch })
+      .where(and(eq(t.prFiles.prId, pr!.id), eq(t.prFiles.path, path), isNull(t.prFiles.patch)));
   }
 
   // ---- built-in agents (the three starter presets) ----

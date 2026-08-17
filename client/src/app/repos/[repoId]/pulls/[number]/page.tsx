@@ -38,7 +38,7 @@ export default function PRDetailPage() {
 
   const isLoading = pullsLoading || (prId != null && detailLoading);
   const { data: reviews, refetch: refetchReviews } = usePrReviews(prId);
-  const { data: intent } = usePrIntent(prId);
+  const { data: intent, isLoading: intentLoading } = usePrIntent(prId);
 
   // Live run tracking is SERVER-SOURCED (agent_runs status='running'): survives
   // navigation AND reload, and self-clears via polling when runs finish.
@@ -60,13 +60,22 @@ export default function PRDetailPage() {
 
   const tab = search.get("tab") ?? "overview";
   const traceRunId = search.get("trace");
-  const setParam = (key: string, val: string | null) => {
+  // The finding a Smart Diff badge was clicked through to. It lives in the URL
+  // rather than in state so the jump is one `router.replace` — same-page, no
+  // reload — and so the resulting view is linkable and survives a refresh.
+  const focusFindingId = search.get("finding");
+  const setParams = (patch: Record<string, string | null>) => {
     const sp = new URLSearchParams(search.toString());
-    if (val == null) sp.delete(key);
-    else sp.set(key, val);
+    for (const [key, val] of Object.entries(patch)) {
+      if (val == null) sp.delete(key);
+      else sp.set(key, val);
+    }
     router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
   };
-  const setTab = (t: string) => setParam("tab", t);
+  const setParam = (key: string, val: string | null) => setParams({ [key]: val });
+  // Leaving a tab by hand drops the focus target: the highlight belongs to the
+  // jump that set it, not to the tab.
+  const setTab = (t: string) => setParams({ tab: t, finding: null });
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
@@ -135,7 +144,7 @@ export default function PRDetailPage() {
       />
 
       <div style={{ padding: "24px 32px 44px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 1080, margin: "0 auto" }}>
-        {tab === "overview" && <OverviewTab prId={prId} prBody={pr.body} intent={intent} />}
+        {tab === "overview" && <OverviewTab prId={prId} prBody={pr.body} intent={intent} intentLoading={intentLoading} />}
 
         {tab === "findings" && (
           <FindingsTab
@@ -143,6 +152,7 @@ export default function PRDetailPage() {
             liveRunIds={liveRunIds}
             reviewRunning={reviewRunning}
             lethalTrifecta={lethalTrifecta}
+            focusFindingId={focusFindingId}
             runs={runs}
             prRuns={prRuns}
             prCommits={pr.commits}
@@ -174,6 +184,7 @@ export default function PRDetailPage() {
             reviews={reviews}
             headSha={pr.head_sha}
             canComment={pr.status === "open"}
+            onOpenFinding={(findingId) => setParams({ tab: "findings", finding: findingId })}
           />
         )}
       </div>
