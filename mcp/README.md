@@ -17,7 +17,7 @@ identifies the PR on its own, so `repo` may be omitted with one.
 | Tool | Does | Read-only |
 | --- | --- | --- |
 | `list_agents` | The configured reviewers: name, provider/model, strategy, CI gate | yes |
-| `run_agent_on_pr` | Starts a review, waits up to 120 s, returns findings inline (or a partial result plus run ids if the wall is hit) | **no** |
+| `run_agent_on_pr` | Starts a review, waits up to ~55 s, returns findings inline (or a partial result plus run ids if the wall is hit) | **no** |
 | `get_findings` | Status, verdict, score and findings of a run | yes |
 | `get_conventions` | A repo's mined house rules, each with its evidence line | yes |
 | `get_blast_radius` | What a PR reaches: changed symbols, callers, endpoints, crons | yes |
@@ -91,26 +91,31 @@ Call `list_agents` first — it is the cheapest round trip that proves the serve
 can reach the API. If it returns the `Cannot reach the DevDigest API…` message,
 go back to step 1.
 
-### 5. Know where the tool-call wall is before registering with a host
+### 5. Leave the host's tool call timeout alone
 
-`run_agent_on_pr` blocks for up to **55 s**, deliberately just under the 60 s
-the MCP TypeScript SDK's client allows a single tool call by default. Most
-hosts, Claude Code included, treat that as a hard per-call wall and do **not**
-extend it for progress notifications. Ours expiring first is what makes the
-partial-result path — finished runs, plus run ids to collect the rest with
-`get_findings` — reachable at all, so **the defaults need no change**.
+`run_agent_on_pr` blocks for up to ~55 s — deliberately **under** the MCP
+TypeScript SDK client's 60 s default (`MCP_TOOL_TIMEOUT` in most hosts,
+including Claude Code), which is a hard per-call wall and is **not** extended by
+progress notifications. Ours firing first is what makes the partial-result path
+— finished runs, plus run ids to collect the rest with `get_findings` —
+reachable at all, instead of the host cutting the call and discarding
+everything. The default registration needs no `MCP_TOOL_TIMEOUT` at all.
 
-If you want a longer inline wait, raise both, in this order:
+Only raise `MCP_TOOL_TIMEOUT` if you also raise `DEVDIGEST_MCP_WAIT_MS` — the
+two move together, and ours must always stay under the host's:
 
 ```sh
-export MCP_TOOL_TIMEOUT=150000        # the host's wall, first
-export DEVDIGEST_MCP_WAIT_MS=120000   # ours, still under it
+export MCP_TOOL_TIMEOUT=120000       # ms; the host's wall, first
+export DEVDIGEST_MCP_WAIT_MS=90000   # ms; ours, still under it
 ```
 
 Raising ours alone reintroduces the bug this arrangement was built to fix; when
 both variables are visible to the server it says so on stderr at startup.
-Either way the review keeps running on the server (`agent_runs`) even if the
-call is cut off — you lose the inline result, not the review.
+
+This is a convenience, not a correctness requirement — a review keeps running
+on the server (`agent_runs`) even if the MCP call is cut off, and `get_findings`
+will still collect it afterwards. Without raising either, you just lose the
+inline result on a slow review and fall back to polling `get_findings` yourself.
 
 ### 6. Register it with a host
 
@@ -146,8 +151,9 @@ working directory, not from this one.
 claude mcp add devdigest -- node /absolute/path/to/dev-digest/mcp/bin/devdigest-mcp.mjs
 ```
 
-Check `claude mcp add --help` for the flag that sets env vars in your version,
-or use the config form above.
+`MCP_TOOL_TIMEOUT` is not needed for this form either — it only matters if you
+raise the wait wall (see step 5). Check `claude mcp add --help` for the flag
+that sets env vars in your version, or just use the config form above.
 
 Then, in a **new** session: `/mcp` should list `devdigest` with five tools.
 
@@ -176,14 +182,20 @@ seconds, so you can see the partial-result path without waiting two minutes.
 ## Test it
 
 ```sh
-npm test           # 25 tests: the real server driven by an in-memory MCP client
+npm test           # 50 tests across two files: an in-memory MCP client, plus a real-child-process smoke test
 npm run typecheck  # this IS the build; the package emits no JS
 ```
 
 The suite stubs only the HTTP layer, so schema validation, the `isError`
 envelope, the poll loop, cancellation and progress are all exercised for real.
-Three of the tests are guards rather than feature coverage: exactly five tools,
-`tools/list` under 4000 characters, and the read/write annotations.
+Six of the tests are guards rather than feature coverage:
+
+- `tools/list` stays under 4000 characters
+- no tool's input schema contains `anyOf`/`oneOf` (no union input property)
+- no tool advertises an `outputSchema`
+- no tool's input schema exposes an operator knob (`wait`/`poll`/`timeout`/`*_ms`)
+- `DEVDIGEST_MCP_WAIT_MS` stays under the host's 60 s default
+- the shipped binary's stdout is protocol-only JSON-RPC and it boots with no API running (`test/binary.test.ts`)
 
 ## When it does not work
 
@@ -212,7 +224,7 @@ run_agent_on_pr  acme/payments-api #482      → request_changes · 62
 get_conventions            acme/payments-api           → error-handling — …
 ```
 
-The timeout path — the review is still running when the 120 s wall hits, so
+The timeout path — the review is still running when the ~55 s wall hits, so
 the tool returns what finished plus a pointer to collect the rest:
 
 ```
@@ -232,10 +244,10 @@ get_findings               run_id 8f3c…                → request_changes · 
 - **Compact by default.** Responses are one line per row; pass
   `detail: "full"` for rationale and suggestions. Capped lists say how many rows
   they dropped.
-- **The run tool blocks, up to 120 s, and returns findings inline.** It polls
+- **The run tool blocks, up to ~55 s, and returns findings inline.** It polls
   the server rather than waiting on a stream, and on the wall it returns a
   partial result — never an error — with a pointer to `get_findings` for what
-  is still running. See "Raise the tool call timeout first" above.
+  is still running. See "Leave the host's tool call timeout alone" above.
 - **Errors carry the fix.** An unreachable API, an unimported repo or an unknown
   agent all come back as `isError` results naming what to do — the model reads
   them and retries.

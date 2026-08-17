@@ -1,7 +1,7 @@
 # `devdigest-mcp` — DevDigest's reviewers as MCP tools
 
-**Status:** in progress (`run_agent_on_pr` now blocking; blast radius
-stubbed)
+**Status:** shipped 2026-08-15 (`run_agent_on_pr` blocking; blast radius live
+via `GET /pulls/:id/blast`, `server/src/modules/blast/routes.ts:22`)
 **Packages touched:** `mcp/` (new). No change to `server`, `client`,
 `reviewer-core` or `@devdigest/shared`.
 **Lesson:** L04, first half. The second half is Blast Radius over `repo-intel`.
@@ -57,7 +57,7 @@ because that is what a model can see in a checkout. `src/resolve.ts` maps them t
 ids and memoises successes for the process lifetime — misses are never cached,
 since "not imported yet" is a state the user can fix mid-session.
 
-**The run tool blocks, up to a 120 s wall, and returns findings inline.**
+**The run tool blocks, up to a 55 s wall, and returns findings inline.**
 `run_agent_on_pr` calls `POST /pulls/:id/review` (which still returns
 immediately server-side), then polls `GET /pulls/:id/runs` every 2 s until every
 run it started has finished or the wall is hit. On the wall it returns a
@@ -84,7 +84,7 @@ model needs to choose per call.
 
 `get_findings` keeps its place in the surface, but its role shifts: it is no
 longer the primary way to collect a result, only the way to collect after a
-120 s timeout, or to re-read the same run at a different `detail`.
+55 s timeout, or to re-read the same run at a different `detail`.
 
 > **Rejected: the run tool never blocks, `get_findings` polls.** The original
 > design returned `run_id` immediately on the theory that a review takes tens
@@ -112,10 +112,10 @@ schemas are 60–80% of that cost. Concretely:
 - Every capped list ends with `… +N more — raise \`limit\``, so a cap is never
   mistaken for completeness.
 
-**The blast-radius stub fails loudly.** `RepoIntelService.getBlastRadius` exists
-but has no HTTP route. The tool is registered so the surface is final, and
-returns `isError` naming the state — a model that gets a hard failure says so,
-where one that gets an empty result invents an impact analysis.
+**`get_blast_radius` is real, not a stub.** See `specs/08-blast-radius.md` and
+the summary-first rule (`mcp/AGENTS.md:72-76`): the tool's first line is always
+the API's `summary`, which is what separates "nothing calls this" from "the
+index could not say".
 
 ## Acceptance criteria
 

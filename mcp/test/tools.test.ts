@@ -17,7 +17,7 @@ import type {
   RunSummary,
 } from '@devdigest/shared';
 import type { DevDigestApi, RunTarget } from '../src/api.js';
-import type { Timing } from '../src/constants.js';
+import { WAIT_MS, type Timing } from '../src/constants.js';
 import { buildServer } from '../src/server.js';
 
 // Every test drives the run_agent_on_pr poll loop through this
@@ -228,6 +228,33 @@ describe('tool surface', () => {
     expect(unions).toEqual([]);
   });
 
+  /**
+   * `outputSchema` is advertised in `tools/list` and would roughly double the
+   * static session cost; these results are read by a model, not a program.
+   * specs/06-mcp-server.md:107-109.
+   */
+  it('advertises no outputSchema', async () => {
+    const { tools } = await client.listTools();
+    for (const t of tools) {
+      expect(t.outputSchema, t.name).toBeUndefined();
+    }
+  });
+
+  /**
+   * `DEVDIGEST_MCP_WAIT_MS` / `_POLL_MS` / `_REQUEST_TIMEOUT_MS` are operator
+   * knobs and must never become tool input parameters — mcp/AGENTS.md:124-128.
+   */
+  it('keeps operator knobs out of the tool schemas', async () => {
+    const { tools } = await client.listTools();
+    const offenders: string[] = [];
+    for (const t of tools) {
+      for (const name of Object.keys(t.inputSchema.properties ?? {})) {
+        if (/wait|poll|timeout|_ms$/i.test(name)) offenders.push(`${t.name}.${name}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('marks the four read tools read-only and the run tool not', async () => {
     const { tools } = await client.listTools();
     const readOnly = Object.fromEntries(tools.map((t) => [t.name, t.annotations?.readOnlyHint]));
@@ -239,6 +266,21 @@ describe('tool surface', () => {
       run_agent_on_pr: false,
     });
   });
+
+  /**
+   * The wall must expire before the MCP TypeScript SDK client's own
+   * DEFAULT_REQUEST_TIMEOUT_MSEC (60s), or the host kills the call and
+   * discards the whole result before the partial-result path can run. It was
+   * 120s once — the host's 60s default fired first — see constants.ts:20-36.
+   * `constants.ts` reads env at module load, so a developer's local override
+   * must not turn this red.
+   */
+  it.skipIf(process.env.DEVDIGEST_MCP_WAIT_MS !== undefined)(
+    'waits less than the host default of 60s',
+    () => {
+      expect(WAIT_MS).toBeLessThan(60_000);
+    },
+  );
 
   it('rejects arguments the schema forbids without reaching the handler', async () => {
     const result = await client.callTool({
@@ -603,6 +645,24 @@ describe('get_findings', () => {
     const out = textOf(
       await client.callTool({ name: 'get_findings', arguments: { repo: 'acme/payments-api', pr: '482' } }),
     );
+    expect(out).toContain('run_agent_on_pr');
+  });
+
+  /**
+   * `repo` is legitimately absent when `pr` is a uuid or a pasted URL — the
+   * "no review" message must address the PR the way the caller did, not print
+   * `undefined#<uuid>`.
+   */
+  it('addresses a bare pr uuid without a repo, never as "undefined#..."', async () => {
+    const client = await connect(stubApi({ listRuns: async () => [] }));
+    const out = textOf(
+      await client.callTool({
+        name: 'get_findings',
+        arguments: { pr: 'a23e635c-cb87-4230-8bb8-ff3fa63d1c30' },
+      }),
+    );
+    expect(out).not.toContain('undefined');
+    expect(out).not.toContain('#');
     expect(out).toContain('run_agent_on_pr');
   });
 });

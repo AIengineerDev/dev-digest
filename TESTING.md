@@ -31,6 +31,7 @@ If a test wouldn't catch a class of regression we care about, we don't write it.
 | server-integration | `server/` | integration (real Postgres) | vitest | `server-integration.yml` | **yes** |
 | reviewer-core | `reviewer-core/` | unit (engine) | vitest | `reviewer-core.yml` | no |
 | e2e web | `e2e/` | browser e2e (deterministic) | agent-browser + `run.ts` | `e2e-web.yml` | yes (stack) |
+| mcp | `mcp/` | unit (in-process MCP client) + binary smoke | vitest | `mcp.yml` | no |
 
 ## What each suite covers
 
@@ -56,12 +57,18 @@ and a `run` with a stubbed model → grounded findings. No DB / GitHub / FS.
 main journeys (boot → PR list → PR detail; agents) against a real seeded stack.
 No `chat`, no model key.
 
+**mcp** — the five tools driven through an in-process MCP client (schema
+validation, the `isError` envelope, the poll loop, cancellation, progress),
+plus a real-child-process stdio smoke test that boots the shipped binary and
+checks its `tools/list` output. Hermetic: no API, no LLM, no Docker.
+
 ## Running locally
 
 ```sh
 # per package
 cd client        && pnpm test           # + pnpm typecheck
 cd reviewer-core && npm test
+cd mcp           && npm test            # + npm run typecheck
 
 # server — the unit/integration split (see note below)
 cd server && pnpm exec vitest run --exclude '**/*.it.test.ts'   # unit, no Docker
