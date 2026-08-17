@@ -95,17 +95,22 @@ go back to step 1.
 
 `run_agent_on_pr` blocks for up to ~55 s — deliberately **under** the MCP
 TypeScript SDK client's 60 s default (`MCP_TOOL_TIMEOUT` in most hosts,
-including Claude Code), so that our own wall fires first and returns a partial
-result with run ids, instead of the host cutting the call and discarding
+including Claude Code), which is a hard per-call wall and is **not** extended by
+progress notifications. Ours firing first is what makes the partial-result path
+— finished runs, plus run ids to collect the rest with `get_findings` —
+reachable at all, instead of the host cutting the call and discarding
 everything. The default registration needs no `MCP_TOOL_TIMEOUT` at all.
 
 Only raise `MCP_TOOL_TIMEOUT` if you also raise `DEVDIGEST_MCP_WAIT_MS` — the
 two move together, and ours must always stay under the host's:
 
 ```sh
-export DEVDIGEST_MCP_WAIT_MS=90000   # ms; our wall
-export MCP_TOOL_TIMEOUT=120000       # ms; comfortably above the raised wall
+export MCP_TOOL_TIMEOUT=120000       # ms; the host's wall, first
+export DEVDIGEST_MCP_WAIT_MS=90000   # ms; ours, still under it
 ```
+
+Raising ours alone reintroduces the bug this arrangement was built to fix; when
+both variables are visible to the server it says so on stderr at startup.
 
 This is a convenience, not a correctness requirement — a review keeps running
 on the server (`agent_runs`) even if the MCP call is cut off, and `get_findings`
@@ -114,10 +119,17 @@ inline result on a slow review and fall back to polling `get_findings` yourself.
 
 ### 6. Register it with a host
 
-Paths must be **absolute** — the host spawns the process from its own working
-directory, not from this one.
+#### This repo, in Claude Code — nothing to write
+
+`.mcp.json` at the repo root already declares the server, so opening the repo in
+Claude Code offers it on approval. Its path is relative to the project root, so
+launch `claude` from there. Check with `/mcp` in a **new** session: `devdigest`
+with five tools.
 
 #### Any host, by config (the form that always works)
+
+Paths must be **absolute** here — the host spawns the process from its own
+working directory, not from this one.
 
 ```json
 {
@@ -157,6 +169,12 @@ Then, in a **new** session: `/mcp` should list `devdigest` with five tools.
 
 These are operator knobs and stay out of the tool schemas on purpose — a schema
 field is paid for in the context window of every session, an env var is free.
+
+All of them are **validated at startup** (`src/config.ts`): a value that is not
+a positive whole number of milliseconds, or a `DEVDIGEST_API_URL` that is not an
+absolute `http(s)` URL, stops the server with a message naming the variable, the
+value and the fix. Nothing falls back to a default in silence — a knob you set
+and a knob that applied are the same thing. An empty string counts as unset.
 
 Handy for a fast demo: `DEVDIGEST_MCP_WAIT_MS=5000` makes the wall fire in five
 seconds, so you can see the partial-result path without waiting two minutes.
