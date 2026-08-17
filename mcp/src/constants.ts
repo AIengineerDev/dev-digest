@@ -7,15 +7,20 @@
  *
  * Deliberately NOT tool input parameters: a schema field is paid for in every
  * session (see `../AGENTS.md` "Token budget"), and these are operator/
- * deployment knobs, not something a model should be choosing per call.
+ * deployment knobs, not something a model should be choosing per call. Their
+ * values are validated in `config.ts`, which is what makes env safe as the only
+ * place they can be set.
  */
+import { loadConfig } from './config.js';
 
-function envInt(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
+/**
+ * Bad env stops the process rather than falling back — `index.ts` calls
+ * `loadConfig` first so the operator sees the message instead of an import
+ * stack. Reaching it from here would mean the module graph was loaded some
+ * other way (a test, `buildServer()` imported directly); the throw is still the
+ * right outcome, just uglier.
+ */
+const CONFIG = loadConfig();
 
 /**
  * Wall-clock budget `run_agent_on_pr` blocks for, in ms.
@@ -29,17 +34,21 @@ function envInt(name: string, fallback: number): number {
  * FIRST for that path to mean anything.
  *
  * Raise it only together with the host's own limit (`MCP_TOOL_TIMEOUT`, or the
- * Inspector's Configuration panel); raising it alone brings the old bug back.
- * The review itself is unaffected either way — it runs to completion on the
- * server whether or not a tool call is still attached to it.
+ * Inspector's Configuration panel); raising it alone brings the old bug back,
+ * and `config.ts` warns when it can see both. The review itself is unaffected
+ * either way — it runs to completion on the server whether or not a tool call
+ * is still attached to it.
  */
-export const WAIT_MS = envInt('DEVDIGEST_MCP_WAIT_MS', 55_000);
+export const WAIT_MS = CONFIG.waitMs;
 
 /** Interval between `GET /pulls/:id/runs` polls, in ms. */
-export const POLL_MS = envInt('DEVDIGEST_MCP_POLL_MS', 2_000);
+export const POLL_MS = CONFIG.pollMs;
 
 /** Per-HTTP-request timeout in `src/api.ts`, in ms. */
-export const REQUEST_TIMEOUT_MS = envInt('DEVDIGEST_MCP_REQUEST_TIMEOUT_MS', 15_000);
+export const REQUEST_TIMEOUT_MS = CONFIG.requestTimeoutMs;
+
+/** Where the DevDigest API listens; `api.ts` uses it as its default base URL. */
+export const API_URL = CONFIG.apiUrl;
 
 /** What `run-agent.ts` needs to drive its poll loop; injected via `Deps`. */
 export interface Timing {

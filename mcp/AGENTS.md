@@ -24,6 +24,12 @@ npm run dev        # tsx src/index.ts — stdio, for piping JSON-RPC by hand
   instead. Same arrangement as `reviewer-core`.
 - **`@devdigest/shared` is `import type` only.** A runtime import (a Zod schema)
   would emit a bare specifier node cannot resolve.
+- **`src/config.ts` is the only file that reads `process.env`.** It validates
+  with Zod and throws `ConfigError`; `constants.ts` and `api.ts` consume the
+  parsed values. Nothing falls back to a default in silence — these knobs are
+  env-only *because* they are not tool inputs, so a typo has no other place to
+  surface. `src/index.ts` calls `loadConfig()` first and dynamic-imports
+  `server.js` after, so a bad value prints one line instead of an import stack.
 - `src/api.ts` is the only file that speaks HTTP. Tools depend on the
   `DevDigestApi` interface, which is what lets the tests run the whole server
   against a plain object.
@@ -125,7 +131,13 @@ before the user types a word. Input schemas are 60–80% of that cost.
   become tool input parameters**, even though it would be a small schema
   addition. A schema field is paid for in every session (see "Token budget"
   above); these are operator/deployment knobs, not something a model should be
-  choosing per call. Env is free; keep it there.
+  choosing per call. Env is free; keep it there — and `config.ts` is what makes
+  that safe, since a value nothing validates is a value nothing reports.
+- **The repo root's `.mcp.json` registers this server for Claude Code**, with a
+  path relative to the project root (`mcp/bin/devdigest-mcp.mjs`), so it only
+  resolves when `claude` is launched from there. Every other host takes the
+  absolute-path config in `README.md`. Keep the two in step: they are the same
+  three lines, and a stale one is discovered as "the tools aren't there".
 
 ## Read when
 

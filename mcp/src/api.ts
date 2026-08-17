@@ -17,9 +17,9 @@ import type {
   ReviewRecord,
   RunSummary,
 } from '@devdigest/shared';
-import { REQUEST_TIMEOUT_MS } from './constants.js';
+import { API_URL, REQUEST_TIMEOUT_MS } from './constants.js';
 
-export const DEFAULT_API_URL = 'http://localhost:3001';
+export { DEFAULT_API_URL } from './config.js';
 
 /** One run started by `POST /pulls/:id/review` (ReviewRunTarget). */
 export interface RunTarget {
@@ -66,7 +66,10 @@ function messageFromBody(body: unknown, fallback: string): string {
   return fallback;
 }
 
-export function createApi(baseUrl = process.env.DEVDIGEST_API_URL ?? DEFAULT_API_URL): DevDigestApi {
+// `DEVDIGEST_API_URL` is read in `config.ts`, not here: an unparseable URL has
+// to fail at startup, where it is one message, rather than on the first tool
+// call, where it is a fetch error the model then tries to work around.
+export function createApi(baseUrl = API_URL): DevDigestApi {
   const root = baseUrl.replace(/\/+$/, '');
 
   async function request<T>(path: string, init?: RequestInit, signal?: AbortSignal): Promise<T> {

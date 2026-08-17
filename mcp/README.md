@@ -91,29 +91,40 @@ Call `list_agents` first — it is the cheapest round trip that proves the serve
 can reach the API. If it returns the `Cannot reach the DevDigest API…` message,
 go back to step 1.
 
-### 5. Raise the tool call timeout before registering with a host
+### 5. Know where the tool-call wall is before registering with a host
 
-`run_agent_on_pr` blocks for up to 120 s. Most MCP hosts, including
-Claude Code, cap a single tool call well under that (the MCP TypeScript SDK's
-client default is 60 s) and **do not** extend it for progress notifications —
-it is a hard per-call wall. Raise it or the host will cut the call before the
-review finishes:
+`run_agent_on_pr` blocks for up to **55 s**, deliberately just under the 60 s
+the MCP TypeScript SDK's client allows a single tool call by default. Most
+hosts, Claude Code included, treat that as a hard per-call wall and do **not**
+extend it for progress notifications. Ours expiring first is what makes the
+partial-result path — finished runs, plus run ids to collect the rest with
+`get_findings` — reachable at all, so **the defaults need no change**.
+
+If you want a longer inline wait, raise both, in this order:
 
 ```sh
-export MCP_TOOL_TIMEOUT=150000   # ms; comfortably above the 120s wall
+export MCP_TOOL_TIMEOUT=150000        # the host's wall, first
+export DEVDIGEST_MCP_WAIT_MS=120000   # ours, still under it
 ```
 
-This is a convenience, not a correctness requirement — a review keeps running
-on the server (`agent_runs`) even if the MCP call is cut off, and `get_findings`
-will still collect it afterwards. Without the raised timeout you just lose the
-inline result and fall back to polling `get_findings` yourself.
+Raising ours alone reintroduces the bug this arrangement was built to fix; when
+both variables are visible to the server it says so on stderr at startup.
+Either way the review keeps running on the server (`agent_runs`) even if the
+call is cut off — you lose the inline result, not the review.
 
 ### 6. Register it with a host
 
-Paths must be **absolute** — the host spawns the process from its own working
-directory, not from this one.
+#### This repo, in Claude Code — nothing to write
+
+`.mcp.json` at the repo root already declares the server, so opening the repo in
+Claude Code offers it on approval. Its path is relative to the project root, so
+launch `claude` from there. Check with `/mcp` in a **new** session: `devdigest`
+with five tools.
 
 #### Any host, by config (the form that always works)
+
+Paths must be **absolute** here — the host spawns the process from its own
+working directory, not from this one.
 
 ```json
 {
@@ -122,8 +133,7 @@ directory, not from this one.
       "command": "node",
       "args": ["/absolute/path/to/dev-digest/mcp/bin/devdigest-mcp.mjs"],
       "env": {
-        "DEVDIGEST_API_URL": "http://localhost:3001",
-        "MCP_TOOL_TIMEOUT": "150000"
+        "DEVDIGEST_API_URL": "http://localhost:3001"
       }
     }
   }
@@ -137,8 +147,7 @@ claude mcp add devdigest -- node /absolute/path/to/dev-digest/mcp/bin/devdigest-
 ```
 
 Check `claude mcp add --help` for the flag that sets env vars in your version,
-or just use the config form above — `MCP_TOOL_TIMEOUT` has to reach the process
-one way or the other.
+or use the config form above.
 
 Then, in a **new** session: `/mcp` should list `devdigest` with five tools.
 
@@ -154,6 +163,12 @@ Then, in a **new** session: `/mcp` should list `devdigest` with five tools.
 
 These are operator knobs and stay out of the tool schemas on purpose — a schema
 field is paid for in the context window of every session, an env var is free.
+
+All of them are **validated at startup** (`src/config.ts`): a value that is not
+a positive whole number of milliseconds, or a `DEVDIGEST_API_URL` that is not an
+absolute `http(s)` URL, stops the server with a message naming the variable, the
+value and the fix. Nothing falls back to a default in silence — a knob you set
+and a knob that applied are the same thing. An empty string counts as unset.
 
 Handy for a fast demo: `DEVDIGEST_MCP_WAIT_MS=5000` makes the wall fire in five
 seconds, so you can see the partial-result path without waiting two minutes.

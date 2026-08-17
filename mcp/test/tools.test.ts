@@ -21,7 +21,7 @@ import type { Timing } from '../src/constants.js';
 import { buildServer } from '../src/server.js';
 
 // Every test drives the run_agent_on_pr poll loop through this
-// timing, not the production defaults (120s wait / 2s poll) — fast enough
+// timing, not the production defaults (55s wait / 2s poll) — fast enough
 // that no test needs fake timers around it.
 const FAST_TIMING: Timing = { waitMs: 200, pollMs: 5 };
 

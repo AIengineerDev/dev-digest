@@ -175,6 +175,17 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-17** — An entrypoint **cannot catch a throw from a module it imports
+  statically**: static imports are evaluated before the entry module's own body
+  runs, so a `try` there never sees it and the operator gets a stack trace
+  instead of the message. This is why `mcp/src/index.ts` calls `loadConfig()`
+  first and then `await import('./server.js')` — the config error surfaces as a
+  value inside `main()`, one line naming the bad variable and the fix, while
+  `constants.ts` (which validates again at its own module load) stays the single
+  place the parsed values live. Any fail-fast startup validation in a
+  path-aliased, no-emit package needs this shape; a top-level `try` around the
+  import does nothing. `mcp/src/index.ts:17`
+
 - **2026-08-11** — A package whose tsconfig `paths` alias `@devdigest/shared` to
   `../server/src/vendor/shared` **cannot emit JS**, even when every import from it
   is `import type`. Path-mapped `.ts` files join the program, tsc emits them too,
@@ -240,7 +251,18 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
-_None yet._
+- **2026-08-17** — A **literal NUL byte in a source file makes git treat it as
+  binary**, and a binary file is invisible to every diff-based review — ours
+  included. `client/.../SmartDiffViewer/helpers.ts` used `\0` as a composite-key
+  separator (`` `${f.file}\0${f.start_line}` ``) written as the raw byte rather
+  than the escape, so it landed on the branch as `Bin 0 -> 4536 bytes` in
+  `git diff --stat`, `git diff` said "Binary files differ", and 113 lines of new
+  logic were never read by a human or by DevDigest, which builds its prompt from
+  the diff. TypeScript, ESLint and vitest all pass on it — nothing but git
+  notices. Write the escape (`\0`); it has the same runtime value and keeps the
+  file text. Detect with `git diff --stat <base>...HEAD | grep Bin`, or
+  `file <path>` reporting `data`.
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/SmartDiffViewer/helpers.ts:41`
 
 ## Open Questions
 
