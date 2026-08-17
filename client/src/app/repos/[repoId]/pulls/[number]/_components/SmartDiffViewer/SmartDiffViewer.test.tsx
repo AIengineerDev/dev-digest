@@ -237,13 +237,13 @@ describe("SmartDiffViewer", () => {
     const onOpenFinding = vi.fn();
     renderViewer(REVIEWS, onOpenFinding);
 
-    expect(screen.getByText(/not shown here/)).toBeInTheDocument();
+    expect(screen.getByText(/shown from a review of an/)).toBeInTheDocument();
     expect(screen.getByText(/older commit \(old-hea\)/)).toBeInTheDocument();
   });
 
-  it("shows the stale findings on the diff when asked, and takes them back", () => {
-    // Anchored to the OLD head's line numbers, so they are off by default and
-    // drawn as a dashed hint rather than as a claim about this line.
+  it("marks the stale findings on the diff, and lets the reader put them away", () => {
+    // Anchored to the OLD head's line numbers, so they are drawn as a dashed
+    // hint rather than as a claim about the line below them.
     smartDiffQuery.current = {
       data: {
         ...SMART_DIFF,
@@ -257,22 +257,30 @@ describe("SmartDiffViewer", () => {
     };
     const onOpenFinding = vi.fn();
     renderViewer(REVIEWS, onOpenFinding);
+    // Shown by default: an empty diff plus a sentence explaining the emptiness
+    // is honest and useless. The reader can still put them away.
+    expect(screen.getByRole("button", { name: "1 finding" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hide them" }));
     expect(screen.queryByRole("button", { name: /finding/ })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Show them anyway" }));
+    // Bringing them back takes the reader TO the first mark — otherwise they are left at
+    // the top of a 90-file diff hunting for a line 100 rows inside one card.
+    // The prototype spy is shared, so clear it and attribute the next call.
+    (Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Show them" }));
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(document.getElementById("diff-line-src/middleware/ratelimit.ts-L26")).not.toBeNull();
+
     const badge = screen.getByRole("button", { name: "1 finding" });
     expect(badge).toBeInTheDocument();
     // Still a way into the card it names.
     fireEvent.click(badge);
     expect(onOpenFinding).toHaveBeenCalledWith("old");
-
-    fireEvent.click(screen.getByRole("button", { name: "Hide them" }));
-    expect(screen.queryByRole("button", { name: /finding/ })).not.toBeInTheDocument();
   });
 
   it("stays quiet when the current head has findings of its own", () => {
     renderViewer(REVIEWS);
-    expect(screen.queryByText(/not shown here/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/shown from a review of an/)).not.toBeInTheDocument();
   });
 
   it("ignores findings from a review of an older head", () => {

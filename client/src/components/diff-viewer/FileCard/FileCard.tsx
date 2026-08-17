@@ -7,7 +7,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
 import type { PrFile } from "@/lib/types";
-import { AUTO_EXPAND_MAX_LINES } from "../constants";
+import { AUTO_EXPAND_MAX_LINES, REVEAL_RETRY_DELAYS_MS } from "../constants";
 import { parsePatch, type Line } from "../helpers";
 import {
   buildThreads,
@@ -99,13 +99,23 @@ export function FileCard({
   React.useEffect(() => {
     if (!target) return;
     setOpen(true);
-    // One frame: React has to commit the expansion before the line has a node.
-    const frame = requestAnimationFrame(() => {
-      document
-        .getElementById(diffLineDomId(file.path, target.line))
-        ?.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-    return () => cancelAnimationFrame(frame);
+    // One frame so React can commit the expansion before the line has a node —
+    // then twice more, because sibling cards expanding alongside this one keep
+    // moving it until the page settles.
+    let frame = 0;
+    const aim = () => {
+      frame = requestAnimationFrame(() => {
+        document
+          .getElementById(diffLineDomId(file.path, target.line))
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    };
+    aim();
+    const timers = REVEAL_RETRY_DELAYS_MS.map((delay) => window.setTimeout(aim, delay));
+    return () => {
+      timers.forEach(window.clearTimeout);
+      cancelAnimationFrame(frame);
+    };
   }, [target?.line, target?.nonce, file.path]);
 
   const badgeSeverity = worstSeverity(marks);

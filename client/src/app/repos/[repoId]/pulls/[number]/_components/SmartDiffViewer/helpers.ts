@@ -147,6 +147,25 @@ export function buildStaleAnnotations(
 }
 
 /**
+ * Where to land when the stale marks are revealed: the first one, in the order
+ * the groups are read — core logic before wiring before boilerplate. Undefined
+ * when no stale finding lands on a file this diff still has.
+ */
+export function firstStaleMark(
+  groups: readonly SmartDiffGroup[],
+  findings: readonly FindingRecord[],
+): { path: string; line: number } | undefined {
+  const marks = buildStaleAnnotations(groups, findings);
+  for (const group of groups) {
+    for (const file of group.files) {
+      const first = marks.get(file.path)?.[0];
+      if (first) return { path: file.path, line: first.line };
+    }
+  }
+  return undefined;
+}
+
+/**
  * Attach each classified file to the patch text the PR detail already holds.
  *
  * `smart-diff` returns paths and counts, never patches — the diff text is

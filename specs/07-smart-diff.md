@@ -80,14 +80,18 @@ commit they describe. Silence here is the failure mode: a diff with no markers
 and no explanation reads as "this code is clean", which is the opposite of what
 a stale critical finding means.
 
-*Show them anyway* draws them **on the diff**, and this is the one place the
+They are drawn **on the diff by default**, because a reviewer opening Files
+changed wants to see where the problems are and an empty diff with a sentence
+under it is not that. *Hide them* puts them away. This is the one place the
 client anchors marks itself: the server reports `finding_lines` for the current
 head only, so a stale mark is placed at the finding's own `start_line`, from a
 revision this diff is not. It may land on an unrelated line, or on none. That is
 why they are off by default, why they render dashed and faded rather than as
-solid chips, and why their tooltip says which commit they came from. Files
-carrying revealed marks expand, since a mark inside a collapsed card is a mark
-nobody can see. Clicking one still opens its card in the Findings tab.
+solid chips, and why their tooltip says which commit they came from. Turning them back on scrolls to the first mark, and only then expands the files
+that carry them — on the default reveal that would be tens of thousands of
+rendered lines on a large PR, and the file-header badges already make the
+problem files findable. Clicking a mark still opens its card in the Findings
+tab.
 
 **Where the numbers come from.** The API is the source of truth for *which*
 lines are flagged (`finding_lines`), so the badge count always matches it. The
@@ -115,7 +119,7 @@ All in one file each, per the task spec:
 | A badge opens that finding's card in the Findings tab, same page | `SmartDiffViewer.test.tsx` (`onOpenFinding`), `FindingsPanel.test.tsx` (revealed, and unhidden by the filters) |
 | A flagged line with no loaded finding still scrolls in place | `SmartDiffViewer.test.tsx` (`scrollIntoView` on the line's DOM id) |
 | A diff whose findings are all stale says so | `SmartDiffViewer.test.tsx` (notice names the count and the commit) |
-| Stale findings can be drawn on the diff, marked as stale, and taken back | `SmartDiffViewer.test.tsx` (`Show them anyway` → badge → `onOpenFinding`; `Hide them`) |
+| Stale findings mark the diff by default, drawn as stale, and can be put away | `SmartDiffViewer.test.tsx` (badge present on load; `Hide them` / `Show them` → scroll to the first) |
 | No model call on view | `pnpm arch` rule `smart-diff-spends-nothing` |
 | Thresholds and patterns in constants | the two `constants.ts` above |
 

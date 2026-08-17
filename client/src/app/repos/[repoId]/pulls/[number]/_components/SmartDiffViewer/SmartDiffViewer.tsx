@@ -18,6 +18,7 @@ import { ApiError } from "@/lib/api";
 import {
   buildAnnotations,
   buildStaleAnnotations,
+  firstStaleMark,
   defaultOpenPredicate,
   findingsAtHead,
   groupFindingCount,
@@ -68,9 +69,13 @@ export function SmartDiffViewer({
   // and indistinguishable from "no findings" unless the viewer says which.
   const stale = React.useMemo(() => staleFindings(reviews, headSha), [reviews, headSha]);
   const showStaleNotice = annotations.size === 0 && stale.length > 0;
-  // Off by default, and asked for explicitly — these marks are anchored to line
-  // numbers from a revision this diff is not.
-  const [showStale, setShowStale] = React.useState(false);
+  // Shown by default when nothing else marks this diff. A reviewer opening
+  // Files changed wants to see where the problems are; an empty diff plus a
+  // sentence explaining why it is empty is technically honest and practically
+  // useless. They stay visibly marked as belonging to an older commit, and the
+  // reader can put them away — which is what `override` remembers.
+  const [override, setOverride] = React.useState<boolean | null>(null);
+  const showStale = override ?? showStaleNotice;
   const staleAnnotations = React.useMemo(
     () => (showStale ? buildStaleAnnotations(data?.groups ?? [], stale) : null),
     [showStale, data, stale],
@@ -133,7 +138,17 @@ export function SmartDiffViewer({
           <button
             type="button"
             style={s.staleAction}
-            onClick={() => setShowStale((v) => !v)}
+            onClick={() => {
+              const next = !showStale;
+              setOverride(next);
+              // Revealing without going there leaves the reader looking at the
+              // top of a 90-file diff for a mark that is 100 lines inside one
+              // card. Take them to the first one; the rest are found from there.
+              if (next) {
+                const first = firstStaleMark(data?.groups ?? [], stale);
+                if (first) revealLine(first.path, first.line);
+              }
+            }}
           >
             {t(showStale ? "staleNoticeHide" : "staleNoticeAction")}
           </button>
@@ -146,7 +161,13 @@ export function SmartDiffViewer({
           group={group}
           files={files}
           annotations={shownAnnotations}
-          openPaths={staleAnnotations ? new Set(staleAnnotations.keys()) : undefined}
+          // Only when the reader asked for them by hand. On the default reveal
+          // this would expand every file carrying a stale mark — on a 90-file
+          // PR that is tens of thousands of rendered lines, and the page grinds
+          // before it helps. The file badges are visible either way.
+          openPaths={
+            override === true && staleAnnotations ? new Set(staleAnnotations.keys()) : undefined
+          }
           commenting={commenting}
           reveal={reveal}
           onRevealLine={revealLine}
