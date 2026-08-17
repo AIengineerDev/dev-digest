@@ -32,7 +32,9 @@ which lines it flagged. Nothing joined them.
   served as `null`, for the brief pipeline that does have one.
 - Any change to how findings are produced, stored, or graded.
 - Per-user ordering preferences. The toggle is Smart / Original, in component
-  state, and is not persisted.
+  state, and is not persisted. It changes the **order only**: both viewers are
+  fed the same marks from one `useFindingMarks` in `DiffTab`, so switching to
+  Original cannot quietly un-flag a file.
 
 ## Contract changes
 
@@ -120,6 +122,8 @@ All in one file each, per the task spec:
 | A flagged line with no loaded finding still scrolls in place | `SmartDiffViewer.test.tsx` (`scrollIntoView` on the line's DOM id) |
 | A diff whose findings are all stale says so | `SmartDiffViewer.test.tsx` (notice names the count and the commit) |
 | Stale findings mark the diff by default, drawn as stale, and can be put away | `SmartDiffViewer.test.tsx` (badge present on load; `Hide them` / `Show them` → scroll to the first) |
+| Original order carries the same badges as Smart order | `SmartDiffViewer.test.tsx` (the flat viewer, fed from the same hook) |
+| A line two agents flagged shows the worse of them | `SmartDiffViewer.test.tsx` (`buildAnnotations` precedence) |
 | No model call on view | `pnpm arch` rule `smart-diff-spends-nothing` |
 | Thresholds and patterns in constants | the two `constants.ts` above |
 

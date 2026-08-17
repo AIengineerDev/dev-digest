@@ -14,7 +14,9 @@ vi.mock("@/lib/hooks", () => ({
   useSmartDiff: () => ({ ...smartDiffQuery.current, error: null, refetch: vi.fn() }),
 }));
 
+import { DiffViewer } from "@/components/diff-viewer";
 import { SmartDiffViewer } from "./SmartDiffViewer";
+import { useFindingMarks } from "../DiffTab/useFindingMarks";
 import { buildAnnotations, defaultOpenPredicate, findingsAtHead, withPatches } from "./helpers";
 
 afterEach(cleanup);
@@ -103,6 +105,31 @@ const REVIEWS: ReviewRecord[] = [
   },
 ];
 
+/** The pair as `DiffTab` composes them: one `useFindingMarks` feeding the
+ *  reviewer-ordered viewer, and — when `flat` — the plain one beside it. */
+function Harness({
+  reviews,
+  onOpenFinding,
+  flat = false,
+}: {
+  reviews: ReviewRecord[] | undefined;
+  onOpenFinding?: (findingId: string) => void;
+  flat?: boolean;
+}) {
+  const marks = useFindingMarks("pr1", reviews, HEAD);
+  return flat ? (
+    <DiffViewer
+      files={PR_FILES}
+      annotations={marks.annotations}
+      reveal={marks.reveal}
+      onRevealLine={marks.revealLine}
+      onOpenFinding={onOpenFinding}
+    />
+  ) : (
+    <SmartDiffViewer files={PR_FILES} marks={marks} onOpenFinding={onOpenFinding} />
+  );
+}
+
 function renderViewer(
   reviews: ReviewRecord[] | undefined,
   onOpenFinding?: (findingId: string) => void,
@@ -110,13 +137,18 @@ function renderViewer(
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
       <div data-theme="dark">
-        <SmartDiffViewer
-          prId="pr1"
-          files={PR_FILES}
-          reviews={reviews}
-          headSha={HEAD}
-          onOpenFinding={onOpenFinding}
-        />
+        <Harness reviews={reviews} onOpenFinding={onOpenFinding} />
+      </div>
+    </NextIntlClientProvider>,
+  );
+}
+
+/** The same findings, rendered by the Original-order viewer. */
+function renderFlat(reviews: ReviewRecord[] | undefined) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
+      <div data-theme="dark">
+        <Harness reviews={reviews} flat />
       </div>
     </NextIntlClientProvider>,
   );
@@ -212,6 +244,15 @@ describe("SmartDiffViewer", () => {
     expect(
       document.getElementById("diff-line-src/api/public/webhooks.ts-L61")!.scrollIntoView,
     ).toHaveBeenCalled();
+  });
+
+  it("badges the same files in Original order — the toggle is about order only", () => {
+    // Reported from the app: Smart order showed "1 finding" on a file and
+    // Original order showed nothing, because the flat viewer was rendered with
+    // no annotations at all. Switching how files are sorted cannot decide
+    // whether the reviewer is told they are flagged.
+    renderFlat(REVIEWS);
+    expect(screen.getByRole("button", { name: "2 findings" })).toBeInTheDocument();
   });
 
   it("renders a severity chip per flagged line, worst severity per line", () => {

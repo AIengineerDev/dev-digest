@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { SectionLabel, Button } from "@devdigest/ui";
 import { DiffViewer, type DiffCommentApi } from "@/components/diff-viewer";
 import { SmartDiffViewer } from "../SmartDiffViewer";
+import { useFindingMarks } from "./useFindingMarks";
 import { usePrComments, useCreatePrComment } from "@/lib/hooks/reviews";
 import { notify } from "@/lib/toast";
 import type { PrFile, ReviewRecord } from "@devdigest/shared";
@@ -42,6 +43,11 @@ export function DiffTab({
   const [smartOrder, setSmartOrder] = React.useState(true);
 
   const commentCount = comments?.length ?? 0;
+
+  // Owned here, not inside SmartDiffViewer: Smart and Original are the same
+  // findings in a different order, and the toggle must not decide whether the
+  // reviewer sees them at all.
+  const marks = useFindingMarks(prId, reviews, headSha);
 
   const commenting: DiffCommentApi = {
     comments: comments ?? [],
@@ -97,15 +103,20 @@ export function DiffTab({
       </SectionLabel>
       {smartOrder ? (
         <SmartDiffViewer
-          prId={prId}
           files={files}
-          reviews={reviews}
-          headSha={headSha}
+          marks={marks}
           commenting={commenting}
           onOpenFinding={onOpenFinding}
         />
       ) : (
-        <DiffViewer files={files} commenting={commenting} />
+        <DiffViewer
+          files={files}
+          commenting={commenting}
+          annotations={marks.annotations}
+          reveal={marks.reveal}
+          onRevealLine={marks.revealLine}
+          onOpenFinding={onOpenFinding}
+        />
       )}
     </section>
   );
