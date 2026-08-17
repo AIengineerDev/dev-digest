@@ -58,7 +58,8 @@ as stale would flag a repo's entire history. `client/src/app/repos/[repoId]/pull
 
 ### 2026-07-31 — Standalone packages instead of a workspace
 
-**What:** four packages, each with its own `package.json` and lockfile; sharing
+**What:** standalone packages (four at the time; `mcp/` made five on 2026-08-11),
+each with its own `package.json` and lockfile; sharing
 happens through tsconfig path aliases, not published modules. Each suite is
 gated by its own CI workflow with a path filter.
 **Why:** _rationale not recorded anywhere in the repo — fill this in._ Do not
@@ -93,6 +94,22 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-11** — "The latest review" is **one agent's opinion, not the PR's
+  review.** One trigger of "run all agents" writes one `reviews` row per agent,
+  so `ORDER BY created_at DESC LIMIT 1` returns whichever agent happened to
+  finish last — and an agent that found nothing blanks the result entirely.
+  Measured on the dev DB: PR #482 had 10 review rows, the newest 9 of them
+  empty, so a latest-row scope reported zero findings while the Findings tab
+  listed two. The correct scope is **every review at the PR's current
+  `head_sha`, counting a null `head_sha` as current** — the same tolerant rule
+  `isStaleRun` applies in the UI, and the only scope that agrees with what the
+  Findings tab renders. `GET /pulls/:id/smart-diff` uses it
+  (`server/src/modules/smart-diff/repository.ts:findingsAtHead`); the Pull
+  Requests list's FINDINGS column still uses latest-row and is wrong in the same
+  way for any multi-agent run — fix it when you are next in that file.
+  `server/src/modules/pulls/routes.ts:126` ·
+  `client/src/app/repos/[repoId]/pulls/[number]/_components/staleness.ts:14`
+
 - **2026-08-10** — The 2026-07-31 decision below says "each suite is gated by
   its own CI workflow with a path filter". **There is no CI in this repository**
   — no `.github/` directory exists on disk and `git ls-files` tracks no workflow
@@ -102,6 +119,14 @@ _None yet._
   11). Two consequences: do not write a skill, hook, or doc that says "CI will
   catch this", and when adding the workflows later, the path filters the old
   entry describes still have to be invented, not restored. `server/package.json:11`
+
+  **Correction 2026-08-14:** this stopped holding when `main` gained
+  `.github/`. CI exists and runs — five tracked workflows (`client.yml`,
+  `mcp.yml`, `reviewer-core.yml`, `server-unit.yml`, `server-integration.yml`)
+  — and `gh pr checks` returns real results per PR. The entry was written on a
+  branch that predated them. The rest of it still stands: run the local gates
+  yourself rather than assuming CI catches it, because the workflows are
+  path-filtered and a change outside a filter is never checked.
 
 - **2026-08-10** — Before authoring a skill in `.claude/skills/`, read the
   existing ones — "React/frontend best practices" was requested and would have
@@ -149,6 +174,47 @@ _None yet._
   request. `reviewer-core/src/review/run.ts:216`
 
 ## Tool & Library Notes
+
+- **2026-08-17** — An entrypoint **cannot catch a throw from a module it imports
+  statically**: static imports are evaluated before the entry module's own body
+  runs, so a `try` there never sees it and the operator gets a stack trace
+  instead of the message. This is why `mcp/src/index.ts` calls `loadConfig()`
+  first and then `await import('./server.js')` — the config error surfaces as a
+  value inside `main()`, one line naming the bad variable and the fix, while
+  `constants.ts` (which validates again at its own module load) stays the single
+  place the parsed values live. Any fail-fast startup validation in a
+  path-aliased, no-emit package needs this shape; a top-level `try` around the
+  import does nothing. `mcp/src/index.ts:17`
+
+- **2026-08-11** — A package whose tsconfig `paths` alias `@devdigest/shared` to
+  `../server/src/vendor/shared` **cannot emit JS**, even when every import from it
+  is `import type`. Path-mapped `.ts` files join the program, tsc emits them too,
+  and the common root shifts: `outDir: "dist"` produced `dist/mcp/src/index.js`
+  *and* `dist/server/src/vendor/shared/**`, breaking any `bin` path. This is why
+  `reviewer-core` and `mcp` are consumed as source and their `build` is a
+  typecheck. If an aliased package needs an executable, register tsx's ESM loader
+  in a `.mjs` shim and import the `.ts` entry — one process, no build step.
+  `mcp/bin/devdigest-mcp.mjs:1`
+
+- **2026-08-11** — With `@modelcontextprotocol/server` v2, `ctx.mcpReq.signal`
+  really does abort when a client cancels `callTool({ signal })` mid-request —
+  verified against the in-process `StreamableHTTPClientTransport` +
+  `createMcpHandler` test harness (`mcp/test/tools.test.ts`'s `connect()`),
+  which bridges the two over a synthetic `fetch`, not a real socket. Same for
+  progress: the client only stamps `_meta.progressToken` on the request when
+  `callTool` is given an `onprogress` callback, so a handler gating on
+  `ctx.mcpReq._meta?.progressToken !== undefined` sends zero notifications to a
+  caller that never asked — no separate opt-out needed.
+  `mcp/src/tools/run-agent.ts:78`
+
+- **2026-08-11** — With `@modelcontextprotocol/server` v2, type a tool handler's
+  return as the SDK's exported `CallToolResult`, never as your own `interface`.
+  The SDK's result union carries an index signature and an `interface` is never
+  assignable to one, so tsc reports the failure against whichever union member it
+  tried last — `Property 'resultType' is missing … but required in type
+  'InputRequiredResult'`, which names a feature the code does not use and sends
+  you looking in the wrong place. A `type` alias works; an `interface` does not.
+  `mcp/src/tools/shared.ts:14`
 
 - **2026-08-09** — The "edit each vendored copy by hand" advice below stopped
   holding: `./scripts/check-shared.sh` now diffs the two `@devdigest/shared`

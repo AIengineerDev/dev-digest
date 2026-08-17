@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "moduleDetection": "force",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": false,
+    "declaration": false,
+    "sourceMap": true,
+    "composite": false,
+    "noEmit": true,
+    "types": ["node"],
+    "lib": ["ES2022"],
+    // `@devdigest/shared` is imported with `import type` only. The alias points
+    // at the canonical server copy (same arrangement as reviewer-core), which is
+    // also why this package never emits: tsc would pull those sources into the
+    // program and write them under dist/ alongside our own. See bin/.
+    "paths": {
+      "@devdigest/shared": ["../server/src/vendor/shared/index.ts"],
+      "@devdigest/shared/*": ["../server/src/vendor/shared/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

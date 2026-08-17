@@ -92,13 +92,13 @@ _None yet._
 - **2026-08-13** — `wait --text` matches the **rendered** text, not
   `textContent`, so a CSS `text-transform` defeats it. `SectionLabel` uppercases
   its children, which means every card title in the app is asserted as
-  `"INTENT"` / `"FILES CHANGED"` and never as the string the JSX actually
-  contains. Asserting `"Intent"` fails the whole flow while the card is on
-  screen and correct — the failure screenshot in `test-results/NN-*-fail.png` is
-  what proves that, so read it before assuming the UI is broken. Match the
-  casing you SEE, and prefer a body string over a `SectionLabel` title when you
-  have one.
-  `specs/09-pr-smart-diff.flow.json:13`
+  `"BLAST RADIUS"` / `"PR BRIEF"` / `"INTENT"` / `"FILES CHANGED"` and never as
+  the string the JSX actually contains. Asserting `"Blast radius"` — or
+  `"Intent"` — failed the whole flow while the card was on screen and correct;
+  the failure screenshot in `test-results/NN-*-fail.png` is what proves that, so
+  read it before assuming the UI is broken. Match the casing you SEE, and prefer
+  a body string over a `SectionLabel` title when you have one.
+  `specs/10-pr-blast-radius.flow.json:10` · `specs/09-pr-smart-diff.flow.json:13`
 
 - **2026-08-14** — Same trap, second form: **a CSS-truncated string is not
   matchable either.** The PR list ellipsises long titles, so
@@ -126,6 +126,7 @@ _None yet._
   (buttons, checkboxes) — it ignores non-interactive elements. Add `--exact`
   when the accessible name is a substring of another visible label on the same
   page (e.g. a "Skills" tab button vs. a "Skills Lab" breadcrumb crumb).
+
 - **2026-08-10** — After a client-side navigation click (`router.push`), a
   `wait --text` on content that also exists on the page you're navigating
   *from* (e.g. an agent's name, present in both the list card and the detail

@@ -1,0 +1,15 @@
+{
+  "name": "PR Overview shows the Blast Radius card",
+  "description": "From PR #482, confirm the Overview tab renders the Blast Radius card: the symbols/callers/endpoints counts and the summary line. The seeded demo repo acme/payments-api has no clone, so repo-intel has nothing indexed and the card takes its DEGRADED path — asserting that text is the point: the card must name that state rather than showing a silent row of zeros, which would read as a measurement. Read-only seeded data; the blast route reads the code index and makes no model call. Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    { "cmd": ["open", "{BASE}/"], "label": "load the app root" },
+    { "cmd": ["wait", "--url", "/pulls"], "label": "land on the PR list" },
+    { "cmd": ["find", "text", "#482", "click"], "label": "open the PR row (by number — the title is CSS-truncated in the list)" },
+    { "cmd": ["wait", "--url", "/pulls/482"], "label": "navigate to the PR detail route" },
+    { "cmd": ["wait", "--load", "networkidle"], "label": "PR detail data settles" },
+    { "cmd": ["wait", "--text", "BLAST RADIUS"], "label": "the Blast Radius card renders on Overview (SectionLabel uppercases)" },
+    { "cmd": ["wait", "--text", "symbols"], "label": "the symbol count is present" },
+    { "cmd": ["wait", "--text", "endpoints"], "label": "the endpoint count is present" },
+    { "cmd": ["wait", "--text", "a floor, not a finding"], "label": "an unindexed repo is named as such, not shown as zero impact" }
+  ]
+}

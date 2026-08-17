@@ -18,6 +18,7 @@ import type {
   SpecFile,
   IndexStatus,
   SmartDiff,
+  BlastRadius,
 } from "../types";
 
 // ---- Settings (F1: GET/PUT /settings, POST /settings/test-connection) ----
@@ -132,6 +133,20 @@ export function useSmartDiff(prId: string | null | undefined) {
   return useQuery({
     queryKey: ["smart-diff", prId],
     queryFn: () => api.get<SmartDiff>(`/pulls/${prId}/smart-diff`),
+    enabled: !!prId,
+  });
+}
+
+/**
+ * Blast radius — which symbols a PR changes, who calls them, what sits
+ * downstream. Served from the persistent code index, so it costs no model call
+ * and, like Smart Diff, is never polled: it changes when the PR's files change
+ * or the repo is re-indexed, not on a timer.
+ */
+export function useBlastRadius(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["blast", prId],
+    queryFn: () => api.get<BlastRadius>(`/pulls/${prId}/blast`),
     enabled: !!prId,
   });
 }

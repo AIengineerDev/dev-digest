@@ -126,7 +126,19 @@ reference in every route.
 
 ## What Doesn't Work
 
-_None yet._
+- **2026-08-13** — **The seeded demo repo cannot exercise `repo-intel` at all**,
+  so no amount of `pnpm test` verifies a feature built on it. `acme/payments-api`
+  is inserted by `db/seed.ts` with no `clone_path` and is never cloned, and every
+  facade read starts with `getRepoBasics(repoId)` → no clone → the degraded
+  empty result. The seeded PR therefore returns "index unavailable" from
+  `GET /pulls/:id/blast` forever, and `e2e` flow `09` can only assert the
+  *degraded* copy. 283 green server tests said nothing about whether blast radius
+  worked; the first real answer came from `curl`-ing an imported repo that had
+  actually been indexed (`AIengineerDev/dev-digest`, `repo_index_state` populated)
+  — which is also where the flat-slice caller-cap bug below surfaced. Verify any
+  repo-intel-backed feature against a real imported+indexed repo before calling
+  it done, and never read a passing suite as coverage of the indexed path.
+  `src/db/seed.ts` · `src/modules/repo-intel/service.ts:220`
 
 ## Codebase Patterns
 
@@ -294,6 +306,21 @@ _None yet._
   decides how long a genuine hang takes to report. When a wait helper feeds an assertion, make its timeout loud:
   a silent return costs a full CI round-trip to diagnose.
   `test/helpers/runs.ts:14`
+
+- **2026-08-13** — A cap named `MAX_<THING>_PER_<GROUP>` applied with a flat
+  `.slice(0, N)` is wrong in a way no small test catches. `tryPersistentBlast`
+  ended with `callers.slice(0, MAX_CALLERS_PER_SYMBOL)` over the whole
+  rank-sorted list, so a PR touching more symbols than the cap spent the entire
+  budget on the first few and **every other changed symbol reported zero
+  callers** — which reads as "nothing depends on this", the opposite of the
+  truth. Invisible below the cap, and no fixture in the suite was that big. It
+  surfaced only against a real indexed repo: two unrelated PRs (85 and 51
+  changed symbols) both reported *exactly* 20 callers. After the fix, 54 and 21.
+  The grouping is now `capCallersPerSymbol`, a named helper with the trap in its
+  doc comment, and `test/repo-intel-caller-cap.test.ts` fails if it reverts.
+  When a per-group cap exists, check the granularity it is actually applied at,
+  and size at least one fixture above it.
+  `src/modules/repo-intel/helpers.ts:22` · `src/modules/repo-intel/service.ts:378`
 
 - **2026-08-09** — `GET /skills` is the **first** route in the server with a
   `querystring` schema (`grep -rn querystring src` returned nothing before it),

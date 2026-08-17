@@ -67,6 +67,8 @@ flowchart TB
     repos["repos<br/>/repos"]
     pulls["pulls<br/>/pulls/:id · /pulls/:id/comments"]
     polling["polling<br/>/repos/:id/poll"]
+    smartDiff["smart-diff<br/>/pulls/:id/smart-diff — risk-ordered files, no model call"]
+    blast["blast<br/>/pulls/:id/blast — impact map from the code index, no model call"]
   end
   subgraph Review["Review & runs"]
     reviews["reviews<br/>/pulls/:id/review · /reviews · /findings/:id/(accept|dismiss)<br/>/runs/:id/(events|trace)"]

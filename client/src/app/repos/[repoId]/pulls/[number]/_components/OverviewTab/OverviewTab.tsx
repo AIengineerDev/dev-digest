@@ -4,6 +4,7 @@ import React from "react";
 import { SectionLabel } from "@devdigest/ui";
 import type { PrIntentRecord } from "@devdigest/shared";
 import { IntentCard } from "../IntentCard";
+import { BlastRadiusCard } from "../BlastRadiusCard";
 import { s } from "./styles";
 
 interface OverviewTabProps {
@@ -19,6 +20,7 @@ export function OverviewTab({ prId, prBody, intent, intentLoading }: OverviewTab
   return (
     <>
       {prId && <IntentCard prId={prId} intent={intent} loading={intentLoading} />}
+      {prId && <BlastRadiusCard prId={prId} />}
       {prBody && (
         <section>
           <SectionLabel icon="MessageSquare">Description</SectionLabel>

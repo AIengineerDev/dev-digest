@@ -17,6 +17,7 @@ export {
   usePulls,
   usePullDetail,
   useSmartDiff,
+  useBlastRadius,
   useContextFiles,
   useReindexContext,
 } from "./core";

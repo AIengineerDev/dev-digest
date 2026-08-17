@@ -34,6 +34,7 @@ Drizzle ORM + Postgres (pgvector) · Zod · Vitest · agent-browser (e2e)
 | Client          | `cd client && pnpm dev \| build \| typecheck \| test`      |
 | Engine          | `cd reviewer-core && npm test \| npm run typecheck`        |
 | E2E (hermetic)  | `cd e2e && npm run e2e:hermetic`                            |
+| MCP server      | `cd mcp && npm test \| npm run typecheck`                   |
 
 Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 
@@ -45,6 +46,7 @@ Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 | `client/`                   | Next.js studio, App Router                                |
 | `reviewer-core/`            | Pure engine: diff + repo map → prompt → LLM → findings    |
 | `e2e/`                      | Deterministic browser flows, no LLM                       |
+| `mcp/`                      | `devdigest-mcp` — the reviewers as MCP tools over stdio    |
 | `server/src/vendor/shared/` | `@devdigest/shared` — Zod contracts for every package     |
 | `client/src/vendor/ui/`     | `@devdigest/ui` — vendored UI primitives                  |
 
@@ -54,11 +56,13 @@ Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
   package. Edit `AGENTS.md` — never replace the symlink with a copy, or the two
   will drift.
 - **Not a monorepo workspace.** Each package has its own `package.json` and its
-  own lockfile. `server/` + `client/` use **pnpm**; `reviewer-core/` + `e2e/` use
-  **npm**. Never run the wrong package manager in a package.
+  own lockfile. `server/` + `client/` use **pnpm**; `reviewer-core/`, `e2e/` and
+  `mcp/` use **npm**. Never run the wrong package manager in a package.
 - Cross-package imports resolve through **tsconfig path aliases**, not published
-  modules. `reviewer-core` is consumed as TypeScript **source** and never emits
-  JS — its `build` is a typecheck.
+  modules. `reviewer-core` and `mcp` are consumed as TypeScript **source** and
+  never emit JS — their `build` is a typecheck. A package that path-aliases into
+  `server/src/vendor/shared` **cannot** emit: tsc pulls those sources into the
+  program and writes them under its `dist/` too.
 - Contracts change in `@devdigest/shared` **first**, then in consumers. The same
   Zod schema drives request validation and response serialization.
 - Server tests split by filename: `*.it.test.ts` are DB-backed (testcontainers
@@ -103,6 +107,8 @@ Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 - Read `reviewer-core/README.md` when touching prompt assembly, structured
   output, or the grounding gate.
 - Read `e2e/README.md` before writing or debugging a browser flow.
+- Read `mcp/AGENTS.md` before adding or changing an MCP tool — the token budget
+  it has to stay under is not inferable from the code.
 - Read `INSIGHTS.md` at repo root for decisions that span more than one package.
 - Use the `engineering-insights` skill to read or record an insight — it maps a
   touched path to the right `INSIGHTS.md` and holds the format and quality bar.

@@ -107,4 +107,5 @@ a CI artifact by `.github/workflows/e2e-web.yml`).
 | `07-settings` | `/settings/api-keys` + `/settings/models` → section titles render |
 | `08-skills` | Create a skill in the Skills Lab, attach it to the seeded `Test Quality Reviewer` agent — confirmed by `aria-checked` flipping on its row checkbox. Real writes (`POST /skills`, agent skill-link save), no LLM call. Does **not** run a review — see `INSIGHTS.md`. |
 | `09-pr-smart-diff` | PR #482 → Files changed → reviewer-ordered groups, lock file collapsed in boilerplate, Smart/Original toggle, then the finding badge click-through: `?tab=findings&finding=…` and the named card open |
-| `10-pr-intent` | PR #482 → Overview → the Intent card: band badge, derived summary, both scope columns, Recalculate offered. Intent is **seeded**, never derived here — deriving costs a model call |
+| `10-pr-blast-radius` | PR #482 → Overview → Blast Radius card, counts + the degraded-index summary |
+| `11-pr-intent` | PR #482 → Overview → the Intent card: band badge, derived summary, both scope columns, Recalculate offered. Intent is **seeded**, never derived here — deriving costs a model call |
