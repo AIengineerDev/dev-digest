@@ -15,6 +15,8 @@ import {
   Settings,
   Repo,
   PrDetail,
+  Brief,
+  BriefRecord,
 } from '@devdigest/shared';
 
 /**
@@ -213,5 +215,56 @@ describe('platform DTOs', () => {
         commits: [],
       }),
     ).not.toThrow();
+  });
+
+  it('Brief / BriefRecord (specs/10-pr-brief.md) — full and degraded', () => {
+    const fullBrief = {
+      what: 'Adds a cached PR brief card.',
+      why: 'Reviewers open a PR with no read-first summary.',
+      risk_level: 'medium',
+      risks: [
+        {
+          kind: 'concurrency',
+          title: 'Two writers',
+          explanation: 'Two POSTs could race.',
+          severity: 'medium',
+          file_refs: ['src/modules/brief/service.ts'],
+        },
+      ],
+      review_focus: [{ kind: 'file', ref: 'src/modules/brief/service.ts', reason: 'New write path', line: 12 }],
+    };
+    expect(() => Brief.parse(fullBrief)).not.toThrow();
+
+    const fullRecord = {
+      ...fullBrief,
+      pr_id: 'pr1',
+      head_sha: 'abc123',
+      intent_fingerprint: 'fp1',
+      repo_indexed_sha: 'sha1',
+      provider: 'anthropic',
+      model: 'claude-haiku-4-5',
+      prompt_version: 1,
+      tokens_in: 4200,
+      tokens_out: 380,
+      cost_usd: 0.01,
+      budget_tokens: 8000,
+      dropped_inputs: [],
+      dropped_refs: 0,
+      degraded: false,
+      error: null,
+      generated_at: '2026-08-18T00:00:00.000Z',
+    };
+    expect(() => BriefRecord.parse(fullRecord)).not.toThrow();
+
+    const degradedRecord = {
+      ...fullRecord,
+      intent_fingerprint: null,
+      repo_indexed_sha: null,
+      cost_usd: null,
+      degraded: true,
+      error: 'llm_call_failed',
+      generated_at: null,
+    };
+    expect(() => BriefRecord.parse(degradedRecord)).not.toThrow();
   });
 });

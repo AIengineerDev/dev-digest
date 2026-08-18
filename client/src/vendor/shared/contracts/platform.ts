@@ -61,8 +61,10 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
     id: 'risk_brief',
     label: 'Risk Brief',
     description: 'Assesses merge risks for a pull request.',
-    defaultProvider: 'openai',
-    defaultModel: 'gpt-4.1',
+    // Cheap pre-pass by design (specs/10-pr-brief.md Q7) — the previous
+    // default predated the pricing work, same reasoning as `review_intent`.
+    defaultProvider: 'anthropic',
+    defaultModel: 'claude-haiku-4-5',
   },
   {
     id: 'conformance',

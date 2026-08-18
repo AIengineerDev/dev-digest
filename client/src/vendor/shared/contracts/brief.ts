@@ -174,3 +174,53 @@ export const PrBrief = z.object({
   history: PrHistory,
 });
 export type PrBrief = z.infer<typeof PrBrief>;
+
+// ---- PR Brief (specs/10-pr-brief.md) ----
+/** One "read this first" entry the model points a reviewer at. */
+export const ReviewFocusItem = z.object({
+  kind: z.enum(['file', 'endpoint']),
+  ref: z.string(),
+  reason: z.string(),
+  line: z.number().int().nullish(),
+});
+export type ReviewFocusItem = z.infer<typeof ReviewFocusItem>;
+
+/** The model's structured-output schema for one PR brief generation (R11). */
+export const Brief = z.object({
+  what: z.string(),
+  why: z.string(),
+  risk_level: RiskSeverity,
+  risks: z.array(Risk),
+  review_focus: z.array(ReviewFocusItem),
+});
+export type Brief = z.infer<typeof Brief>;
+
+/**
+ * The wire and storage shape: `Brief` plus the R6 cache-state key and the R10
+ * trace fields. `intent_fingerprint`/`repo_indexed_sha` are nullable — a PR
+ * with no derived intent, or a repo never indexed, is a routine state, not an
+ * absent one, and neither is stored as `''` (see `server/INSIGHTS.md`, the
+ * `pr_brief_records` primary-key correction). `cost_usd`, `error` and
+ * `generated_at` are also nullable so a degraded record (`degraded: true`,
+ * `cost_usd: null`, `generated_at: null`, `error` non-null) parses like any
+ * other row.
+ */
+export const BriefRecord = Brief.extend({
+  pr_id: z.string(),
+  head_sha: z.string(),
+  intent_fingerprint: z.string().nullable(),
+  repo_indexed_sha: z.string().nullable(),
+  provider: z.string(),
+  model: z.string(),
+  prompt_version: z.number().int(),
+  tokens_in: z.number().int(),
+  tokens_out: z.number().int(),
+  cost_usd: z.number().nullable(),
+  budget_tokens: z.number().int(),
+  dropped_inputs: z.array(z.string()),
+  dropped_refs: z.number().int(),
+  degraded: z.boolean(),
+  error: z.string().nullable(),
+  generated_at: z.string().nullable(),
+});
+export type BriefRecord = z.infer<typeof BriefRecord>;
