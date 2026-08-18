@@ -364,4 +364,35 @@ d('POST/GET /pulls/:id/brief (Testcontainers pg)', () => {
     const res = await postBrief(pg.handle.db, 'not-a-uuid');
     expect(res.statusCode).toBe(422);
   });
+
+  // A18. Two things make this the one test in the file that cannot use the
+  // helpers. First, the limiter counts per app instance, and postBrief() builds
+  // a fresh app per call, so it would never accumulate. Second — and this is not
+  // in the plan — `buildApp` registers @fastify/rate-limit only when
+  // `nodeEnv !== 'test'` (`src/app.ts:95`), deliberately, so integration suites
+  // can hammer endpoints through inject(). Under the file's own `config()` the
+  // route's `{ max: 10 }` is inert and eleven POSTs all return 200. So this test
+  // builds its app with NODE_ENV=development: it is the only configuration in
+  // which A18 is falsifiable at all.
+  it('A18 — refuses the 11th POST in a minute with 429', async () => {
+    const { pr } = await setupPr(pg.handle.db, workspaceId);
+    const app = await buildApp({
+      config: loadConfig({ ...process.env, NODE_ENV: 'development' } as NodeJS.ProcessEnv),
+      db: pg.handle.db,
+      overrides: {
+        github: new MockGitHubClient({ pulls: [] }),
+        repoIntel: stubIntel(),
+        llm: { anthropic: new MockLLMProvider('anthropic', { structured: briefFixture() }) },
+      },
+    });
+
+    const codes: number[] = [];
+    for (let i = 0; i < 11; i += 1) {
+      const res = await app.inject({ method: 'POST', url: `/pulls/${pr.id}/brief`, payload: {} });
+      codes.push(res.statusCode);
+    }
+
+    expect(codes.slice(0, 10).every((c) => c === 200)).toBe(true);
+    expect(codes[10]).toBe(429);
+  });
 });
