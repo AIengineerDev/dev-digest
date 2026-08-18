@@ -20,6 +20,26 @@ You start with a fresh context: you did not see the work being done, and that is
 the point. You evaluate the result on its own terms, not the reasoning that
 produced it.
 
+### Which document you were given decides what you are checking
+
+You run **twice** in this repo's workflow, against two different documents, and
+conflating them defeats the second pass:
+
+| Pass | Document | Runs | Catches |
+| --- | --- | --- | --- |
+| 1 — completeness | `plans/NN-*.plan.md` | immediately after `implementer`, before the reviewers and before `test-writer` | a phase or track silently skipped, a gate never run |
+| 2 — acceptance | `specs/NN-*.md` | last, after tests exist | **a requirement the plan itself dropped** — pass 1 can never see this, because it checks the plan, and the plan is already missing it |
+
+If you were given a **spec**, walk its `## Requirements` table by id (`R1`, `R2`,
+…) as well as its acceptance criteria, and say for each requirement whether some
+acceptance criterion covers it. A requirement with no criterion tracing to it is
+`not checkable here` **and** worth naming: it means the spec's own traceability
+does not close.
+
+On pass 1, an acceptance criterion whose `Verify by` lane names a test that does
+not exist yet is `not checkable here`, not `not met` — the tests come later by
+design. That list is the brief `test-writer` works from next, so make it precise.
+
 1. `Read` the plan or spec in full.
 2. Extract the checklist — every stated item, quoted, before you check anything.
 3. Establish what you are checking it against: a branch, a diff, or paths.
@@ -34,8 +54,9 @@ Look in this order, and say which shape you found:
 | `## Acceptance criteria` — numbered claims | root `specs/NN-feature-name.md` (cross-package), `<package>/specs/` (single-package) |
 | A numbered item table with a `State` column | e.g. `specs/01-architecture-cleanup.md` |
 | A `## Shipped — what landed` section on a closed spec | e.g. `specs/03-conventions.md` |
-| A planner plan's **Done when** line, per phase | the plan file you were given |
-| A planner plan's `## Verification matrix` | same file — each row is a checkable item |
+| A plan's **Done when** line, per phase or per track | `plans/NN-feature-name.plan.md` — the plan file you were given |
+| A plan's `## Verification matrix` | same file — each row is a checkable item |
+| A plan's `## Tracks` → **Owns exclusively** | same file — a track that wrote outside its own file set is a finding |
 | `## Scope — Out` | same file — checked as a **negative** item |
 
 Two traps:
@@ -74,7 +95,7 @@ Read-only, with the right package manager:
 | Package | Commands |
 | --- | --- |
 | `server/` | `pnpm typecheck` · `pnpm test` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` · `pnpm exec vitest run .it.test` · `pnpm arch` |
-| `client/` | `pnpm typecheck` · `pnpm test` · `pnpm build` |
+| `client/` | `pnpm typecheck` · `pnpm test` · `pnpm lint` · `pnpm build` |
 | `reviewer-core/` | `npm test` · `npm run typecheck` |
 | `e2e/` | `npm run e2e:hermetic` |
 | root | `./scripts/check-shared.sh` — **bare form only** |
@@ -88,8 +109,14 @@ state change.
 not a task for you. You do not fix it, and you do not re-run it differently until
 it passes.
 
-Note there is **no CI** in this repository — `.github/` does not exist — so the
-gates you run are the only evidence that exists. Never write "CI will catch it".
+Two baselines change what "green" means, and reporting either as a failure is a
+wrong verdict: `pnpm arch` runs `--ignore-known` against an 11-entry baseline, so
+green means **no new violations**; `client`'s `pnpm lint` exits 0 with **42
+pre-existing warnings** (measured 2026-08-17), so green means **no new errors**.
+
+CI exists — five path-filtered workflows under `.github/workflows/` — but a
+change outside a filter is never checked by it. The gates you run are still the
+evidence; never write "CI will catch it".
 
 ## Report format
 

@@ -20,6 +20,12 @@ Then, in this order:
 1. **`Read` the plan in full** before touching anything. You start with a fresh
    context — nothing from the conversation that produced the plan reaches you, so
    the file is all you have.
+   **If the plan has a `## Tracks` section, you own exactly one track** and the
+   task names it. Execute only that track's phases, and write only inside its
+   **Owns exclusively** file list — other tracks are running concurrently and a
+   file outside your list is somebody else's working tree. If the task did not
+   name your track, ask which one and stop. Read the whole plan anyway: the
+   pre-fan-out work and the synchronisation points are what your track depends on.
 2. **Invoke the `engineering-insights` skill** to recall what the module you are
    about to change already learned. This is a repo rule, not a nicety.
 3. **Read the sources the plan cites** at the `path:line` it gives. If a citation
@@ -37,29 +43,76 @@ For each phase, in order:
    repository, adapter, container wiring), `frontend-ui-architecture` before
    creating any file under `client/src`. These decide placement and import
    direction; applying them after the fact means rewriting.
+   **Invoke each skill once per run, on the first phase that needs it.** A skill
+   stays in your context after it loads, so re-invoking it on phase 4 buys
+   nothing and re-pays its full text. If the plan already records the placement
+   decision for a phase, you do not need the skill for that phase at all — read
+   the plan's decision and build it.
 2. Write the code.
 3. Write the tests the phase calls for, in the right lane (below).
-4. **Run the phase's gate** and read the output. Green means green; a phase whose
-   gate is red is not finished, no matter how much of it is written.
+4. **Run the phase's gate** — the *fast* form (below) — and read the output.
+   Green means green; a phase whose gate is red is not finished, no matter how
+   much of it is written.
 5. Only then move to the next phase.
 
 Never batch every phase and run the gates once at the end. The point of phases is
 that a failure is attributable.
+
+## Two gate speeds, and when each one runs
+
+A phase gate and a final gate are not the same command. Running the full suite on
+every phase drags Postgres through Docker and prints every one of the server's 42
+test files each time — the cost is real and it buys nothing a scoped run does not.
+
+**Per phase — fast, scoped, quiet:**
+
+| Package | Command |
+| --- | --- |
+| `server/` | `pnpm exec vitest run --reporter=dot --exclude '**/*.it.test.ts' test/<topic> 2>&1 \| tail -n 30` |
+| `client/` | `pnpm exec vitest run --reporter=dot <path> 2>&1 \| tail -n 30` |
+| `reviewer-core/` | `npm test -- --reporter=dot <path> 2>&1 \| tail -n 30` |
+| any | `pnpm typecheck` — already quiet when green |
+
+`--reporter=dot` is available on the `vitest ^2.1.8` all three packages pin. Pipe
+through `tail` because what you need is the summary line, not the roster.
+
+**Once, at the end of the run — the real gates**, unscoped and complete:
+
+`cd server && pnpm test` (this includes the 15 `*.it.test.ts` files and needs
+Docker) · `pnpm arch` · `cd client && pnpm test && pnpm lint && pnpm build` ·
+`./scripts/check-shared.sh` if contracts changed · plus every command the plan's
+verification matrix names.
+
+Report **the final gates** in `## Gates run`. A phase gate that went red and was
+fixed is a line in the phase's row, not a gate result.
+
+If a phase gate is green and the final full run is red, say so plainly — that
+difference is information, usually an integration test the scoped run never
+touched.
 
 ## Verification — the commands that exist
 
 | Package | Manager | Commands |
 | --- | --- | --- |
 | `server/` | **pnpm** | `pnpm typecheck` · `pnpm test` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` · `pnpm exec vitest run .it.test` · `pnpm arch` · `pnpm db:generate` → `pnpm db:migrate` |
-| `client/` | **pnpm** | `pnpm typecheck` · `pnpm test` · `pnpm build` |
+| `client/` | **pnpm** | `pnpm typecheck` · `pnpm test` · `pnpm lint` · `pnpm build` |
 | `reviewer-core/` | **npm** | `npm test` · `npm run typecheck` |
 | `e2e/` | **npm** | `npm run e2e:hermetic` |
 | root | — | `./scripts/check-shared.sh` |
 
 Facts about these that change how you work:
 
-- **There is no CI in this repository.** `.github/` does not exist. Nothing will
-  catch later what you skip now, and no failing gate is "the pipeline's problem".
+- **CI exists but is path-filtered.** `.github/` holds five workflows
+  (`client`, `mcp`, `reviewer-core`, `server-unit`, `server-integration`), each
+  scoped to its own paths — so a change outside a filter is never checked by
+  anything except you. Never treat a failing gate as "the pipeline's problem",
+  and never skip a local gate because CI exists.
+- **`client` has a `lint` script** (`eslint src`) that no gate table used to
+  name. It is part of the final client gate, and it has a **warning baseline**:
+  measured 2026-08-17 it exits 0 with **0 errors and 42 warnings** (mostly
+  `react-hooks/set-state-in-effect`). Green means **no new errors**, exactly like
+  `pnpm arch` means no new violations. Do not fix the 42 — they are pre-existing
+  and not your plan's scope. Do not run `--fix`.
 - **Server tests split by filename.** `*.it.test.ts` may use the real Postgres via
   testcontainers (they self-skip when Docker is unavailable); every other server
   test must be hermetic — no network, no real clock, no filesystem, no DB.

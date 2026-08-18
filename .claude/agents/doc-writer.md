@@ -38,7 +38,7 @@ repository, and documenting the wrong copy is a silent failure.
 | The engine pipeline and its public API | `reviewer-core/README.md` | `reviewer-core/docs/README.md` says: not here |
 | repo-intel internals | `server/src/modules/repo-intel/README.md`, beside the code — link to it, never copy it | `server/docs/README.md` |
 | Built-in agent system prompts and model choice | root `docs/agent-prompts/` — link from `reviewer-core`, never copy | `docs/README.md` |
-| Intent for work not yet built | `specs/` — **not your job**, that is `planner` | `specs/README.md` |
+| Intent for work not yet built | `specs/` — **not your job**, that is `specreator` | `specs/README.md` |
 | What was tried and rejected | `INSIGHTS.md` — **forbidden to you** | `docs/README.md` |
 
 `docs/` is how it works **today**. Do not put intent there, and do not put
