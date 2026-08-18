@@ -61,6 +61,8 @@ export {
   useRunEvents,
   usePrIntent,
   useDeriveIntent,
+  useBrief,
+  useGenerateBrief,
 } from "./reviews";
 export type { ActiveRun, CreateCommentInput, RunReviewInput } from "./reviews";
 

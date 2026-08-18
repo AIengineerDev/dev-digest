@@ -15,5 +15,35 @@
     "blame": "blame",
     "noHistory": "No history available for this line.",
     "noCommits": "No commits found for this line."
-  }
+  },
+
+  "title": "Brief",
+  "generate": "Generate brief",
+  "generating": "Generating…",
+  "generateFailed": "Couldn't generate the brief — {error}",
+  "degraded": "Not generated — {error}",
+  "retry": "Retry",
+  "regenerate": "Regenerate",
+  "regenerateDisabledReason": "Nothing has changed since this was generated.",
+  "loadErrorTitle": "Couldn't load the brief",
+  "loadErrorBody": "The engine returned an error.",
+  "riskLevel": {
+    "high": "High risk",
+    "medium": "Medium risk",
+    "low": "Low risk"
+  },
+  "whatLabel": "What",
+  "whyLabel": "Why",
+  "risksTitle": "Risks",
+  "moreRisks": "+{count} more",
+  "reviewFocusTitle": "Read these first",
+  "counts": {
+    "notReviewed": "Not reviewed yet",
+    "score": "SCORE",
+    "blockers": "{count, plural, one {# blocker} other {# blockers}}",
+    "findings": "{count, plural, one {# finding} other {# findings}}"
+  },
+  "cost": "Cost",
+  "missingInputs": "Generated without {inputs}",
+  "stale": "Generated against {sha} — the PR head has moved."
 }

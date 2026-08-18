@@ -142,6 +142,18 @@ reference in every route.
 
 ## Codebase Patterns
 
+- **2026-08-18** — `RepoIntelService.getIndexState(repoId).lastIndexedSha` is
+  `''` (empty string), never `null`, for a repo that has no `repo_index_state`
+  row (the seeded demo's permanent state, `server/INSIGHTS.md`, 2026-08-13) —
+  the facade synthesises a degraded `IndexState` literal rather than making the
+  field optional. A caller that needs "never indexed" to mean SQL NULL (e.g. a
+  cache key with a nullable column plus a `COALESCE`d unique index, like
+  `pr_brief_records`) must map it itself: `indexState.lastIndexedSha || null`.
+  Storing the facade's `''` verbatim works today but reads as a real (if odd)
+  sha string instead of "no index", and silently drifts from a schema that was
+  deliberately built to distinguish the two.
+  `src/modules/repo-intel/service.ts:190-206` · `src/modules/brief/service.ts:107`
+
 - **2026-08-09** — A `RunLogger` fanned over an EMPTY `runIds` array is a valid,
   reusable "best-effort logger with no run" — `event()`/`info()`/`step()` just
   iterate zero SSE targets and skip straight to the stdout mirror. `POST
@@ -259,6 +271,21 @@ reference in every route.
 
 ## Tool & Library Notes
 
+- **2026-08-18** — A Drizzle `onConflictDoUpdate({ target: [...] })` cannot
+  target a **partial/expression unique index** — only a plain-column
+  constraint. `pr_brief_records_state_uq` is
+  `UNIQUE (pr_id, head_sha, COALESCE(intent_fingerprint,''), COALESCE(repo_indexed_sha,''), prompt_version, provider, model)`
+  (needed because two of those columns are legitimately nullable and Postgres
+  rejects NULL in a plain unique index the way `repo_map_cache`'s composite PK
+  uses). Passing `target: [t.prBriefRecords.prId, t.prBriefRecords.headSha, …]`
+  would generate `ON CONFLICT (pr_id, head_sha, …)`, which does not match this
+  constraint at all and Postgres rejects at runtime. The workaround —
+  `BriefRepository.upsert`, select-by-key then `update`-by-id or `insert` — is
+  not atomic against a genuine race, which is fine here (`server/INSIGHTS.md`,
+  2026-08-09, "nothing here is atomic") but is the reason ANY future
+  `COALESCE`-based unique index needs the same select-then-write shape, not a
+  native upsert. `src/modules/brief/repository.ts:100-127`
+
 - **2026-08-10** — `text('col', { enum: [...] })` in Drizzle is a **TypeScript-only**
   union over a plain Postgres `text` column — `\d skills` shows no check
   constraint and no PG enum type. Adding a value (`'imported_file'` to
@@ -345,6 +372,16 @@ reference in every route.
   the host half; only the port is configurable. `src/app.ts:90`
 
 ## Open Questions
+
+- **2026-08-18** — `test/settings-models.it.test.ts` currently fails on
+  `pnpm test` (unfiltered) with the repo in its `plans/10-pr-brief.plan.md` P0
+  state: it asserts `resolveFeatureModel(..., 'risk_brief')` still resolves to
+  the registry default `{ provider: 'openai', model: 'gpt-4.1' }`, but P0
+  changed `FEATURE_MODELS`'s `risk_brief` entry to `anthropic`/`claude-haiku-4-5`
+  (`contracts/platform.ts:60-66`, Q7) and this test was not updated in the same
+  change. Not fixed here — the file is outside `modules/brief/`'s scope for
+  this track. Whoever lands next in `modules/settings/` should update the
+  expected default. `test/settings-models.it.test.ts:54-56`
 
 - **2026-08-06** — The latest-completed-run cost aggregate on
   `GET /repos/:id/pulls` has no automated coverage; all cost tests landed

@@ -111,12 +111,14 @@ function Harness({
   reviews,
   onOpenFinding,
   flat = false,
+  focusFile = null,
 }: {
   reviews: ReviewRecord[] | undefined;
   onOpenFinding?: (findingId: string) => void;
   flat?: boolean;
+  focusFile?: string | null;
 }) {
-  const marks = useFindingMarks("pr1", reviews, HEAD);
+  const marks = useFindingMarks("pr1", reviews, HEAD, focusFile);
   return flat ? (
     <DiffViewer
       files={PR_FILES}
@@ -133,11 +135,12 @@ function Harness({
 function renderViewer(
   reviews: ReviewRecord[] | undefined,
   onOpenFinding?: (findingId: string) => void,
+  focusFile?: string | null,
 ) {
   return render(
     <NextIntlClientProvider locale="en" messages={{ prReview, shell }}>
       <div data-theme="dark">
-        <Harness reviews={reviews} onOpenFinding={onOpenFinding} />
+        <Harness reviews={reviews} onOpenFinding={onOpenFinding} focusFile={focusFile} />
       </div>
     </NextIntlClientProvider>,
   );
@@ -350,6 +353,17 @@ describe("SmartDiffViewer", () => {
     renderViewer(REVIEWS);
     expect(screen.getByText("This PR is large (620 changed lines)")).toBeInTheDocument();
     expect(screen.getByText(/src\/middleware · 2 files/)).toBeInTheDocument();
+  });
+
+  it("a file-level focus target (no line) scrolls to and expands the file, including boilerplate (B3, A6)", () => {
+    // package-lock.json is `boilerplate` and carries no findings — it stays
+    // collapsed by default (see "leaves the lock file collapsed" above).
+    renderViewer(REVIEWS, undefined, "package-lock.json");
+    const card = document.getElementById("diff-file-package-lock.json");
+    expect(card).not.toBeNull();
+    expect(card!.scrollIntoView).toHaveBeenCalled();
+    // Open, not just scrolled to: its content is now rendered.
+    expect(screen.getByText('"lockfileVersion": 3,')).toBeInTheDocument();
   });
 
   it("renders a loading state and an error state", () => {

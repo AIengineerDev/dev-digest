@@ -223,6 +223,26 @@ _None yet._
   mistake before review, and do not add a `pnpm lint` to a CI workflow or a
   pre-push step without first adding the config — the script does not exist and
   the step will fail, not no-op. `client/package.json:6`
+  **Stopped holding by 2026-08-17**: `client/package.json` now has
+  `"lint": "eslint src"` and `client/eslint.config.mjs` exists (the very next
+  entry above describes it). `pnpm lint` is a real gate with a measured
+  **0-error, 42-warning baseline** (mostly `react-hooks/set-state-in-effect`) —
+  green means no *new* errors and no more than 42 warnings, not a clean run.
+  Treat any plan or doc still citing "no ESLint here" as stale.
+
+- **2026-08-17** — Reflecting an incoming URL/prop into local reveal state with
+  a plain `useEffect` (`if (x) setState(...)`, deps `[x]`) trips
+  `react-hooks/set-state-in-effect` and pushes `pnpm lint` **past** the
+  42-warning baseline — one new occurrence is a regression the gate is built to
+  catch. On a component that unmounts and remounts on the triggering
+  navigation (here, `DiffTab` under `page.tsx`'s `{tab === "diff" && …}`), the
+  fix is not an effect at all: seed the state from a **lazy `useState`
+  initializer** (`useState(() => x ? … : null)`) instead. The initializer only
+  runs on mount, which is exactly when the prop needs picking up, and it costs
+  zero warnings. This also gets a "clicking the same target twice re-triggers
+  the reveal" requirement for free, without a `nonce` query param — a fresh
+  mount has no prior value to compare against.
+  `src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/useFindingMarks.ts:60`
 
 - **2026-08-09** — In a `next-intl` message, a bare `{count}` placeholder is
   **string interpolation, not number formatting**: passing `8000` renders

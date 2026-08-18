@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, API_BASE } from "../api";
 import { notify } from "../toast";
 import type {
+  BriefRecord,
   FindingActionKind,
   PrIntentRecord,
   PrReviewComment,
@@ -234,5 +235,29 @@ export function useDeriveIntent(prId: string | null | undefined) {
     mutationFn: (force?: boolean) =>
       api.post<PrIntentRecord | null>(`/pulls/${prId}/intent`, force ? { force } : undefined),
     onSuccess: (data) => qc.setQueryData(["pr-intent", prId], data),
+  });
+}
+
+// ---- PR Brief (specs/10-pr-brief.md) ----
+/** The PR's brief — `null` is a state ("not yet generated"), not absence of
+   data, so it renders like any other successful, empty query result. */
+export function useBrief(prId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["pr-brief", prId],
+    queryFn: () => api.get<BriefRecord | null>(`/pulls/${prId}/brief`),
+    enabled: !!prId,
+  });
+}
+
+/** (Re-)generate a PR's brief. `force:true` bypasses the R6 cache — required
+   on a degraded record's Retry (spec amendment A-2): a matching cache key
+   returns the cached row, including a degraded one, so without `force` Retry
+   would just hand back the same failure. */
+export function useGenerateBrief(prId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (force?: boolean) =>
+      api.post<BriefRecord>(`/pulls/${prId}/brief`, force ? { force } : undefined),
+    onSuccess: (data) => qc.setQueryData(["pr-brief", prId], data),
   });
 }
