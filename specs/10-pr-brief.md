@@ -379,6 +379,40 @@ So the stretch is **connecting an existing wire**, not designing one.
 - **`client/` has no ESLint** (`client/INSIGHTS.md:216-225`) — no lint gate will
   catch a hook-order or dependency mistake in the new card.
 
+## Amendments
+
+Recorded after the plan's cross-model review
+(`plans/10-pr-brief.cross-model-review.md`). Both were authorised by the CTO on
+2026-08-18. They are recorded here rather than in a superseding spec because
+each changes one clause, and a 400-line rewrite for two clauses would bury the
+change it is meant to publish. Nothing else in this document is edited.
+
+### A-1 (2026-08-18) — R3: `maxRetries` is `0`, not `1`
+
+R3 says "one structured model call. No second call, no repair call." The plan
+proposed satisfying it by counting *invocations* while leaving the adapter's
+`maxRetries: 1` in place. An adapter retry is a second billed request, so the
+worst case per generation would be **2 x 8 000** input tokens against a budget
+this spec states as an acceptance criterion.
+
+**R3 now reads:** exactly one `completeStructured` invocation with
+`maxRetries: 0`. A malformed structured response is a degradation on the
+`ungrounded_output` path, not a retry. The 8 000-token ceiling is therefore
+per generation, not per attempt.
+
+### A-2 (2026-08-18) — R6: the Retry button sends `force=true`
+
+The plan proposed regenerating on `POST` when the cached row is degraded, even
+at a matching key. That silently changes R6's contract, which says a matching
+key returns the cached row.
+
+**R6 is unchanged.** The regeneration path is the existing `force` flag: the
+Retry control on a degraded card sends `force=true`, which R6 already permits.
+A degraded row stays cached and stays visible until a human asks for another
+attempt — which is also the behaviour that keeps a failing provider from being
+retried on every page view.
+
+
 ## Open questions
 
 | ID | Question | My proposed default | Blocks |

@@ -29,6 +29,53 @@ You asked me to decide rather than ask. My recommendation is **parallel tracks**
 
 ---
 
+## Corrections after cross-model review
+
+`plans/10-pr-brief.cross-model-review.md` (gpt-5, 2026-08-18) found four things
+this plan got wrong. They override the phase text below wherever they conflict.
+
+**C-1 — Smart Diff roles are computed, not stored. Blocking.** Phase A1's select
+and Phase A2's `files` parameter both assume a `role` column on `pr_files`.
+There is none (`server/src/db/schema/pulls.ts:36-42`); role is derived per
+request from path patterns (`server/src/modules/smart-diff/helpers.ts:43`,
+`smart-diff/constants.ts`). `no-cross-module-internals` forbids importing it.
+**Fix:** move the classifier and its pattern table to
+`server/src/modules/_shared/file-roles.ts` and have `smart-diff` re-export from
+there, exactly the move `plans/09-project-context.plan.md` Phase T3 makes for
+the walk limits. `brief` imports `_shared`, which is a permitted target. This
+lands in **Phase P1**, not A1 — it is a shared-module move and both tracks'
+type-checking depends on it.
+
+**C-2 — No `''` sentinels in the primary key.** P1's composite PK cannot hold
+NULLs, and the plan's answer was to store `''` for a missing
+`intent_fingerprint` / `repo_indexed_sha`. That collides with a legitimately
+empty value and produces cache behaviour nobody can debug. **Fix:** keep both
+columns nullable, drop them from the primary key, and enforce C10 with a
+**partial unique index** over the seven components using
+`COALESCE(intent_fingerprint, '')` — the uniqueness is still in Postgres, which
+was the point, without a sentinel that can be confused for data.
+
+**C-3 — The injection-guard test must assert effect, not presence.** A2's A15
+checks that `<untrusted>` wrappers are present. A wrapper whose guard text is
+missing or wrong is decorative, and the test would still pass. **Fix:** the test
+feeds a hostile string that instructs the model to ignore its instructions and
+asserts (a) it appears only inside a wrapper, (b) it is escaped where it mimics
+a delimiter, and (c) the system prompt contains the guard clause that gives the
+wrapper meaning. Assert the guard's text, not just that some guard exists.
+
+**C-4 — `maxRetries` must be `0`.** R3 says one call, no repair call; an
+adapter-level retry is a second billed request, making the worst case
+2 x 8 000 input tokens. A budget stated in the acceptance criteria cannot be
+quietly doubled. **Fix:** `maxRetries: 0`. A malformed structured response is a
+degradation (`error: 'ungrounded_output'` path), not a retry. Recorded as
+amendment A-1 on the spec.
+
+**Not corrected, deliberately:** the reviewer's finding that R6's "unless
+degraded" exception changes the contract is real, and is fixed on the **spec**
+side as amendment A-2 (the Retry button sends `force=true`), not here.
+
+---
+
 ## Requirement audit
 
 Read adversarially against the code. Eight problems; one is a genuine contradiction that changes behaviour.
@@ -178,10 +225,10 @@ These two run single-threaded, in order. Nothing forks until both are green.
 ### Phase P1 — Schema and migration
 
 - **What lands:** `pr_brief_records` exists in the database, keyed by the R6 tuple.
-- **Files:** `server/src/db/schema/reviews.ts` (append; it already owns `prIntent` and `prBrief`) · `server/src/db/schema.ts` (barrel import + `schema` object entry, mirroring lines 32 and 62) · one generated file under `server/src/db/migrations/`.
+- **Files:** `server/src/modules/_shared/file-roles.ts` (new — correction C-1) · `server/src/modules/smart-diff/{helpers,constants}.ts` (re-export from `_shared`, behaviour unchanged) · `server/src/db/schema/reviews.ts` (append; it already owns `prIntent` and `prBrief`) · `server/src/db/schema.ts` (barrel import + `schema` object entry, mirroring lines 32 and 62) · one generated file under `server/src/db/migrations/`.
 - **Governing skill:** `onion-architecture`.
 - **Placement decision:** the table is a PR-review artefact, so it joins `schema/reviews.ts` rather than earning a new domain file. It is **`pr_brief_records`**, because `pr_brief` is taken by the dead `{pr_id, json}` table at `schema/reviews.ts:77-82`. Shape copies `repo_map_cache` (`schema/repo-intel.ts:129-143`): a composite `primaryKey({ columns: [prId, headSha, intentFingerprint, repoIndexedSha, promptVersion, provider, model] })` and **no surrogate id** — C10's "two rows for one state must never exist" is then enforced by Postgres, not by application logic. `prId` carries `references(() => pullRequests.id, { onDelete: 'cascade' })`.
-  **Postgres will not accept a NULL in a primary-key column**, and `intent_fingerprint` and `repo_indexed_sha` are both legitimately absent (null intent; never-indexed repo — the seeded demo's permanent state). Store `''` for each, and say so in the column comment. An implementer who leaves them nullable gets a table that silently accepts duplicates for exactly the two cases C8 and R14 make routine.
+  **Postgres will not accept a NULL in a primary-key column**, and `intent_fingerprint` and `repo_indexed_sha` are both legitimately absent (null intent; never-indexed repo — the seeded demo's permanent state). **Correction C-2 overrides the plan's original answer here:** do *not* store `''`. Keep both columns nullable, keep them out of the primary key, and enforce C10 with a partial unique index over the seven components using `COALESCE(intent_fingerprint, '')` and `COALESCE(repo_indexed_sha, '')`. Uniqueness stays in Postgres — which was the point — without a sentinel that later reads as data.
 - **Gate:** `cd server && pnpm db:generate` — must emit **exactly one** `.sql` file and must not prompt (it is add-only; the two-generate rule in `server/INSIGHTS.md` applies only to add-and-drop on one table) · `pnpm db:migrate` · `pnpm typecheck` · `pnpm arch`
 - **Done when:** `\d pr_brief_records` shows the 7-column composite PK; the migration file is generated, not hand-written; `pnpm arch` still reports the 10-violation baseline and nothing more.
 - **Depends on:** P0.
@@ -214,7 +261,7 @@ These two run single-threaded, in order. Nothing forks until both are green.
 - **What lands:** a pure function that turns fetched inputs into the exact `{ system, user }` pair the model will receive, measured by `container.tokenizer.count`, dropping inputs in order until it fits 8 000 or refusing. **No model call is made in this phase**, which is what makes the 8 000 ceiling assertable in a hermetic test.
 - **Files:** `server/src/modules/brief/assemble.ts` (new, pure) · `server/src/modules/brief/constants.ts` · `server/src/adapters/tokenizer/index.ts` (doc comment at `:11` only) · `server/test/brief-budget.test.ts` · `server/test/brief-prompt.test.ts`
 - **Placement decision (`onion-architecture`):** `assemble.ts` is domain — pure functions over values, no `Container`, no `Db`, no adapter. It takes the tokenizer as an **injected `count: (s: string) => number`**, not as `container.tokenizer`, so the file imports nothing from `src/adapters/` and `helpers-are-pure` is satisfied even under `tsPreCompilationDeps: true`. Its input types are declared **structurally** — the precedent is `modules/blast/helpers.ts:18-27` (`BlastResultLike`) and `modules/skills/helpers.ts:14` (`SkillRowLike`), both recorded in `server/INSIGHTS.md` as the way a pure file describes a Drizzle row without importing one.
-  **This is R2's second and load-bearing wall.** The `files` parameter is typed `readonly { path: string; additions: number; deletions: number; role: SmartDiffRole }[]`. There is no member a patch could occupy. A future implementer who wants to pass hunk bodies has to change the exported signature — a visible, reviewable act — rather than widening an object that already flows through. Combined with A1's three-column select, passing a patch requires two deliberate edits in two files. A4's sentinel test is the third wall.
+  **This is R2's second and load-bearing wall.** The `files` parameter is typed `readonly { path: string; additions: number; deletions: number; role: FileRole }[]`, where `role` is **computed** by `classifyPath` from `modules/_shared/file-roles.ts` (correction C-1) — it is not selected from the database, because `pr_files` has no such column. There is no member a patch could occupy. A future implementer who wants to pass hunk bodies has to change the exported signature — a visible, reviewable act — rather than widening an object that already flows through. Combined with A1's three-column select, passing a patch requires two deliberate edits in two files. A4's sentinel test is the third wall.
   **The single-string discipline.** `assembleBriefInput` returns `{ system, user, tokens, droppedInputs }` where `tokens === count(system + user)` computed on the returned strings. The service sends exactly those two strings and nothing else. Without this, A3's assertion ("the string handed to the LLM mock measures ≤ 8 000") tests a different string than R5 gated, and the criterion is unfalsifiable. Assert it in the test as an identity: the mock's captured messages, re-measured, equal the returned `tokens`.
   **Wrapping (R7):** `wrapUntrusted` is imported from `@devdigest/reviewer-core` (exported at `reviewer-core/src/index.ts:17`) — no arch rule forbids `modules/brief/` → `reviewer-core`; only `smart-diff` is barred (`.dependency-cruiser.cjs:88-95`). PR title, PR body, linked-issue title/body, commit subjects and the **derived intent** all go inside wrappers. Instructions, the output schema, and every input label sit outside. Because this call does not go through `assemblePrompt`, the system prompt carries its own injection guard modelled on `INJECTION_GUARD` (`reviewer-core/src/prompt.ts:14-27`) — without it the delimiters mean nothing to the model. **Do not copy `intentUserPrompt` (`intent-prompt.ts:50-67`), which uses a plain instruction line and no wrapper at all**; the spec names it as an anti-pattern (`:292`).
   **Drop order is ascending** (audit row 1): `1a` project-context → `1b` commit subjects → `2` issue body (keep number + title) → `3` PR body sliced from the tail at 4 000 chars, matching `MAX_PR_DESCRIPTION_CHARS` (`reviewer-core/src/prompt.ts:36`) → `4` the `boilerplate` file group entirely, then `wiring`; `core` is never dropped → `5` blast callers only — the summary line and `endpoints_affected` are **never** dropped, because they are R4's reference set → `6` derived intent. Rows 1, 2, 3 are never droppable. Each drop appends a string to `droppedInputs` and the total is re-measured.
@@ -224,7 +271,7 @@ These two run single-threaded, in order. Nothing forks until both are green.
   - **A4** — a PR fixture whose `pr_files.patch` carries a sentinel string produces an assembled input in which the sentinel does not appear. Assert against `system + user` concatenated.
   - **A3** — with a counting tokenizer injected via `ContainerOverrides.tokenizer`, the returned `tokens` is ≤ 8 000 for every input set that produces an assembly, and equals a re-measurement of the strings actually sent.
   - **A5 / C14** — a 300-file fixture returns no assembly and the reason `input_over_budget`, with the LLM mock's call count `0`.
-  - **A15** — each untrusted field appears only between `<untrusted …>` and `</untrusted>`; a PR body containing a literal `</untrusted>` is escaped (`reviewer-core/src/prompt.ts:31`); the output schema and instruction text appear outside every wrapper; the system prompt contains an injection guard.
+  - **A15** — each untrusted field appears only between `<untrusted …>` and `</untrusted>`; a PR body containing a literal `</untrusted>` is escaped (`reviewer-core/src/prompt.ts:31`); the output schema and instruction text appear outside every wrapper; and, per correction **C-3**, a hostile fixture body ("ignore previous instructions and …") is asserted to appear only inside a wrapper **and** the system prompt is asserted to contain the guard clause by its text — presence of a wrapper alone does not pass.
   - **Drop order** — a fixture over budget by 500 tokens drops the project-context slot and commit subjects before touching the derived intent.
 - **Depends on:** A1.
 
