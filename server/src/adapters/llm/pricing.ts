@@ -60,3 +60,51 @@ export function estimateCost(model: string, tokensIn: number, tokensOut: number)
   if (!p) return null;
   return (tokensIn * p.in + tokensOut * p.out) / 1_000_000;
 }
+
+/**
+ * Static per-model context window (tokens), APPROXIMATE — the R7 fallback for
+ * when `ModelInfo.contextLength` is unpopulated, which is every model today
+ * (`adapters/llm/anthropic.ts:92-101`, `adapters/llm/openai.ts:69-76` never
+ * set it). specs/09-project-context.md R7.
+ */
+const CONTEXT_WINDOWS: Record<string, number> = {
+  'gpt-5.6-sol': 400_000,
+  'gpt-5.6-terra': 400_000,
+  'gpt-5.6-luna': 400_000,
+  'gpt-5.5': 400_000,
+  'gpt-5.4': 400_000,
+  'gpt-5.4-mini': 400_000,
+  'gpt-5.4-nano': 400_000,
+  'gpt-5.1': 400_000,
+  'gpt-5': 400_000,
+  'gpt-4.1': 1_000_000,
+  'gpt-4.1-mini': 1_000_000,
+  'gpt-4o': 128_000,
+  'gpt-4o-mini': 128_000,
+  'claude-opus-5': 500_000,
+  'claude-opus-4-8': 500_000,
+  'claude-opus-4-7': 200_000,
+  'claude-sonnet-5': 500_000,
+  'claude-haiku-4-5': 200_000,
+  'claude-3-5-sonnet-latest': 200_000,
+  'claude-3-5-haiku-latest': 200_000,
+  'claude-3-opus-latest': 200_000,
+};
+
+/**
+ * Flat fallback when a model resolves through neither `ModelInfo.contextLength`
+ * nor `CONTEXT_WINDOWS` (specs/09-project-context.md R7).
+ */
+export const FALLBACK_CONTEXT_WINDOW = 30_000;
+
+/**
+ * R7's window fallback chain: the provider-reported context length (when
+ * populated), else the static table above, else the flat fallback. Reached
+ * only through the container (`container.projectContext`'s injected
+ * `resolveWindow`) — `injected-adapters-only-from-container` forbids a module
+ * importing `adapters/llm/*` directly.
+ */
+export function resolveContextWindow(model: string, providerContextLength?: number | null): number {
+  if (providerContextLength != null && providerContextLength > 0) return providerContextLength;
+  return CONTEXT_WINDOWS[model] ?? FALLBACK_CONTEXT_WINDOW;
+}

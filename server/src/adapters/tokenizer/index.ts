@@ -8,8 +8,15 @@
  * lazy-initialised (loading the BPE ranks is the heavy part) and any failure
  * falls back to the `ceil(chars / 4)` heuristic — the renderer must never throw.
  *
- * Scope: in-process, ONLY under modules/repo-intel. Swappable in tests via a
- * mock counter (ContainerOverrides.tokenizer).
+ * Scope: in-process. Originally scoped to modules/repo-intel only; widened
+ * deliberately for specs/09-project-context.md (plan A2) — `container.tokenizer`
+ * is reached the same way from `modules/project-context` (list/detail token
+ * counts, and the assembler's run-time budget), and `pnpm arch` does not
+ * restrict it: this file is a stateless helper (no credentials, no network),
+ * exempt from `injected-adapters-only-from-container`. It stays the ONE
+ * counter in the repo — `server/INSIGHTS.md` (2026-08-09) already rejected a
+ * second, cheaper estimator; do not add one for a new caller either.
+ * Swappable in tests via a mock counter (ContainerOverrides.tokenizer).
  */
 import { getEncoding, type Tiktoken } from 'js-tiktoken';
 
