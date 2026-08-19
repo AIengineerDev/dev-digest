@@ -251,6 +251,17 @@ export class ReviewRunExecutor {
       // linked skills' (specs/09-project-context.md R4, R6). Not pinned to a
       // replay's agent version (D3): a replay reads today's documents.
       const specs = await this.resolveProjectContext(agent, repo);
+      // Always state the count, not only the exclusions. `notes` carries what
+      // did NOT reach the prompt, so on a healthy run it is empty and the log
+      // would say nothing at all about project context — leaving a reader
+      // unable to tell "no documents attached" from "this build ignores them".
+      runLog.info(
+        specs.used.length > 0
+          ? `project context: ${specs.used.length} document(s) attached — ${specs.used
+              .map((u) => u.path)
+              .join(', ')}`
+          : 'project context: no documents attached',
+      );
       for (const note of specs.notes) runLog.info(note);
 
       // ---- Engine: assemble → single-pass → grounding -----------------------
