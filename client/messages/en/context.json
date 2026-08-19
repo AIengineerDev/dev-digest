@@ -1,24 +1,75 @@
 {
-  "title": "Project Context",
-  "chunks": "{count} chunks",
-  "reindex": "Re-index",
-  "indexing": "Indexing…",
-  "resync": "Resync",
-  "resyncing": "Resyncing…",
-  "indexStatus": "Index status: {status}",
-  "loadError": "Couldn’t load specs",
-  "kb": "{kb}kb",
-  "empty": {
-    "title": "No spec files yet",
-    "body": "Drop your PRDs, tech specs, and acceptance criteria under .devdigest/specs/. Every agent and the PR brief read them as grounding context."
+  "page": {
+    "crumbLab": "Project Context",
+    "headingPrefix": "Project Context in ",
+    "repoFallback": "repo",
+    "subtitle": "Every Markdown document DevDigest found in the repo. Attach one to an agent or a skill and it is read into that agent's next review."
+  },
+  "rail": {
+    "searchPlaceholder": "Filter by path…",
+    "rescan": "Rescan",
+    "rescanning": "Rescanning…",
+    "rescanError": "Rescan failed — the previous list is still shown below.",
+    "footer": "{files, plural, one {# file} other {# files}} · {tokens} tokens total (ceiling if everything were attached)",
+    "readAt": "read at {sha}",
+    "truncated": "Showing the first {limit} — the repo has more than {limit} Markdown documents.",
+    "missingBadge": "missing",
+    "tooLargeBadge": "too large",
+    "tokensPending": "…",
+    "loadError": "Couldn't load Project Context.",
+    "retry": "Retry"
+  },
+  "states": {
+    "indexing": {
+      "title": "Indexing this repo",
+      "body": "DevDigest is still cloning and indexing this repo. The document list appears once that finishes."
+    },
+    "empty": {
+      "title": "No Markdown documents found",
+      "body": "DevDigest looked everywhere in the repo except node_modules, dist, build, coverage, .next, out, vendor and .git, and found no .md or .markdown files.",
+      "cta": "Rescan"
+    },
+    "notFound": {
+      "title": "Not found in this repo",
+      "body": "\"{path}\" is not among the documents DevDigest discovered here."
+    },
+    "missingDoc": {
+      "title": "No longer in the repository",
+      "body": "\"{path}\" was attached, but the last scan didn't find it on disk — it may have been deleted, renamed or moved. The attachment is kept, so a rename back restores it."
+    },
+    "docLoadError": {
+      "title": "Couldn't load this document",
+      "body": "The Skills and Agents tabs below still work."
+    }
+  },
+  "doc": {
+    "openOnGithub": "Open on GitHub",
+    "usedByAgents": "{count, plural, one {Used by # agent} other {Used by # agents}}",
+    "tokens": "{tokens} tokens",
+    "selectPrompt": "Select a document from the list to read it.",
+    "tabs": {
+      "document": "Document",
+      "skills": "Skills",
+      "agents": "Agents"
+    }
   },
   "mode": {
     "preview": "preview",
     "edit": "edit"
   },
   "editor": {
-    "loadError": "Couldn’t load spec",
+    "loadError": "Couldn't load spec",
     "save": "Save",
     "saving": "Saving…"
+  },
+  "attach": {
+    "emptySkills": "No skills in this workspace yet.",
+    "emptyAgents": "No agents in this workspace yet.",
+    "directLabel": "attached directly",
+    "viaSkillLabel": "via linked skill: {name}",
+    "disabledLabel": "skill disabled — contributes nothing to a run",
+    "toggleLabel": "Attach \"{path}\" to {name}",
+    "saveError": "Couldn't save that change — reverted.",
+    "tooLarge": "Over the {limit}KB attach limit — not attachable."
   }
 }
