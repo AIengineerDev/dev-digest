@@ -15,7 +15,7 @@ import type {
   Repo,
   PrMeta,
   PrDetail,
-  SpecFile,
+  ProjectContextDoc,
   IndexStatus,
   SmartDiff,
   BlastRadius,
@@ -155,7 +155,7 @@ export function useBlastRadius(prId: string | null | undefined) {
 export function useContextFiles(repoId: string | null | undefined) {
   return useQuery({
     queryKey: ["context", repoId],
-    queryFn: () => api.get<SpecFile[]>(`/repos/${repoId}/context`),
+    queryFn: () => api.get<ProjectContextDoc[]>(`/repos/${repoId}/context`),
     enabled: !!repoId,
   });
 }

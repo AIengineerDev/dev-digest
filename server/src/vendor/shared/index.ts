@@ -7,7 +7,7 @@
  *  - contracts/knowledge  Conformance, Onboarding, EvalRun/EvalCase, MemoryItem,
  *                         Skill/CommunitySkill, Convention, Agent
  *  - contracts/trace      RunTrace, RunEvent, RunLogLine (single-document trace)
- *  - contracts/platform   Settings, ConnTestResult, Repo, PrMeta/PrDetail, SpecFile, …
+ *  - contracts/platform   Settings, ConnTestResult, Repo, PrMeta/PrDetail, ProjectContextDoc, …
  *  - adapters             adapter interfaces + ModelInfo
  *
  * Feature agents (A1–A6) and F2 import everything from here. The barrel is

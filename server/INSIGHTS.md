@@ -207,7 +207,7 @@ reference in every route.
   that is correct — a test just calls them. `pnpm arch` enforces exactly this
   split, so the test for a new adapter is "would a test ever want to swap it
   out?", not "does it live in adapters/". `src/adapters/index.ts:1`
-- **2026-08-09** — 5 of the 11 baseline `pnpm arch` violations are import cycles,
+- **2026-08-09** — 5 of the baseline `pnpm arch` violations are import cycles,
   and nearly all run through the composition root: `platform/container.ts`
   imports concrete module classes (`AgentsRepository`, `ReviewRepository`,
   `RepoIntelService` at `container.ts:26-29`) while those modules import
@@ -279,6 +279,18 @@ reference in every route.
 
 
 ## Recurring Errors & Fixes
+
+- **2026-08-19** — The `pnpm arch` known-violations baseline is smaller than
+  every doc that quotes it: `server/.dependency-cruiser-known-violations.json`
+  has **10** entries (5 `no-circular`, 3 `routes-no-db`, 1 `helpers-are-pure`,
+  1 `no-cross-module-internals`) as of this date, not the "11" / "4
+  `routes-no-db`" repeated in `.claude/skills/onion-architecture/SKILL.md` and
+  in `plans/09-project-context.plan.md`. One `routes-no-db` violation was
+  fixed between when those docs were written and now, and nothing updated the
+  count. Trust `pnpm arch`'s own `‼ N known violations ignored` line (or the
+  file's length) over any doc-stated number before treating a gate result as
+  "matches baseline" — do not chase a phantom "missing violation".
+  `server/.dependency-cruiser-known-violations.json`
 
 - **2026-08-14** — `agent_runs.status = 'done'` used to be written **before**
   the `run_traces` row, so a consumer that polls for a terminal status and then
