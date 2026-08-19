@@ -271,6 +271,24 @@ reference in every route.
 
 ## Tool & Library Notes
 
+- **2026-08-19** — A pre-flight token gate that counts only the prompt strings
+  **undercounts what the provider bills by the structured-output schema**, and
+  the gap is not small. Measured on the first real PR Brief generation
+  (`pr_brief_records`, PR #482, 4 changed files): our gate measured **612**
+  tokens over `system + user`; Anthropic billed `usage.input_tokens` = **2006**.
+  The 1 394-token difference is the tool/JSON-schema envelope `completeStructured`
+  adds, which never appears in either string, so no amount of care in
+  `assembleBriefInput` can see it. Consequence for any budget expressed as an
+  acceptance criterion: an input measuring 7 900 against an 8 000 ceiling passes
+  the gate and is billed ~9 300. The gate is still worth having — it is the only
+  bound available *before* spending — but it must either count a serialized copy
+  of the response schema alongside the strings, or the ceiling must be set with
+  an explicit envelope allowance and named as such. Do not compare a local
+  `tokenizer.count` to a provider ceiling without measuring the envelope first;
+  persisting both numbers (`budget_tokens` and `tokens_in` on the record) is what
+  made this visible in one query. `server/src/modules/brief/service.ts` ·
+  `server/src/modules/brief/assemble.ts`
+
 - **2026-08-18** — A Drizzle `onConflictDoUpdate({ target: [...] })` cannot
   target a **partial/expression unique index** — only a plain-column
   constraint. `pr_brief_records_state_uq` is

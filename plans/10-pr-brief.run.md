@@ -37,13 +37,25 @@ test-writer stage — so they travel to the end of the run and get reported.
 
 ## Open findings
 
-- **J1 not run.** No `e2e/specs/12-pr-brief.flow.json`, and the manual real-repo
-  check has not happened. Both tracks are green in isolation and together, but
-  the feature has not been driven through a browser.
-- **`cl100k_base` drift is still unmeasured.** The 8 000-token gate is enforced
-  by our counter; the provider's own `usage.input_tokens` is now persisted, so
-  the first real generation will show the gap. Until then 8 000 is a bound we
-  enforce, not one we have proven matches billing.
+- **J1 partly done 2026-08-19.** The stack was booted and the feature exercised
+  against real seeded data — route registered, `GET` returns `200 null` before
+  generation, one `POST` produced a grounded brief, three `POST`s left exactly
+  one row and one model call ($0.005671 total). Still missing: the browser flow
+  (`e2e/specs/12-pr-brief.flow.json`) and a run against an **indexed** repo — the
+  seeded repo is not indexed, so the brief correctly reported
+  `dropped_inputs: ['blast:degraded']` and the blast half of the card is
+  unexercised.
+- **MEASURED 2026-08-19, and worse than expected. The pre-flight gate
+  undercounts by 228%.** First real generation against PR #482: our gate
+  measured **612** tokens, Anthropic billed **2006**. The 1 394-token gap is the
+  structured-output schema envelope, which is in neither `system` nor `user`, so
+  `assembleBriefInput` cannot see it. Nothing is over budget today — 2 006 is
+  well under 8 000 — but the gate is **unsound**: an input measuring 7 900 would
+  be billed ~9 300 and pass. Fix is one of two: count a serialized copy of the
+  response schema alongside the strings, or restate the ceiling with a named
+  envelope allowance. This is exactly what the gpt-5 cross-model review
+  predicted (`plans/10-pr-brief.cross-model-review.md`, risk 2). Recorded in
+  `server/INSIGHTS.md`.
 
 ## Human decisions
 - 2026-08-18 — all eight spec open questions resolved to their stated defaults.
