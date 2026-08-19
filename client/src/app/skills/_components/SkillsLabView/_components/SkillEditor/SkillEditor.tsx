@@ -6,11 +6,14 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Badge, Button, ErrorState, Icon, Skeleton } from "@devdigest/ui";
+import { Badge, Button, ErrorState, Icon, Skeleton, Tabs } from "@devdigest/ui";
 import { useDeleteSkill, useSkill, useUpdateSkill } from "../../../../../../lib/hooks/skills";
 import { MAX_SKILL_BODY_CHARS } from "../../constants";
+import { ContextTab } from "./_components/ContextTab";
 import { currentBody, isDirty, isOverLimit } from "./helpers";
 import { s } from "./styles";
+
+type EditorTab = "body" | "context";
 
 export function SkillEditor({ id }: { id: string }) {
   const t = useTranslations("skills");
@@ -20,6 +23,11 @@ export function SkillEditor({ id }: { id: string }) {
   // null = untouched; the saved body is then rendered directly, so a refetch is
   // reflected without mirroring server state into local state.
   const [draft, setDraft] = React.useState<string | null>(null);
+  // Local, not URL-lifted (mirrors ProjectContextView's DocViewerBody, not
+  // AgentEditor's ?tab=): SkillsLabView already remounts this component on
+  // selection via `key={selectedId}`, so a skill switch resets the tab for
+  // free and no route plumbing is needed for a still-shareable deep link.
+  const [tab, setTab] = React.useState<EditorTab>("body");
 
   if (isLoading) {
     return (
@@ -67,43 +75,63 @@ export function SkillEditor({ id }: { id: string }) {
         {!skill.enabled && <Badge color="var(--text-muted)">{t("editor.disabled")}</Badge>}
         {dirty && <Badge color="var(--text-muted)">{t("editor.unsaved")}</Badge>}
         <div style={s.actions}>
-          <span className="mono tnum" style={s.count(over)}>
-            {t("editor.count", { count: body.length, limit: MAX_SKILL_BODY_CHARS })}
-          </span>
+          {tab === "body" && (
+            <span className="mono tnum" style={s.count(over)}>
+              {t("editor.count", { count: body.length, limit: MAX_SKILL_BODY_CHARS })}
+            </span>
+          )}
           <Button kind="ghost" size="sm" icon="Trash" onClick={del} disabled={remove.isPending}>
             {t("editor.delete")}
           </Button>
-          <Button
-            kind="secondary"
-            size="sm"
-            icon="Check"
-            onClick={save}
-            disabled={over || !dirty || update.isPending}
-          >
-            {update.isPending ? t("editor.saving") : t("editor.save")}
-          </Button>
+          {tab === "body" && (
+            <Button
+              kind="secondary"
+              size="sm"
+              icon="Check"
+              onClick={save}
+              disabled={over || !dirty || update.isPending}
+            >
+              {update.isPending ? t("editor.saving") : t("editor.save")}
+            </Button>
+          )}
         </div>
       </div>
 
-      <textarea
-        className="mono"
-        value={body}
-        onChange={(e) => setDraft(e.target.value)}
-        placeholder={t("editor.bodyPlaceholder")}
-        aria-label={skill.name}
-        spellCheck={false}
-        style={s.textarea}
+      <Tabs
+        tabs={[
+          { key: "body", label: t("editor.tabs.body") },
+          { key: "context", label: t("editor.tabs.context") },
+        ]}
+        value={tab}
+        onChange={(k) => setTab(k as EditorTab)}
+        pad="0 14px"
       />
 
-      {over && (
-        <div role="alert" style={s.limitError}>
-          {t("editor.overLimit", { count: body.length, limit: MAX_SKILL_BODY_CHARS })}
-        </div>
-      )}
-      {update.isError && (
-        <div role="alert" style={s.limitError}>
-          {t("editor.saveError")}
-        </div>
+      {tab === "body" ? (
+        <>
+          <textarea
+            className="mono"
+            value={body}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={t("editor.bodyPlaceholder")}
+            aria-label={skill.name}
+            spellCheck={false}
+            style={s.textarea}
+          />
+
+          {over && (
+            <div role="alert" style={s.limitError}>
+              {t("editor.overLimit", { count: body.length, limit: MAX_SKILL_BODY_CHARS })}
+            </div>
+          )}
+          {update.isError && (
+            <div role="alert" style={s.limitError}>
+              {t("editor.saveError")}
+            </div>
+          )}
+        </>
+      ) : (
+        <ContextTab skillId={skill.id} />
       )}
     </div>
   );
