@@ -27,7 +27,10 @@ export type {
   PrCommit,
   PrReviewComment,
   PrStatus,
-  SpecFile,
+  ProjectContextDoc,
+  ProjectContextList,
+  ProjectContextDocDetail,
+  ProjectContextAttachment,
   IndexStatus,
 } from "@devdigest/shared";
 

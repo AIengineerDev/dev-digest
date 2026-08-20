@@ -66,6 +66,32 @@ _None yet._
 
 ## Codebase Patterns
 
+- **2026-08-19** — A route with no `:repoId` in its URL (e.g. `/skills`) is not
+  actually repo-blind: `useActiveRepo()` (`src/lib/repo-context.tsx`) tracks one
+  global active repo for the whole app — path segment, then `localStorage`
+  (`dd-repo`), then the first repo from `useRepos()` — and it already backs the
+  shell's own repo switcher, reachable from every page. A repo-scoped feature
+  bolted onto a repo-agnostic screen (the skill editor's Context tab, reversing
+  spec 09's D2 for skills only) should read this instead of adding a second
+  local `useState`/`<select>` for "current repo": a second source would let the
+  shell and the feature disagree about which repo is active, the exact class of
+  bug D2 was written to avoid for attachment state.
+  `src/lib/repo-context.tsx:58`
+
+- **2026-08-19** — `PUT /repos/:id/context/attachments` replaces the WHOLE
+  attachment-target set for **one document**, not a delta — so any attach UI
+  that is not itself document-centric (a skill- or agent-centric "which docs am
+  I attached to" tab) is unsafe to write from until it has that specific
+  document's own attachment list. The list endpoint (`GET /repos/:id/context`)
+  only carries `agent_count`/`skill_count`, never the targets themselves, so
+  toggling from it would silently drop the document's other attachments (every
+  agent/skill that isn't the one being toggled). The fix: fetch each row's
+  detail via `useQueries`, keyed **identically** to `hooks/core.ts`'s
+  `useProjectContextDoc` (`["context-doc", repoId, path]`) so the cache is
+  shared rather than duplicated, and disable that row's toggle until its own
+  detail has loaded — a click before then is a silent no-op, not a wrong write.
+  `src/app/skills/_components/SkillsLabView/_components/SkillEditor/_components/ContextTab/ContextTab.tsx:38`
+
 - **2026-08-10** — Do not act on 2026-era "React Compiler made `useMemo`
   obsolete, delete it" advice here: **the compiler is not enabled**. React is
   19.0 and `next.config.mjs` sets only `reactStrictMode` and the API-base env

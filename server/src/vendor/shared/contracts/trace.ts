@@ -36,6 +36,18 @@ export const ToolCall = z.object({
 });
 export type ToolCall = z.infer<typeof ToolCall>;
 
+/** One document's attribution row inside `PromptAssembly.specs_used`
+ *  (specs/09-project-context.md R5, R6, R8, R10). */
+export const SpecUsed = z.object({
+  path: z.string(),
+  /** `agent` and/or `skill:<name>` — both listed when a document is attached
+   *  through both routes and deduped into one injection (R6). */
+  sources: z.array(z.string()),
+  tokens: z.number().int(),
+  status: z.enum(['injected', 'dropped', 'skipped']),
+});
+export type SpecUsed = z.infer<typeof SpecUsed>;
+
 export const PromptAssembly = z.object({
   system: z.string(),
   skills: z.string().nullish(),
@@ -73,6 +85,21 @@ export const PromptAssembly = z.object({
    * here. Null on traces written before the id existed.
    */
   correlation_id: z.string().nullish(),
+  /**
+   * Per-document attribution for the `specs` slot (specs/09-project-context.md
+   * R5, R6). Metadata only — path, attachment source(s), token count, status —
+   * never the document text: `specs` already holds the rendered block verbatim
+   * and `user` holds the whole message, so a third copy would double the
+   * largest thing in the trace (root `INSIGHTS.md:211-219`). Null on traces
+   * written before this field existed, and on runs with no `specs` slot.
+   */
+  specs_used: z.array(SpecUsed).nullish(),
+  /**
+   * Token count of the `specs` slot alone, from the same tokenizer the run
+   * log's per-section stats use. Null when the run has no `specs` slot, or on
+   * traces written before this field existed — never 0.
+   */
+  specs_tokens: z.number().int().nullish(),
   user: z.string(),
 });
 export type PromptAssembly = z.infer<typeof PromptAssembly>;

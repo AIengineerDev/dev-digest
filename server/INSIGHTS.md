@@ -154,6 +154,18 @@ reference in every route.
   deliberately built to distinguish the two.
   `src/modules/repo-intel/service.ts:190-206` · `src/modules/brief/service.ts:107`
 
+- **2026-08-19** — When a plan requires a hermetic unit test for an assembler-shaped
+  class that reads one DB table (mirroring `SkillAssembler`'s
+  `constructor(db: Db)`), do not copy that constructor shape verbatim — it can
+  only be tested via `*.it.test.ts` + Postgres, which is what `SkillAssembler`'s
+  own only test (`test/skills-assembly.it.test.ts`) does. `ProjectContextAssembler`
+  instead takes an injected `AttachmentSource` interface (the narrow read it
+  needs), not a raw `Db` it builds its own repository from; the container still
+  wires the real `ProjectContextRepository`, but `test/project-context/
+  assembler.test.ts` passes an in-memory stub and needs no Docker. The dedup
+  (C11), tail-drop (C12) and disabled-skill (C14) cases in
+  `specs/09-project-context.md` all needed this to stay in the fast lane.
+  `src/modules/project-context/assembler.ts:26` (`AttachmentSource`)
 - **2026-08-09** — A `RunLogger` fanned over an EMPTY `runIds` array is a valid,
   reusable "best-effort logger with no run" — `event()`/`info()`/`step()` just
   iterate zero SSE targets and skip straight to the stdout mirror. `POST
@@ -219,7 +231,7 @@ reference in every route.
   that is correct — a test just calls them. `pnpm arch` enforces exactly this
   split, so the test for a new adapter is "would a test ever want to swap it
   out?", not "does it live in adapters/". `src/adapters/index.ts:1`
-- **2026-08-09** — 5 of the 11 baseline `pnpm arch` violations are import cycles,
+- **2026-08-09** — 5 of the baseline `pnpm arch` violations are import cycles,
   and nearly all run through the composition root: `platform/container.ts`
   imports concrete module classes (`AgentsRepository`, `ReviewRepository`,
   `RepoIntelService` at `container.ts:26-29`) while those modules import
@@ -303,6 +315,17 @@ reference in every route.
   2026-08-09, "nothing here is atomic") but is the reason ANY future
   `COALESCE`-based unique index needs the same select-then-write shape, not a
   native upsert. `src/modules/brief/repository.ts:100-127`
+- **2026-08-19** — `MockGitClient.readFile` (`src/adapters/mocks.ts:293-295`)
+  never throws — an unknown path degrades to `''`, unlike the real
+  `SimpleGitClient.readFile` (a bare `fs.readFile`, ENOENT on a missing file).
+  A test asserting a "document unreadable / missing on disk" code path (e.g.
+  specs/09-project-context.md R10, C7) against the base mock silently exercises
+  the *empty-content* branch instead, not the *catch* branch — both return, so
+  nothing fails, but the wrong line ran. Use a small subclass overriding
+  `readFile` to throw for unknown paths (see
+  `test/project-context/attachments.it.test.ts`'s `ThrowsOnMissingGitClient`,
+  or `test/project-context/assembler.test.ts`'s throwing stub) when the
+  assertion is specifically about the unreadable path, not the found-but-empty one.
 
 - **2026-08-10** — `text('col', { enum: [...] })` in Drizzle is a **TypeScript-only**
   union over a plain Postgres `text` column — `\d skills` shows no check
@@ -324,6 +347,49 @@ reference in every route.
 
 
 ## Recurring Errors & Fixes
+
+- **2026-08-19** — The integration lane is now big enough to starve itself.
+  After merging two features it holds **19 `*.it.test.ts` files**, each pulling
+  up its own Postgres through testcontainers. Run together,
+  `pnpm exec vitest run .it.test` produced one failure —
+  `skills-assembly.it.test.ts > an over-budget assembly drops the tail` — after
+  **289 s** on a test that takes **10.5 s in isolation and passes**. The
+  hermetic lane (258 tests) was green in the same tree. So a single red in a
+  full `.it.test` run is now more likely to be contention than a defect:
+  re-run the named file alone before believing it. If it recurs, the fix is to
+  cap concurrency for that lane (`--poolOptions.threads.maxThreads`) rather
+  than to raise `testTimeout` again — it is already 120 s, and a timeout that
+  large stops distinguishing "slow" from "hung".
+  `server/vitest.config.ts:16` · `server/test/skills-assembly.it.test.ts`
+
+- **2026-08-19** — `test/prompt-callers.test.ts` and `test/prompt-structured.test.ts`
+  fail on this branch's trunk as of commit `2dbaa58` ("feat(context): contracts,
+  engine labelling and shared walk limits") — **pre-existing, not caused by any
+  later change**: confirmed by `git stash` of an unrelated Track A diff and
+  re-running the same two files, which failed identically. Both still call
+  `assemblePrompt({ ..., specs: ['a string'] })`, the shape `ReviewInput.specs`/
+  `PromptParts.specs` had before that commit widened it to
+  `Array<{source, text}>` (specs/09-project-context.md contract change,
+  `reviewer-core/src/prompt.ts:99`). `wrapUntrusted` then reads `s.source`/
+  `s.text` off a bare string and throws `Cannot read properties of undefined
+  (reading 'replaceAll')` (`reviewer-core/src/prompt.ts:47`). Fix is a one-line
+  fixture change in each file (`specs: [{ source: 'security-baseline.md', text:
+  '...' }]`); not fixed here because neither file is in `server/test/
+  project-context/**` or `server/test/reviews/**`. A bare `cd server && pnpm
+  test` will show these 2 files / 5 tests red until someone in-scope updates them.
+  `server/test/prompt-callers.test.ts:20` · `server/test/prompt-structured.test.ts:19`
+
+- **2026-08-19** — The `pnpm arch` known-violations baseline is smaller than
+  every doc that quotes it: `server/.dependency-cruiser-known-violations.json`
+  has **10** entries (5 `no-circular`, 3 `routes-no-db`, 1 `helpers-are-pure`,
+  1 `no-cross-module-internals`) as of this date, not the "11" / "4
+  `routes-no-db`" repeated in `.claude/skills/onion-architecture/SKILL.md` and
+  in `plans/09-project-context.plan.md`. One `routes-no-db` violation was
+  fixed between when those docs were written and now, and nothing updated the
+  count. Trust `pnpm arch`'s own `‼ N known violations ignored` line (or the
+  file's length) over any doc-stated number before treating a gate result as
+  "matches baseline" — do not chase a phantom "missing violation".
+  `server/.dependency-cruiser-known-violations.json`
 
 - **2026-08-14** — `agent_runs.status = 'done'` used to be written **before**
   the `run_traces` row, so a consumer that polls for a terminal status and then

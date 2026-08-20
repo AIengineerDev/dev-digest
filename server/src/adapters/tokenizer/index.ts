@@ -8,12 +8,21 @@
  * lazy-initialised (loading the BPE ranks is the heavy part) and any failure
  * falls back to the `ceil(chars / 4)` heuristic — the renderer must never throw.
  *
- * Scope: in-process. Used by the repo-map budget search under
- * modules/repo-intel, and by modules/brief's R5 pre-flight gate
- * (`modules/brief/assemble.ts`), which measures the assembled prompt BEFORE
- * any model call — that is what makes the 8 000-token ceiling assertable in a
- * hermetic test. Swappable in tests via a mock counter
- * (ContainerOverrides.tokenizer).
+ * Scope: in-process. Originally scoped to modules/repo-intel only, and widened
+ * deliberately twice: for `modules/brief`'s pre-flight gate
+ * (`modules/brief/assemble.ts`), which measures the assembled prompt BEFORE any
+ * model call — that is what makes the 8 000-token ceiling assertable in a
+ * hermetic test — and for `modules/project-context` (list/detail token counts,
+ * and the assembler's run-time budget, specs/09-project-context.md plan A2).
+ *
+ * `pnpm arch` does not restrict it: this file is a stateless helper (no
+ * credentials, no network), exempt from `injected-adapters-only-from-container`.
+ * It stays the ONE counter in the repo — `server/INSIGHTS.md` (2026-08-09)
+ * already rejected a second, cheaper estimator; do not add one for a new caller
+ * either. Note the measured limit recorded in `specs/10-pr-brief.md`: this
+ * counter does not see the structured-output schema envelope the provider
+ * bills, so a gate built on it is a floor, not the billed number.
+ * Swappable in tests via a mock counter (ContainerOverrides.tokenizer).
  */
 import { getEncoding, type Tiktoken } from 'js-tiktoken';
 

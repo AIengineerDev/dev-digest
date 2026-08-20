@@ -57,7 +57,18 @@ _None yet._
 
 ## Codebase Patterns
 
-_None yet._
+- **2026-08-19** — To prove a new `assemblePrompt` slot did not shift the
+  output for callers that omit it ("byte-identical to the pre-feature
+  baseline" — a "done when" in `plans/09-project-context.plan.md` T2), record
+  the baseline by running the SAME full-input object through the pre-change
+  `assemblePrompt` (`git show <commit>:reviewer-core/src/prompt.ts` piped to a
+  scratch file, executed with `npx tsx` — the `import type { … } from
+  '@devdigest/shared'` at the top is erased by esbuild so no path-alias
+  resolution is needed) and hardcode the resulting `messages[1].content`
+  string as the test fixture, not a description of it. A structural diff of
+  the two `prompt.ts` versions is not sufficient proof by itself: only a
+  literal string comparison catches an unrelated section's rendering having
+  shifted. See `test/prompt-specs.test.ts` (`PRE_FEATURE_BASELINE_USER`).
 
 ## Tool & Library Notes
 

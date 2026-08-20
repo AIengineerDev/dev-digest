@@ -256,14 +256,68 @@ export const PrCommentInput = z.object({
 });
 export type PrCommentInput = z.infer<typeof PrCommentInput>;
 
-// ---- Project Context ----
-export const SpecFile = z.object({
+// ---- Project Context (specs/09-project-context.md) ----
+
+/**
+ * One row of the document list (`GET /repos/:id/context`). Never carries
+ * `content` — a list response that shipped every document body would send
+ * megabytes to render a sidebar; the body is fetched per-document via
+ * `ProjectContextDocDetail`.
+ */
+export const ProjectContextDoc = z.object({
   path: z.string(),
-  content: z.string().nullish(),
-  size: z.number().int().nullish(),
-  updated_at: z.string().nullish(),
+  size: z.number().int(),
+  /** Token count from `container.tokenizer.count`. Nullish = not yet counted
+   *  (renders a skeleton, never a `0` — see spec C5). */
+  tokens: z.number().int().nullish(),
+  agent_count: z.number().int(),
+  skill_count: z.number().int(),
+  /** Attached but no longer found on disk at the last scan (spec R10). */
+  missing: z.boolean(),
+  /** Over the per-document size ceiling; listed but not attachable (spec C4). */
+  too_large: z.boolean(),
 });
-export type SpecFile = z.infer<typeof SpecFile>;
+export type ProjectContextDoc = z.infer<typeof ProjectContextDoc>;
+
+/** Response of `GET /repos/:id/context` (spec R1, R3a, D4, C3, C6). */
+export const ProjectContextList = z.object({
+  docs: z.array(ProjectContextDoc),
+  /** Commit the scan read the clone at (spec D4's footer; per-document
+   *  last-modified info was dropped as unbuildable on a depth-1 clone). */
+  head_sha: z.string().nullish(),
+  /** True when discovery hit the document cap and stopped (spec C3). */
+  truncated: z.boolean(),
+  /** The cap `truncated` is measured against. */
+  limit: z.number().int(),
+  /** Sum of `tokens` over every discovered document — a ceiling if everything
+   *  were attached, never a current cost (spec R3a, D4). */
+  total_tokens: z.number().int(),
+});
+export type ProjectContextList = z.infer<typeof ProjectContextList>;
+
+/** Response of `GET /repos/:id/context/doc?path=…` (spec R2). */
+export const ProjectContextDocDetail = z.object({
+  path: z.string(),
+  content: z.string(),
+  tokens: z.number().int().nullish(),
+  attachments: z.array(z.object({ target_kind: z.enum(['agent', 'skill']), target_id: z.string() })),
+  github_url: z.string().nullish(),
+  missing: z.boolean(),
+});
+export type ProjectContextDocDetail = z.infer<typeof ProjectContextDocDetail>;
+
+/**
+ * A document-to-target attachment, mirroring `AgentSkillLink`
+ * (`contracts/knowledge.ts:376-381`), which already carries `order` — the
+ * order the run-time cap (spec R8) drops from.
+ */
+export const ProjectContextAttachment = z.object({
+  path: z.string(),
+  target_kind: z.enum(['agent', 'skill']),
+  target_id: z.string(),
+  order: z.number().int(),
+});
+export type ProjectContextAttachment = z.infer<typeof ProjectContextAttachment>;
 
 export const IndexStatus = z.object({
   status: z.enum(['idle', 'cloning', 'parsing', 'embedding', 'done', 'error']),

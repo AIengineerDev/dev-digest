@@ -20,12 +20,14 @@ import { OpenAIProvider } from '../adapters/llm/openai.js';
 import { AnthropicProvider } from '../adapters/llm/anthropic.js';
 import { OpenAIEmbedder } from '../adapters/embedder/openai.js';
 import { OpenRouterProvider } from '@devdigest/reviewer-core';
-import { estimateCost } from '../adapters/llm/pricing.js';
+import { estimateCost, resolveContextWindow } from '../adapters/llm/pricing.js';
 import { PriceBook } from './price-book.js';
 import { ConfigError } from './errors.js';
 import { AgentsRepository } from '../modules/agents/repository.js';
 import { ReviewRepository } from '../modules/reviews/repository.js';
 import { SkillAssembler } from '../modules/skills/assembler.js';
+import { ProjectContextAssembler } from '../modules/project-context/assembler.js';
+import { ProjectContextRepository } from '../modules/project-context/repository.js';
 import { SkillsWriter } from '../modules/skills/writer.js';
 import type { RepoIntel } from '../modules/repo-intel/types.js';
 import { RepoIntelService } from '../modules/repo-intel/service.js';
@@ -75,6 +77,7 @@ export class Container {
   private _agentsRepo?: AgentsRepository;
   private _reviewRepo?: ReviewRepository;
   private _skills?: SkillAssembler;
+  private _projectContext?: ProjectContextAssembler;
   private _skillsWriter?: SkillsWriter;
   private _repoIntel?: RepoIntel;
   private _depgraph?: DepGraph;
@@ -121,6 +124,24 @@ export class Container {
    */
   get skillsWriter(): SkillsWriter {
     return (this._skillsWriter ??= new SkillsWriter(this.db));
+  }
+
+  /**
+   * Resolves an agent's attached project-context documents into prompt blocks
+   * (dedup by path, the run-time budget cap). Constructed here — same shape as
+   * `skills` — so the run executor reaches it through the container instead of
+   * importing across modules. `resolveContextWindow` (adapters/llm/pricing.ts)
+   * is injected rather than imported by the assembler itself, since
+   * `injected-adapters-only-from-container` forbids a module reaching into
+   * `adapters/llm/*` directly.
+   */
+  get projectContext(): ProjectContextAssembler {
+    return (this._projectContext ??= new ProjectContextAssembler(
+      new ProjectContextRepository(this.db),
+      this.git,
+      this.tokenizer,
+      resolveContextWindow,
+    ));
   }
 
   get codeIndex(): CodeIndex {

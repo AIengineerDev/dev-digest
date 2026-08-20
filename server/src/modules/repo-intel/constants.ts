@@ -3,6 +3,8 @@
  * exported early so the pipeline lands against a single source of truth.
  */
 
+import { EXCLUDED_DIRS, MAX_FILE_SIZE } from '../_shared/walk-limits.js';
+
 // --- Job kinds (registered on JobRunner; enqueued from repos/service.ts) ----
 export const INDEX_JOB_KIND = 'repo-intel-index';
 export const REFRESH_JOB_KIND = 'repo-intel-refresh';
@@ -13,17 +15,13 @@ export const RESYNC_JOB_KIND = 'repo-intel-resync';
 /** [T1] Files we parse (diff-scoped in T1; whole walk in T2). */
 export const SUPPORTED_EXT = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'] as const;
 
-/** [T1] Directories never walked. `.gitignore` is layered on top in T2 walk. */
-export const EXCLUDED_DIRS = [
-  'node_modules',
-  'dist',
-  'build',
-  'coverage',
-  '.next',
-  'out',
-  'vendor',
-  '.git',
-] as const;
+/**
+ * [T1] Directories never walked. `.gitignore` is layered on top in T2 walk.
+ * Re-exported from `modules/_shared/walk-limits.ts` (specs/09-project-
+ * context.md, T3) — `project-context`'s discovery walk shares this exact
+ * list, and it must not drift into a second, differently-maintained copy.
+ */
+export { EXCLUDED_DIRS };
 
 // --- Read-time limits -------------------------------------------------------
 /** [T1] Caller fan-out cap per changed symbol (ORDER BY rank DESC LIMIT N). */
@@ -40,7 +38,11 @@ export const INDEXER_VERSION = 2;
 
 // --- [T2] Full-index limits (documented now, enforced in the pipeline) ------
 export const MAX_INDEXED_FILES = 5000;
-export const MAX_FILE_SIZE = 400 * 1024; // 400 KB
+/**
+ * Re-exported from `modules/_shared/walk-limits.ts` (specs/09-project-
+ * context.md, T3) for the same reason as `EXCLUDED_DIRS` above.
+ */
+export { MAX_FILE_SIZE };
 export const MAX_PARSE_MS_PER_FILE = 2000;
 /** Soft self-watch budget (< JobRunner hard 120s) → finish as `partial`. */
 export const INDEX_SOFT_BUDGET_MS = 110_000;

@@ -61,7 +61,9 @@
       "noMatches": "No matches for “{q}”.",
       "skillsUsed": "{count} · {names}",
       "skillsUsedWithTokens": "{count} · {tokens} · {names}",
-      "skillsNone": "none linked — attach skills in Agents → this agent → Skills"
+      "skillsNone": "none linked — attach skills in Agents → this agent → Skills",
+      "specsUsed": "{count} · {names} — documents read at replay time, not pinned to this version",
+      "specsUsedWithTokens": "{count} · {tokens} · {names} — documents read at replay time, not pinned to this version"
     },
     "tools": {
       "args": "args",
