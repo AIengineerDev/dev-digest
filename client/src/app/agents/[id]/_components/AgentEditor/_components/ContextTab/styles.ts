@@ -2,7 +2,12 @@ import type { CSSProperties } from "react";
 
 /** Co-located styles for the Agent Editor → Context tab. */
 export const s = {
-  wrap: { maxWidth: 760 } satisfies CSSProperties,
+  // `outer` holds the document list beside the (optional) PreviewPanel:
+  // `wrap` keeps its own maxWidth so the list reads the same whether or not
+  // the panel is open, and flex naturally gives the panel the remaining
+  // width without either column needing to know about the other's state.
+  outer: { display: "flex", gap: 16, alignItems: "flex-start" } satisfies CSSProperties,
+  wrap: { maxWidth: 760, minWidth: 0, flex: "1 1 auto" } satisfies CSSProperties,
   header: { display: "flex", alignItems: "center", gap: 12, marginBottom: 6 } satisfies CSSProperties,
   h2: { fontSize: 18, fontWeight: 700 } satisfies CSSProperties,
   filter: { marginLeft: "auto", width: 220 } satisfies CSSProperties,
@@ -61,7 +66,10 @@ export const s = {
     display: "flex",
     alignItems: "center",
     gap: 3,
-    textDecoration: "none",
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
   } satisfies CSSProperties,
   note: { fontSize: 11, color: "var(--text-muted)" } satisfies CSSProperties,
   empty: { padding: "24px 12px", fontSize: 13, color: "var(--text-muted)", textAlign: "center" } satisfies CSSProperties,

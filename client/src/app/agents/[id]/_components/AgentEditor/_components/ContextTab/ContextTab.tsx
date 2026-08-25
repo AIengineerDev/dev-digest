@@ -33,12 +33,12 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { Badge, EmptyState, ErrorState, Icon, Skeleton, TextInput, Toggle } from "@devdigest/ui";
 import type { Agent, ProjectContextDocDetail } from "@devdigest/shared";
 import { api } from "@/lib/api";
 import { useActiveRepo } from "@/lib/repo-context";
 import { useContextFiles, useSetContextAttachments, useSetContextOrder } from "@/lib/hooks/core";
+import { PreviewPanel } from "./_components/PreviewPanel";
 import { CATEGORY_COLOR, DRAG_MIME, SKELETON_ROWS } from "./constants";
 import {
   buildDocOrder,
@@ -64,6 +64,7 @@ export function ContextTab({ agent }: { agent: Agent }) {
   const [errorFor, setErrorFor] = React.useState<string | null>(null);
   const [order, setOrderState] = React.useState<string[]>([]);
   const [dragPath, setDragPath] = React.useState<string | null>(null);
+  const [previewPath, setPreviewPath] = React.useState<string | null>(null);
 
   const docs = React.useMemo(() => [...(filesQuery.data?.docs ?? [])].sort((a, b) => a.path.localeCompare(b.path)), [
     filesQuery.data,
@@ -164,7 +165,17 @@ export function ContextTab({ agent }: { agent: Agent }) {
     );
   };
 
+  // Toggling the SAME row's Preview a second time closes the panel; any
+  // other row's Preview swaps its content in — the read-your-own-click
+  // behaviour asked for by the task, decided consistently here rather than
+  // per click site.
+  const togglePreview = (path: string) => setPreviewPath((cur) => (cur === path ? null : path));
+  const previewDoc = previewPath ? docs.find((d) => d.path === previewPath) : undefined;
+  const previewDetail = previewPath ? detailByPath.get(previewPath) : undefined;
+  const previewQuery = previewPath ? queryByPath.get(previewPath) : undefined;
+
   return (
+    <div style={s.outer}>
     <div style={s.wrap}>
       <div style={s.header}>
         <h2 style={s.h2}>{t("context.heading")}</h2>
@@ -271,23 +282,33 @@ export function ContextTab({ agent }: { agent: Agent }) {
                 <span className="tnum" style={s.tokens}>
                   {doc.tokens == null ? "" : t("context.tokens", { tokens: doc.tokens })}
                 </span>
-                {repoId && (
-                  <Link
-                    href={`/repos/${repoId}/context?path=${encodeURIComponent(doc.path)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={s.preview}
-                    aria-label={t("context.previewLabel", { path: doc.path })}
-                  >
-                    <Icon.ExternalLink size={12} />
-                    {t("context.preview")}
-                  </Link>
-                )}
+                <button
+                  type="button"
+                  style={s.preview}
+                  aria-pressed={previewPath === doc.path}
+                  aria-label={t("context.previewLabel", { path: doc.path })}
+                  onClick={() => togglePreview(doc.path)}
+                >
+                  <Icon.Eye size={12} />
+                  {t("context.preview")}
+                </button>
               </div>
             );
           })}
         </div>
       )}
+    </div>
+    {previewDoc && (
+      <PreviewPanel
+        path={previewDoc.path}
+        missing={previewDoc.missing}
+        tooLarge={previewDoc.too_large}
+        detail={previewDetail}
+        isLoading={!previewDetail && !previewQuery?.isError}
+        isError={!!previewQuery?.isError}
+        onClose={() => setPreviewPath(null)}
+      />
+    )}
     </div>
   );
 }

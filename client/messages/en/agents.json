@@ -134,7 +134,18 @@
     "missing": "missing",
     "tooLarge": "over the attach size limit",
     "rowLoadError": "Couldn't load this document's attachments.",
-    "saveError": "Couldn't save that change — reverted."
+    "saveError": "Couldn't save that change — reverted.",
+    "previewPanel": {
+      "close": "Close preview",
+      "closeLabel": "Close preview of \"{path}\"",
+      "loading": "Loading document…",
+      "loadErrorTitle": "Couldn't load this document",
+      "loadErrorBody": "The document's content could not be loaded.",
+      "missingTitle": "No longer in the repository",
+      "missingBody": "\"{path}\" was attached, but the last scan didn't find it on disk — it may have been deleted, renamed or moved.",
+      "tooLargeTitle": "Too large to preview",
+      "tooLargeBody": "\"{path}\" is over the attach size limit — open it on GitHub to read it."
+    }
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."

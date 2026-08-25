@@ -103,6 +103,22 @@ to display data already sitting in memory.
 
 ## Codebase Patterns
 
+- **2026-08-25** — Any row that already renders through a per-row `useQueries`
+  detail fetch (agent/skill `ContextTab`'s `["context-doc", repoId, path]` map,
+  `ContextTab.tsx:78-87`) can add an inline preview for free: the query already
+  carries `ProjectContextDocDetail.content`, keyed identically to
+  `useProjectContextDoc`, so a preview panel takes `detail`/`isLoading`/`isError`
+  as props from that same map instead of calling the hook again — no new
+  request, same cache entry the Project Context page's own `DocViewer` reads.
+  Also worth knowing before gating a preview on size: `too_large` on
+  `ProjectContextDoc` is attach-only — `getDocument` (`server/src/modules/
+  project-context/service.ts:107-115`) always reads and returns the FULL file,
+  never truncates, and `DocViewer` itself renders the full body for a too-large
+  doc and only disables the attach toggle. A panel that wants to refuse a huge
+  body has to add that check itself from the list-level `doc.too_large` flag —
+  nothing upstream does it for you.
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/ContextTab/_components/PreviewPanel/PreviewPanel.tsx:1`
+
 - **2026-08-19** — A route with no `:repoId` in its URL (e.g. `/skills`) is not
   actually repo-blind: `useActiveRepo()` (`src/lib/repo-context.tsx`) tracks one
   global active repo for the whole app — path segment, then `localStorage`

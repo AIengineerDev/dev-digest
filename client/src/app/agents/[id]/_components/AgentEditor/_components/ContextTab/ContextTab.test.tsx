@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent, ProjectContextDoc, ProjectContextDocDetail, Repo } from "@devdigest/shared";
@@ -338,5 +338,68 @@ describe("ContextTab (agent editor)", () => {
     filesQuery.current = { ...filesQuery.current, isError: true, data: undefined };
     renderTab();
     expect(screen.getByText("Couldn't load project-context documents.")).toBeInTheDocument();
+  });
+
+  describe("preview panel", () => {
+    it("opens inline, on the same page, with the clicked row's full path and rendered content", async () => {
+      renderTab();
+      await screen.findByText("README.md");
+      fireEvent.click(screen.getByLabelText("Preview docs/prd.md"));
+
+      // The row's own detail query is already loaded (the same one that
+      // drives the toggle) — no separate fetch, no navigation away.
+      const panel = await screen.findByRole("region", { name: "docs/prd.md" });
+      expect(panel).toBeInTheDocument();
+      expect(within(panel).getByText("PRD")).toBeInTheDocument();
+      // The list is still there, on the same page — Preview didn't navigate.
+      expect(screen.getByText("README.md")).toBeInTheDocument();
+    });
+
+    it("swaps content when Preview is clicked on a different row", async () => {
+      renderTab();
+      await screen.findByText("README.md");
+      fireEvent.click(screen.getByLabelText("Preview docs/prd.md"));
+      await screen.findByRole("region", { name: "docs/prd.md" });
+
+      fireEvent.click(screen.getByLabelText("Preview README.md"));
+      await waitFor(() => expect(screen.getByRole("region", { name: "README.md" })).toBeInTheDocument());
+      expect(screen.queryByRole("region", { name: "docs/prd.md" })).not.toBeInTheDocument();
+    });
+
+    it("closes when Preview is clicked again on the row already shown", async () => {
+      renderTab();
+      await screen.findByText("README.md");
+      fireEvent.click(screen.getByLabelText("Preview docs/prd.md"));
+      await screen.findByRole("region", { name: "docs/prd.md" });
+
+      fireEvent.click(screen.getByLabelText("Preview docs/prd.md"));
+      expect(screen.queryByRole("region", { name: "docs/prd.md" })).not.toBeInTheDocument();
+    });
+
+    it("closes via the panel's own close control", async () => {
+      renderTab();
+      await screen.findByText("README.md");
+      fireEvent.click(screen.getByLabelText("Preview docs/prd.md"));
+      await screen.findByRole("region", { name: "docs/prd.md" });
+
+      fireEvent.click(screen.getByLabelText('Close preview of "docs/prd.md"'));
+      expect(screen.queryByRole("region", { name: "docs/prd.md" })).not.toBeInTheDocument();
+    });
+
+    it("keeps toggling and reordering usable while the panel is open", async () => {
+      renderTab();
+      await screen.findByText("README.md");
+      fireEvent.click(screen.getByLabelText("Preview docs/prd.md"));
+      await screen.findByRole("region", { name: "docs/prd.md" });
+
+      const rowA = screen.getByLabelText('Attach "docs/prd.md" to this agent');
+      await waitFor(() => expect(rowA.querySelector('[role="switch"]')).toHaveAttribute("aria-checked", "false"));
+      fireEvent.click(rowA.querySelector('[role="switch"]')!);
+      expect(setAttachmentsMutate).toHaveBeenCalled();
+
+      const readmeHandle = screen.getByLabelText('Reorder "README.md"');
+      fireEvent.keyDown(readmeHandle, { key: "ArrowUp" });
+      expect(setOrderMutate).toHaveBeenCalled();
+    });
   });
 });
