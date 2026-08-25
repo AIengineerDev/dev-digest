@@ -62,7 +62,27 @@ to display data already sitting in memory.
 
 ## What Doesn't Work
 
-_None yet._
+- **2026-08-25** — A drag-reorder UI for project-context attachments cannot be
+  built against the shipped endpoints, on the agent (or any non-skill) side of
+  D2's reversal, without a server change — verified by reading, not guessed.
+  Two independent blockers: (1) `PUT /repos/:id/context/attachments` computes
+  `order` **server-side as a per-target append**
+  (`server/src/modules/project-context/service.ts:130-166`) — every target in
+  the submitted array gets `max(existing)+1` on every call, not just the one
+  you meant to reorder, so resubmitting a document to bump one target's order
+  silently reorders it for every *other* attached target too (a sibling skill
+  or agent's assembled context shifts without that owner touching anything —
+  the exact class of cross-actor corruption D2 exists to prevent). (2) Even if
+  that were acceptable, there is **no way to read the order back**: neither
+  `GET /repos/:id/context` nor `GET /repos/:id/context/doc` returns it —
+  `ProjectContextDocDetail.attachments` is `{target_kind, target_id}` only,
+  `order` is dropped (`client/src/vendor/shared/contracts/platform.ts:299-320`,
+  the response-only `ProjectContextAttachment` type that carries it is never
+  fetched by any client hook). A row order set client-side would revert to
+  path-sort on the next reload. The Agent Editor's Context tab therefore ships
+  without persisted reordering — rows are path-sorted — and this is the "stop
+  and report" outcome the PR brief explicitly allowed for exactly this case.
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/ContextTab/ContextTab.tsx:1`
 
 ## Codebase Patterns
 

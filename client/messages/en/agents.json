@@ -46,6 +46,7 @@
     "tabs": {
       "config": "Config",
       "skills": "Skills",
+      "context": "Context",
       "evals": "Evals",
       "stats": "Stats",
       "ci": "CI"
@@ -105,6 +106,33 @@
     "noMatches": "No skills match “{query}”.",
     "emptyTitle": "No skills yet",
     "emptyBody": "A skill is a reusable block of review guidance shared across agents. Create one in the Skills Lab, then attach it here."
+  },
+  "context": {
+    "heading": "Project context",
+    "attachedCount": "{attached} of {total} attached",
+    "explanation": "Order matters — earlier docs appear earlier in the assembled \"## Project context\" block. Toggle to attach.",
+    "filterPlaceholder": "Filter documents…",
+    "noMatches": "No documents match “{query}”.",
+    "toggleLabel": "Attach \"{path}\" to this agent",
+    "preview": "Preview",
+    "previewLabel": "Preview {path}",
+    "tokens": "{tokens}t",
+    "categories": {
+      "readme": "readme",
+      "specs": "specs",
+      "insights": "insights",
+      "docs": "docs"
+    },
+    "repoLabel": "Documents in {name}",
+    "noRepo": "Connect a repo to attach project-context documents to this agent.",
+    "loading": "Loading project-context documents…",
+    "loadError": "Couldn't load project-context documents.",
+    "emptyTitle": "No project-context documents",
+    "emptyBody": "This repo has no Markdown documents yet — add some and rescan from Project Context.",
+    "missing": "missing",
+    "tooLarge": "over the attach size limit",
+    "rowLoadError": "Couldn't load this document's attachments.",
+    "saveError": "Couldn't save that change — reverted."
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."
