@@ -49,12 +49,14 @@ const filesQuery = vi.hoisted(() => ({
   },
 }));
 const setAttachmentsMutate = vi.hoisted(() => vi.fn());
+const setOrderMutate = vi.hoisted(() => vi.fn());
 const detailByPath = vi.hoisted(() => new Map<string, ProjectContextDocDetail>());
 
 vi.mock("@/lib/repo-context", () => ({ useActiveRepo: () => activeRepo.current }));
 vi.mock("@/lib/hooks/core", () => ({
   useContextFiles: () => filesQuery.current,
   useSetContextAttachments: () => ({ mutate: setAttachmentsMutate, isPending: false, variables: undefined }),
+  useSetContextOrder: () => ({ mutate: setOrderMutate, isPending: false }),
 }));
 vi.mock("@/lib/api", () => ({
   api: {
@@ -79,12 +81,13 @@ beforeEach(() => {
     refetch: vi.fn(),
   };
   setAttachmentsMutate.mockClear();
+  setOrderMutate.mockClear();
   detailByPath.clear();
   detailByPath.set(DOC_A.path, {
     path: DOC_A.path,
     content: "# PRD",
     tokens: 559,
-    attachments: [{ target_kind: "skill", target_id: "sk-1" }],
+    attachments: [{ target_kind: "skill", target_id: "sk-1", order: 0 }],
     github_url: null,
     missing: false,
   });
@@ -92,7 +95,7 @@ beforeEach(() => {
     path: DOC_B.path,
     content: "# Spec",
     tokens: 120,
-    attachments: [{ target_kind: "agent", target_id: "agent-1" }],
+    attachments: [{ target_kind: "agent", target_id: "agent-1", order: 0 }],
     github_url: null,
     missing: false,
   });
@@ -155,7 +158,7 @@ describe("ContextTab (agent editor)", () => {
       {
         path: "docs/prd.md",
         targets: [
-          { target_kind: "skill", target_id: "sk-1" },
+          { target_kind: "skill", target_id: "sk-1", order: 0 },
           { target_kind: "agent", target_id: "agent-1" },
         ],
       },
@@ -169,9 +172,9 @@ describe("ContextTab (agent editor)", () => {
       content: "# Spec",
       tokens: 120,
       attachments: [
-        { target_kind: "agent", target_id: "agent-1" },
-        { target_kind: "agent", target_id: "agent-2" },
-        { target_kind: "skill", target_id: "sk-1" },
+        { target_kind: "agent", target_id: "agent-1", order: 0 },
+        { target_kind: "agent", target_id: "agent-2", order: 0 },
+        { target_kind: "skill", target_id: "sk-1", order: 0 },
       ],
       github_url: null,
       missing: false,
@@ -186,8 +189,8 @@ describe("ContextTab (agent editor)", () => {
       {
         path: "specs/09-project-context.md",
         targets: [
-          { target_kind: "agent", target_id: "agent-2" },
-          { target_kind: "skill", target_id: "sk-1" },
+          { target_kind: "agent", target_id: "agent-2", order: 0 },
+          { target_kind: "skill", target_id: "sk-1", order: 0 },
         ],
       },
       expect.anything(),
@@ -200,6 +203,110 @@ describe("ContextTab (agent editor)", () => {
     fireEvent.change(screen.getByLabelText("Filter documents…"), { target: { value: "specs" } });
     expect(screen.queryByText("README.md")).not.toBeInTheDocument();
     expect(screen.getByText("09-project-context.md")).toBeInTheDocument();
+  });
+
+  it("renders attached documents first, in persisted order (attachments[].order), not path order", async () => {
+    // Both docs/prd.md and README.md are attached to agent-1, README's
+    // `order` (0) lower than prd's (1) — the opposite of path-sort, which
+    // would put README.md first anyway by coincidence, so also invert vs
+    // specs/09-project-context.md (also attached, higher order still).
+    detailByPath.set(DOC_A.path, {
+      path: DOC_A.path,
+      content: "# PRD",
+      tokens: 559,
+      attachments: [{ target_kind: "agent", target_id: "agent-1", order: 2 }],
+      github_url: null,
+      missing: false,
+    });
+    detailByPath.set(DOC_B.path, {
+      path: DOC_B.path,
+      content: "# Spec",
+      tokens: 120,
+      attachments: [{ target_kind: "agent", target_id: "agent-1", order: 1 }],
+      github_url: null,
+      missing: false,
+    });
+    detailByPath.set(DOC_C.path, {
+      path: DOC_C.path,
+      content: "# Readme",
+      tokens: 42,
+      attachments: [{ target_kind: "agent", target_id: "agent-1", order: 0 }],
+      github_url: null,
+      missing: false,
+    });
+    renderTab();
+    await screen.findByText("README.md");
+
+    // The per-document detail queries (and thus their `order`) resolve
+    // asynchronously; wait for the reseed effect to apply the persisted order
+    // rather than asserting against the pre-load fallback (path order).
+    await waitFor(() =>
+      expect(screen.getAllByRole("listitem").map((row) => row.getAttribute("aria-label"))).toEqual([
+        "README.md",
+        "specs/09-project-context.md",
+        "docs/prd.md",
+      ]),
+    );
+  });
+
+  it("reordering with the keyboard persists via PUT /context/order, target-scoped to this agent", async () => {
+    detailByPath.set(DOC_B.path, {
+      path: DOC_B.path,
+      content: "# Spec",
+      tokens: 120,
+      attachments: [{ target_kind: "agent", target_id: "agent-1", order: 0 }],
+      github_url: null,
+      missing: false,
+    });
+    detailByPath.set(DOC_C.path, {
+      path: DOC_C.path,
+      content: "# Readme",
+      tokens: 42,
+      attachments: [{ target_kind: "agent", target_id: "agent-1", order: 1 }],
+      github_url: null,
+      missing: false,
+    });
+    renderTab();
+    await screen.findByText("README.md");
+
+    // Initial order: specs/09-project-context.md (order 0), README.md
+    // (order 1), then unattached docs/prd.md. Wait for the async detail
+    // queries' `order` to land before asserting.
+    await waitFor(() =>
+      expect(screen.getAllByRole("listitem").map((r) => r.getAttribute("aria-label"))).toEqual([
+        "specs/09-project-context.md",
+        "README.md",
+        "docs/prd.md",
+      ]),
+    );
+
+    const readmeHandle = screen.getByLabelText('Reorder "README.md"');
+    fireEvent.keyDown(readmeHandle, { key: "ArrowUp" });
+
+    await waitFor(() =>
+      expect(setOrderMutate).toHaveBeenCalledWith(
+        {
+          target_kind: "agent",
+          target_id: "agent-1",
+          // Only the two ATTACHED docs are in the write payload, reordered.
+          paths: ["README.md", "specs/09-project-context.md"],
+        },
+        expect.anything(),
+      ),
+    );
+    expect(screen.getAllByRole("listitem").map((r) => r.getAttribute("aria-label"))).toEqual([
+      "README.md",
+      "specs/09-project-context.md",
+      "docs/prd.md",
+    ]);
+  });
+
+  it("disables the reorder handle and drag while a filter is active", async () => {
+    renderTab();
+    await screen.findByText("README.md");
+    fireEvent.change(screen.getByLabelText("Filter documents…"), { target: { value: "readme" } });
+    const handle = screen.getByLabelText('Reorder "README.md"');
+    expect(handle).toBeDisabled();
   });
 
   it("blocks the toggle for an over-the-limit document", async () => {

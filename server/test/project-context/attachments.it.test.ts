@@ -128,6 +128,113 @@ d('project-context attachments', () => {
     expect(rows.map((r) => r.target_kind).sort()).toEqual(['agent', 'skill']);
   });
 
+  it('PUT /context/order reorders one target and leaves a sibling target on the same document untouched', async () => {
+    const app = await makeApp({ 'docs/c.md': '# c', 'docs/d.md': '# d' });
+    const agentId = randomUUID();
+    const skillId = randomUUID();
+
+    // Both docs attached to both the agent and a skill sharing them, in the
+    // same append order (docs/c.md, docs/d.md) for each target.
+    for (const path of ['docs/c.md', 'docs/d.md']) {
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/repos/${repoId}/context/attachments`,
+        payload: {
+          path,
+          targets: [
+            { target_kind: 'agent', target_id: agentId },
+            { target_kind: 'skill', target_id: skillId },
+          ],
+        },
+      });
+      expect(res.statusCode, res.body).toBe(200);
+    }
+
+    const skillOrderBefore = await app.inject({ method: 'GET', url: `/repos/${repoId}/context/doc?path=docs/c.md` });
+    const skillRowBefore = (
+      skillOrderBefore.json().attachments as Array<{ target_kind: string; target_id: string; order: number }>
+    ).find((a) => a.target_kind === 'skill' && a.target_id === skillId);
+
+    // Reorder ONLY the agent: docs/d.md before docs/c.md.
+    const reorder = await app.inject({
+      method: 'PUT',
+      url: `/repos/${repoId}/context/order`,
+      payload: { target_kind: 'agent', target_id: agentId, paths: ['docs/d.md', 'docs/c.md'] },
+    });
+    expect(reorder.statusCode, reorder.body).toBe(200);
+    const reordered = reorder.json().attachments as Array<{ path: string; order: number }>;
+    expect(reordered.map((a) => a.path)).toEqual(['docs/d.md', 'docs/c.md']);
+    expect(reordered.map((a) => a.order)).toEqual([0, 1]);
+
+    // The agent's order changed on docs/c.md...
+    const cDetail = await app.inject({ method: 'GET', url: `/repos/${repoId}/context/doc?path=docs/c.md` });
+    const cRows = cDetail.json().attachments as Array<{ target_kind: string; target_id: string; order: number }>;
+    const agentRowC = cRows.find((a) => a.target_kind === 'agent' && a.target_id === agentId);
+    expect(agentRowC?.order).toBe(1);
+
+    // ...but the SKILL's order on the very same document is untouched.
+    const skillRowAfter = cRows.find((a) => a.target_kind === 'skill' && a.target_id === skillId);
+    expect(skillRowAfter?.order).toBe(skillRowBefore?.order);
+  });
+
+  it('PUT /context/order persists across a reload (a GET afterward reflects the new order)', async () => {
+    const app = await makeApp({ 'docs/e.md': '# e', 'docs/f.md': '# f' });
+    const agentId = randomUUID();
+    for (const path of ['docs/e.md', 'docs/f.md']) {
+      await app.inject({
+        method: 'PUT',
+        url: `/repos/${repoId}/context/attachments`,
+        payload: { path, targets: [{ target_kind: 'agent', target_id: agentId }] },
+      });
+    }
+
+    await app.inject({
+      method: 'PUT',
+      url: `/repos/${repoId}/context/order`,
+      payload: { target_kind: 'agent', target_id: agentId, paths: ['docs/f.md', 'docs/e.md'] },
+    });
+
+    // Simulate a reload: fresh detail fetches for both documents.
+    const eDetail = await app.inject({ method: 'GET', url: `/repos/${repoId}/context/doc?path=docs/e.md` });
+    const fDetail = await app.inject({ method: 'GET', url: `/repos/${repoId}/context/doc?path=docs/f.md` });
+    const eOrder = (eDetail.json().attachments as Array<{ target_id: string; order: number }>).find(
+      (a) => a.target_id === agentId,
+    )?.order;
+    const fOrder = (fDetail.json().attachments as Array<{ target_id: string; order: number }>).find(
+      (a) => a.target_id === agentId,
+    )?.order;
+    expect(fOrder).toBeLessThan(eOrder!);
+  });
+
+  it('PUT /context/order ignores a path not currently attached to the target (no phantom row)', async () => {
+    const app = await makeApp({ 'docs/g.md': '# g' });
+    const agentId = randomUUID();
+    await app.inject({
+      method: 'PUT',
+      url: `/repos/${repoId}/context/attachments`,
+      payload: { path: 'docs/g.md', targets: [{ target_kind: 'agent', target_id: agentId }] },
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/repos/${repoId}/context/order`,
+      payload: { target_kind: 'agent', target_id: agentId, paths: ['docs/g.md', 'docs/never-attached.md'] },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json().attachments).toEqual([{ path: 'docs/g.md', target_kind: 'agent', target_id: agentId, order: 0 }]);
+
+    const rows = await pg.handle.db
+      .select()
+      .from(t.projectContextAttachments)
+      .where(
+        and(
+          eq(t.projectContextAttachments.repoId, repoId),
+          eq(t.projectContextAttachments.path, 'docs/never-attached.md'),
+        ),
+      );
+    expect(rows).toHaveLength(0);
+  });
+
   it('rejects attaching a document over the 400 KB size ceiling (spec C4)', async () => {
     const big = 'x'.repeat(401 * 1024);
     const app = await makeApp({ 'docs/huge.md': big });

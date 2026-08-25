@@ -191,6 +191,31 @@ export function useSetContextAttachments(repoId: string | null | undefined) {
 }
 
 /**
+ * PUT /repos/:id/context/order — set ONE target's (agent or skill) attachment
+ * order across many documents. The target-centric counterpart to
+ * `useSetContextAttachments` above: it never touches another target's rows
+ * (server/src/modules/project-context/service.ts:setOrder), so dragging a
+ * row in this agent's Context tab cannot reshuffle a sibling skill's or
+ * agent's assembled context — the cross-actor corruption
+ * `useSetContextAttachments`'s per-target append order would cause if reused
+ * for reordering (`client/INSIGHTS.md`, 2026-08-25).
+ */
+export function useSetContextOrder(repoId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { target_kind: "agent" | "skill"; target_id: string; paths: string[] }) =>
+      api.put<{ attachments: ProjectContextAttachment[] }>(`/repos/${repoId}/context/order`, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["context", repoId] });
+      // Order lives on each document's OWN attachment rows
+      // (`ProjectContextDocDetail.attachments[].order`), not on the list
+      // response — every cached doc detail for this repo may now be stale.
+      qc.invalidateQueries({ queryKey: ["context-doc", repoId] });
+    },
+  });
+}
+
+/**
  * Rescan (R9) — reuses the existing `POST /repos/:id/resync` (repo-intel's
  * route, which fetches origin then reindexes). There is no separate
  * `/context/reindex` route and there never will be (plan B2 placement

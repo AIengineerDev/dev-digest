@@ -109,15 +109,15 @@ Facts about these that change how you work:
   and never skip a local gate because CI exists.
 - **`client` has a `lint` script** (`eslint src`) that no gate table used to
   name. It is part of the final client gate, and it has a **warning baseline**:
-  measured 2026-08-17 it exits 0 with **0 errors and 42 warnings** (mostly
+  measured 2026-08-25 it exits 0 with **0 errors and 43 warnings** (mostly
   `react-hooks/set-state-in-effect`). Green means **no new errors**, exactly like
-  `pnpm arch` means no new violations. Do not fix the 42 — they are pre-existing
+  `pnpm arch` means no new violations. Do not fix them — they are pre-existing
   and not your plan's scope. Do not run `--fix`.
 - **Server tests split by filename.** `*.it.test.ts` may use the real Postgres via
   testcontainers (they self-skip when Docker is unavailable); every other server
   test must be hermetic — no network, no real clock, no filesystem, no DB.
 - **`pnpm arch` must show no new violations.** It runs with `--ignore-known`
-  against an 11-entry baseline. If it goes red, fix the import — route the
+  against a 10-entry baseline (the JSON file is authoritative; older docs say 11). If it goes red, fix the import — route the
   dependency through `@devdigest/shared`, `modules/_shared/`, or the container.
   **Never regenerate `.dependency-cruiser-known-violations.json`.**
 - **A contract change runs `./scripts/check-shared.sh --fix`** (server → client,

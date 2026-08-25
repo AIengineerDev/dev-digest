@@ -110,7 +110,9 @@
   "context": {
     "heading": "Project context",
     "attachedCount": "{attached} of {total} attached",
-    "explanation": "Order matters — earlier docs appear earlier in the assembled \"## Project context\" block. Toggle to attach.",
+    "explanation": "Order matters — earlier docs appear earlier in the assembled \"## Project context\" block. Toggle to attach; drag the handle (or focus it and press ↑ / ↓) to reorder.",
+    "orderHintFiltered": "Order matters — earlier docs appear earlier in the assembled \"## Project context\" block. Clear the filter to reorder.",
+    "reorderHandle": "Reorder \"{path}\"",
     "filterPlaceholder": "Filter documents…",
     "noMatches": "No documents match “{query}”.",
     "toggleLabel": "Attach \"{path}\" to this agent",

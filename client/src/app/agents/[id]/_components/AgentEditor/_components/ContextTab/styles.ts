@@ -10,7 +10,7 @@ export const s = {
   repoNote: { fontSize: 11.5, color: "var(--text-muted)", marginBottom: 10 } satisfies CSSProperties,
   hint: { fontSize: 12.5, color: "var(--text-muted)" } satisfies CSSProperties,
   list: { display: "flex", flexDirection: "column", gap: 4 } satisfies CSSProperties,
-  row: {
+  row: (dragging: boolean): CSSProperties => ({
     display: "flex",
     alignItems: "center",
     gap: 10,
@@ -18,7 +18,17 @@ export const s = {
     borderRadius: 7,
     border: "1px solid var(--border)",
     background: "var(--bg-elevated)",
-  } satisfies CSSProperties,
+    opacity: dragging ? 0.45 : 1,
+  }),
+  handle: (draggable: boolean): CSSProperties => ({
+    color: "var(--text-muted)",
+    cursor: draggable ? "grab" : "not-allowed",
+    display: "flex",
+    flexShrink: 0,
+    background: "transparent",
+    border: "none",
+    padding: 0,
+  }),
   pathWrap: { flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8 } satisfies CSSProperties,
   filename: { fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" } satisfies CSSProperties,
   directory: {

@@ -83,7 +83,7 @@ beforeEach(() => {
     path: DOC_A.path,
     content: "# PRD",
     tokens: 100,
-    attachments: [{ target_kind: "agent", target_id: "agent-1" }],
+    attachments: [{ target_kind: "agent", target_id: "agent-1", order: 0 }],
     github_url: null,
     missing: false,
   });
@@ -91,7 +91,7 @@ beforeEach(() => {
     path: DOC_B.path,
     content: "# Style",
     tokens: 80,
-    attachments: [{ target_kind: "skill", target_id: "sk-1" }],
+    attachments: [{ target_kind: "skill", target_id: "sk-1", order: 0 }],
     github_url: null,
     missing: false,
   });
@@ -141,7 +141,7 @@ describe("ContextTab", () => {
       {
         path: "docs/prd.md",
         targets: [
-          { target_kind: "agent", target_id: "agent-1" },
+          { target_kind: "agent", target_id: "agent-1", order: 0 },
           { target_kind: "skill", target_id: "sk-1" },
         ],
       },
@@ -169,9 +169,9 @@ describe("ContextTab", () => {
       content: "# Style",
       tokens: 80,
       attachments: [
-        { target_kind: "skill", target_id: "sk-1" },
-        { target_kind: "skill", target_id: "sk-2" },
-        { target_kind: "agent", target_id: "agent-1" },
+        { target_kind: "skill", target_id: "sk-1", order: 0 },
+        { target_kind: "skill", target_id: "sk-2", order: 0 },
+        { target_kind: "agent", target_id: "agent-1", order: 0 },
       ],
       github_url: null,
       missing: false,
@@ -186,8 +186,8 @@ describe("ContextTab", () => {
       {
         path: "docs/style-guide.md",
         targets: [
-          { target_kind: "skill", target_id: "sk-2" },
-          { target_kind: "agent", target_id: "agent-1" },
+          { target_kind: "skill", target_id: "sk-2", order: 0 },
+          { target_kind: "agent", target_id: "agent-1", order: 0 },
         ],
       },
       expect.anything(),

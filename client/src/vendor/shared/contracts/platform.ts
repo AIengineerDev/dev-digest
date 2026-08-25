@@ -300,7 +300,9 @@ export const ProjectContextDocDetail = z.object({
   path: z.string(),
   content: z.string(),
   tokens: z.number().int().nullish(),
-  attachments: z.array(z.object({ target_kind: z.enum(['agent', 'skill']), target_id: z.string() })),
+  attachments: z.array(
+    z.object({ target_kind: z.enum(['agent', 'skill']), target_id: z.string(), order: z.number().int() }),
+  ),
   github_url: z.string().nullish(),
   missing: z.boolean(),
 });

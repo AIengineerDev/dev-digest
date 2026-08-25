@@ -3,6 +3,7 @@
 export interface AttachmentTarget {
   target_kind: "agent" | "skill";
   target_id: string;
+  order?: number;
 }
 
 export type ContextCategory = "readme" | "specs" | "insights" | "docs";
@@ -63,4 +64,64 @@ export function filterDocs<T extends { path: string }>(docs: T[], query: string)
   const q = query.trim().toLowerCase();
   if (!q) return docs;
   return docs.filter((d) => d.path.toLowerCase().includes(q));
+}
+
+/**
+ * Display order for the tab, mirroring SkillsTab's `buildOrder`: every
+ * document THIS agent is attached to, first, in its persisted
+ * `attachments[].order` for `agent:agentId` (ascending); then every other
+ * discovered document, in the order the list endpoint returned it.
+ *
+ * `detailByPath` may not have every document's detail loaded yet (they load
+ * one query per row) — a document whose detail is still pending is treated
+ * as unattached until it resolves, which is why the caller re-derives this
+ * on every detail load, not just once.
+ */
+export function buildDocOrder<D extends { path: string }>(
+  docs: D[],
+  detailByPath: Map<string, { attachments: AttachmentTarget[] } | undefined>,
+  agentId: string,
+): string[] {
+  const attached = docs
+    .map((d) => {
+      const row = detailByPath
+        .get(d.path)
+        ?.attachments.find((a) => a.target_kind === "agent" && a.target_id === agentId);
+      return row ? { path: d.path, order: row.order ?? 0 } : null;
+    })
+    .filter((x): x is { path: string; order: number } => x !== null)
+    .sort((a, b) => a.order - b.order)
+    .map((x) => x.path);
+  const seen = new Set(attached);
+  const rest = docs.map((d) => d.path).filter((p) => !seen.has(p));
+  return [...attached, ...rest];
+}
+
+/**
+ * Move `dragPath` to the slot `overPath` occupies. Returns the input
+ * untouched when either path is unknown or they are the same, so a no-op
+ * drop cannot trigger a write. Identical shape to SkillsTab's `moveBefore`.
+ */
+export function moveBefore(order: string[], dragPath: string, overPath: string): string[] {
+  if (dragPath === overPath) return order;
+  const from = order.indexOf(dragPath);
+  const to = order.indexOf(overPath);
+  if (from < 0 || to < 0) return order;
+  const next = [...order];
+  next.splice(from, 1);
+  next.splice(to, 0, dragPath);
+  return next;
+}
+
+/** Sort a document list into `order`; paths missing from `order` keep their tail position. */
+export function sortByOrder<D extends { path: string }>(docs: D[], order: string[]): D[] {
+  const rank = new Map(order.map((p, i) => [p, i]));
+  return [...docs].sort(
+    (a, b) => (rank.get(a.path) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.path) ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
+/** The write payload for `PUT /repos/:id/context/order`: display order narrowed to attached paths. */
+export function toOrderedPaths(order: string[], attached: ReadonlySet<string>): string[] {
+  return order.filter((p) => attached.has(p));
 }

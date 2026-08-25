@@ -40,8 +40,8 @@ Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 
 Two gates are **baselined**, so green means "nothing new", not "clean":
 `server pnpm arch` ignores an 11-entry known-violations file, and
-`client pnpm lint` exits 0 with 42 pre-existing warnings. Never regenerate the
-arch baseline and never `lint --fix` the 42 as part of a feature.
+`client pnpm lint` exits 0 with 43 pre-existing warnings. Never regenerate the
+arch baseline and never `lint --fix` them as part of a feature.
 
 `server pnpm test` is unfiltered and includes the 15 `*.it.test.ts` files, which
 pull up Postgres via testcontainers. While iterating, scope it:

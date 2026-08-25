@@ -49,6 +49,23 @@ to display data already sitting in memory.
 
 ## What Works
 
+- **2026-08-25** — Both blockers in the "2026-08-25" `What Doesn't Work` entry
+  below are now closed, without touching `useSetContextAttachments` at all: a
+  second, target-centric endpoint, `PUT /repos/:id/context/order`
+  (`useSetContextOrder`, `server/src/modules/project-context/service.ts:setOrder`),
+  writes ONLY the calling target's rows (`repository.ts:setOrderForTarget`
+  scopes its `UPDATE` on `repoId + targetKind + targetId + path`, never reading
+  or writing a sibling target), and `ProjectContextDocDetail.attachments[]` now
+  carries `order` so a reload reflects a drag. The agent-side `ContextTab` drags
+  exactly like `SkillsTab` (local `order` state reseeded on a content
+  signature, not array identity) but this DOES cost a new
+  `react-hooks/set-state-in-effect` warning — the client `pnpm lint` baseline
+  moved from 42 to 43 for this reason alone, the same rule `SkillsTab.tsx:59`
+  already carries. Anyone re-measuring "the baseline" after this should expect
+  43, not 42, and should not try to fix either occurrence — it's the accepted
+  cost of the reseed-from-server pattern for a reorderable list.
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/ContextTab/ContextTab.tsx:17`
+
 - **2026-08-06** — The `null` vs `0` cost rule is pinned in exactly two files:
   `src/lib/format.test.ts` asserts both directions (`null`/`undefined`/`NaN` →
   `—`, `0` → `$0.00`, and `0.00002` → `<$0.0001` so a real cost never renders as

@@ -14,3 +14,7 @@ export const CATEGORY_COLOR: Record<ContextCategory, string> = {
   insights: "#10b981",
   docs: "#999999",
 };
+
+/** dataTransfer key used by the drag-to-reorder handles. Matches the naming
+ *  of SkillsTab's own `DRAG_MIME`, scoped to this tab's document paths. */
+export const DRAG_MIME = "text/x-devdigest-context-path";

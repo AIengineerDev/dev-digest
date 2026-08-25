@@ -96,6 +96,40 @@ export class ProjectContextRepository {
   }
 
   /**
+   * Set `order` for one target across the given paths, and touch nothing
+   * else: no other target's rows are read or written, and a path not
+   * currently attached to this target is never inserted (the caller,
+   * `ProjectContextService.setOrder`, has already filtered `paths` down to
+   * the target's existing attachments — this method trusts that and just
+   * writes). Individual `UPDATE`s, not a single `CASE WHEN`, because the
+   * server has no transaction usage anywhere (`setAttachmentsForPath`
+   * above) and the row count here is bounded by one target's attachment
+   * count, never `MAX_DOCUMENTS`.
+   */
+  async setOrderForTarget(
+    repoId: string,
+    targetKind: 'agent' | 'skill',
+    targetId: string,
+    orderedPaths: string[],
+  ): Promise<void> {
+    await Promise.all(
+      orderedPaths.map((path, order) =>
+        this.db
+          .update(t.projectContextAttachments)
+          .set({ order })
+          .where(
+            and(
+              eq(t.projectContextAttachments.repoId, repoId),
+              eq(t.projectContextAttachments.targetKind, targetKind),
+              eq(t.projectContextAttachments.targetId, targetId),
+              eq(t.projectContextAttachments.path, path),
+            ),
+          ),
+      ),
+    );
+  }
+
+  /**
    * Replace the full attachment set for one document. Two sequential
    * statements, not a transaction: the server has none historically
    * (`server/INSIGHTS.md`, 2026-08-09 — "there is no transaction anywhere in

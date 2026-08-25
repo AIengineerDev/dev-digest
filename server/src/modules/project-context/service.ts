@@ -119,7 +119,7 @@ export class ProjectContextService {
       path,
       content,
       tokens,
-      attachments: attachmentRows.map((a) => ({ target_kind: a.targetKind, target_id: a.targetId })),
+      attachments: attachmentRows.map((a) => ({ target_kind: a.targetKind, target_id: a.targetId, order: a.order })),
       github_url: missing
         ? null
         : `https://github.com/${repoBasics.owner}/${repoBasics.name}/blob/${repoBasics.defaultBranch}/${path}`,
@@ -164,6 +164,45 @@ export class ProjectContextService {
 
     await this.repo.setAttachmentsForPath(workspaceId, repoId, path, withOrder);
     return withOrder.map((a) => ({ path, target_kind: a.targetKind, target_id: a.targetId, order: a.order }));
+  }
+
+  /**
+   * `PUT /repos/:id/context/order` — set the attachment order for **one
+   * target** (an agent or a skill) across many documents. Target-centric,
+   * unlike `setAttachments` (document-centric): it never reads or writes
+   * another target's rows, so reordering this agent's list cannot reshuffle
+   * a sibling skill's or agent's assembled context (the bug the document-
+   * centric endpoint's per-target append caused — see
+   * `client/INSIGHTS.md`, 2026-08-25).
+   *
+   * `paths` not currently attached to this target are dropped, not
+   * rejected: a stale client tab (attachment toggled elsewhere, or removed
+   * by a rescan) submitting an order for a path that no longer belongs to
+   * this target should not resurrect it as a phantom row, and a full
+   * rejection would block the reorder for every *other* path in the same
+   * request over one stale entry. An attached path omitted from `paths`
+   * keeps its existing `order` — a reorder call is not a replace call.
+   */
+  async setOrder(
+    workspaceId: string,
+    repoId: string,
+    targetKind: 'agent' | 'skill',
+    targetId: string,
+    paths: string[],
+  ): Promise<ProjectContextAttachment[]> {
+    const repoBasics = await this.repo.getRepoBasics(workspaceId, repoId);
+    if (!repoBasics) throw new NotFoundError('Repo not found');
+
+    const existing = await this.repo.attachmentsForTargets(repoId, [{ kind: targetKind, id: targetId }]);
+    const attachedPaths = new Set(existing.map((a) => a.path));
+    const orderedPaths = paths.filter((p) => attachedPaths.has(p));
+
+    await this.repo.setOrderForTarget(repoId, targetKind, targetId, orderedPaths);
+
+    const updated = await this.repo.attachmentsForTargets(repoId, [{ kind: targetKind, id: targetId }]);
+    return updated
+      .sort((a, b) => a.order - b.order)
+      .map((a) => ({ path: a.path, target_kind: a.targetKind, target_id: a.targetId, order: a.order }));
   }
 
   /** Documents attached to a set of targets — the assembler's read side. */

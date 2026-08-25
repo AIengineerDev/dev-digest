@@ -353,6 +353,18 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
+- **2026-08-25** — Turning an existing `@devdigest/shared` array-item field from
+  absent to required (`ProjectContextDocDetail.attachments[].order`,
+  `z.number().int()` with no `.nullish()`) breaks TS compilation in every
+  client test file that hand-builds that shape as a fixture — including ones
+  in an unrelated module that the task never touched
+  (`src/app/skills/.../SkillEditor/_components/ContextTab/ContextTab.test.tsx`
+  broke from a change scoped to the agent-side `ContextTab`). `pnpm typecheck`
+  catches it immediately and by name, so it's cheap to fix once found — the
+  actionable part is budgeting for it: grep the field name across `client/src`
+  before treating "made a field required" as a one-file contract edit.
+  `client/src/vendor/shared/contracts/platform.ts:299-307`
+
 - **2026-08-17** — An agent that runs `cd server && pnpm test` as a *per-phase*
   gate pays for Postgres on every phase: the script is a bare `vitest run` with
   no filter, `test/` holds 42 files of which **15 are `*.it.test.ts`** driving

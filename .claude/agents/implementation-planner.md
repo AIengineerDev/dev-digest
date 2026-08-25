@@ -194,7 +194,7 @@ Use these verbatim; do not invent scripts.
 | Package | Commands |
 | --- | --- |
 | `server/` | `pnpm typecheck` · `pnpm test` · `pnpm exec vitest run --exclude '**/*.it.test.ts'` (hermetic only) · `pnpm exec vitest run .it.test` (DB-backed) · `pnpm arch` · `pnpm db:generate` → `pnpm db:migrate` |
-| `client/` | `pnpm typecheck` · `pnpm test` · `pnpm lint` (0 errors / 42 baseline warnings) · `pnpm build` |
+| `client/` | `pnpm typecheck` · `pnpm test` · `pnpm lint` (0 errors / 43 baseline warnings) · `pnpm build` |
 | `reviewer-core/` | `npm test` · `npm run typecheck` (its `build` *is* a typecheck — it emits no JS) |
 | `e2e/` | `npm run e2e:hermetic` |
 | repo root | `./scripts/check-shared.sh` (contract drift) · `./scripts/dev.sh` |
