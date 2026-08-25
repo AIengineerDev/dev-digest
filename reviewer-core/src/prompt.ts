@@ -154,7 +154,7 @@ export function assemblePrompt(parts: PromptParts): AssembledPrompt {
       : undefined;
   const specsBlock =
     parts.specs && parts.specs.length > 0
-      ? parts.specs.map((s) => wrapUntrusted(s.source, s.text)).join('\n\n')
+      ? parts.specs.map((s) => wrapUntrusted(`spec:${s.source}`, s.text)).join('\n\n')
       : undefined;
 
   const prDescription =

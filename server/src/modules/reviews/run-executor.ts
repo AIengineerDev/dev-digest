@@ -255,13 +255,7 @@ export class ReviewRunExecutor {
       // did NOT reach the prompt, so on a healthy run it is empty and the log
       // would say nothing at all about project context — leaving a reader
       // unable to tell "no documents attached" from "this build ignores them".
-      runLog.info(
-        specs.used.length > 0
-          ? `project context: ${specs.used.length} document(s) attached — ${specs.used
-              .map((u) => u.path)
-              .join(', ')}`
-          : 'project context: no documents attached',
-      );
+      runLog.info(`Specs: ${specs.used.length} context doc(s) attached to prompt`);
       for (const note of specs.notes) runLog.info(note);
 
       // ---- Engine: assemble → single-pass → grounding -----------------------

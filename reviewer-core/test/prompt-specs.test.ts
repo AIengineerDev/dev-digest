@@ -89,8 +89,11 @@ describe('assemblePrompt — ## Project context (specs)', () => {
     expect(opens).toHaveLength(3);
     expect(closes).toHaveLength(3);
 
+    // The `spec:` prefix is what distinguishes a project-context block from the
+    // six other untrusted kinds that share this wrapper — a bare path would be
+    // ambiguous with, say, a caller digest whose label happened to look like one.
     const specSources = opens.map((m) => m[1]).filter((s) => s !== 'diff');
-    expect(specSources).toEqual(['docs/prd.md', 'docs/nested/architecture.md']);
+    expect(specSources).toEqual(['spec:docs/prd.md', 'spec:docs/nested/architecture.md']);
 
     expect(user).toContain('## Project context');
     expect(user).toContain('All public endpoints MUST be rate-limited.');
