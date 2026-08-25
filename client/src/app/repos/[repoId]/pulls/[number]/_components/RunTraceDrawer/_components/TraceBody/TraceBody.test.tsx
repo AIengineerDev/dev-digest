@@ -74,9 +74,16 @@ describe("TraceBody — project context attribution (A6, A9)", () => {
     expect(screen.queryByText(/undefined tok/)).not.toBeInTheDocument();
   });
 
-  it("omits the specs block entirely when the run had no project-context slot", () => {
+  it("always shows the Project context row, with a hint when nothing is attached", () => {
+    // Replaces an earlier test that asserted the row was hidden when `specs`
+    // was null. A real run showed why that was wrong: a reader could not tell
+    // "no documents attached" from "this build has no such feature", while the
+    // Skills row — the other slot the reader configures — showed itself with a
+    // hint. The prompt is still byte-identical when nothing is attached; this
+    // is the trace's slot list, not the prompt.
     renderWithIntl(BASE);
     fireEvent.click(screen.getByText("Prompt assembly"));
-    expect(screen.queryByText("Project context (dynamic)")).not.toBeInTheDocument();
+    expect(screen.getByText("Project context (dynamic)")).toBeInTheDocument();
+    expect(screen.getByText(/none attached/i)).toBeInTheDocument();
   });
 });

@@ -63,7 +63,8 @@
       "skillsUsedWithTokens": "{count} · {tokens} · {names}",
       "skillsNone": "none linked — attach skills in Agents → this agent → Skills",
       "specsUsed": "{count} · {names} — documents read at replay time, not pinned to this version",
-      "specsUsedWithTokens": "{count} · {tokens} · {names} — documents read at replay time, not pinned to this version"
+      "specsUsedWithTokens": "{count} · {tokens} · {names} — documents read at replay time, not pinned to this version",
+      "specsNone": "none attached — attach documents in Project Context, or in Agents → this agent → Context"
     },
     "tools": {
       "args": "args",
