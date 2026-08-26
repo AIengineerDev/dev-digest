@@ -45,8 +45,14 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
     id: 'onboarding',
     label: 'Onboarding Tour',
     description: 'Writes the per-repo onboarding tour.',
-    defaultProvider: 'openrouter',
-    defaultModel: 'deepseek/deepseek-v4-flash',
+    // Repointed 2026-08-26 (CTO): was `openrouter`/`deepseek/deepseek-v4-flash`,
+    // the only registry entry never revisited during the pricing work. We do
+    // not use OpenRouter, so the default resolved to a provider with no key and
+    // every out-of-the-box generation would have degraded to a skeleton. Now
+    // matches `review_intent` and `risk_brief`, the two sibling features that
+    // also derive facts first and narrate second. Resolves `specs/12-onboarding-generator.md` Q4.
+    defaultProvider: 'anthropic',
+    defaultModel: 'claude-haiku-4-5',
   },
   {
     id: 'review_intent',
