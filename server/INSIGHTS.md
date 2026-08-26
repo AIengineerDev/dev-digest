@@ -142,6 +142,23 @@ reference in every route.
 
 ## Codebase Patterns
 
+- **2026-08-26** — When a cache table's primary key includes a value expected
+  to drift out from under a READ (here: `onboarding_tours`'s key includes
+  `indexed_sha`/`indexer_version`, and a resync changes them), the write path's
+  cache-check and the read path's lookup need DIFFERENT keys, not the same one
+  loosened everywhere. `TourService.generate()`'s cache-hit check still uses
+  the full 6-column `findByKey` — a stale sha there is correctly a cache miss,
+  triggering regeneration. `TourService.get()` instead calls a new
+  `findLatestForRepo(repoId, promptVersion, provider, model)` — deliberately
+  omitting `indexedSha`/`indexerVersion` — so a re-index doesn't make the
+  previously-generated row invisible to a plain page view; the response then
+  carries both the row's own `indexed_sha` and a freshly-fetched
+  `current_indexed_sha` so the client can render a "stale" banner instead of
+  silently regenerating. Generalizes to any R12-shaped cache key: the row that
+  answers "what do we have" is not always the row `onConflictDoUpdate` targets.
+  `src/modules/tour/repository.ts` (`findLatestForRepo`) ·
+  `src/modules/tour/service.ts` (`get`)
+
 - **2026-08-18** — `RepoIntelService.getIndexState(repoId).lastIndexedSha` is
   `''` (empty string), never `null`, for a repo that has no `repo_index_state`
   row (the seeded demo's permanent state, `server/INSIGHTS.md`, 2026-08-13) —
@@ -362,6 +379,22 @@ reference in every route.
 
 
 ## Recurring Errors & Fixes
+
+- **2026-08-26** — A `Write`/`Edit` tool call can silently insert a literal NUL
+  byte (`\x00`) where a plain space was intended inside a template-literal
+  expression (e.g. `` `${a} ${b}` `` landing on disk as `` `${a}\x00${b}` ``).
+  `tsc` does not flag it — a `\x00` is a legal character inside a template
+  string — and a loosely-worded test can pass anyway: `buildDiagram`'s edge-pair
+  key used this pattern, `pair.split(' ')` silently returned the whole
+  undelimited string as one element, both `ids.get()` lookups resolved to
+  `undefined`, and the only assertion at the time (`.toContain('-->')`) was
+  satisfied by the resulting `"undefined --> undefined"` line. Caught only by
+  scanning the file for `\x00` (`python3 -c "b'\x00' in open(path,'rb').read()"`,
+  or `file <path>` reporting `data` instead of `ASCII/Unicode text`) and by
+  tightening the assertion to check for real node labels and the absence of the
+  literal string `"undefined"`. When a template-literal join produces a
+  surprising result and the source LOOKS correct, check for this before
+  assuming the logic is wrong. `src/modules/tour/derive/diagram.ts:43`
 
 - **2026-08-19** — The integration lane is now big enough to starve itself.
   After merging two features it holds **19 `*.it.test.ts` files**, each pulling
