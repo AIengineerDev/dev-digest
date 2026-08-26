@@ -9,6 +9,7 @@
  * adapter import — a pure function over values.
  */
 import { classifyPath } from '../../_shared/file-roles.js';
+import { depth3Ancestor, dirOf } from './paths.js';
 
 /** Directories with more entries than this are dropped, keeping the biggest
  *  first — a huge monorepo must not blow past a renderable tree (A2.1 cap). */
@@ -35,17 +36,16 @@ export interface DerivedTreeEntry {
   folded: string[];
 }
 
-function dirOf(path: string): string {
-  const idx = path.lastIndexOf('/');
-  return idx === -1 ? '' : path.slice(0, idx);
-}
-
-/** The depth-3 ancestor of a directory, and the folded remainder (if any). */
+/** The depth-3 ancestor of a directory, and the folded remainder (if any).
+ *  The ancestor comes from the SHARED `depth3Ancestor` so the tree and the
+ *  diagram cannot fold differently — they did once, see `paths.ts`. */
 function depth3Split(dir: string): { ancestor: string; foldedSegment: string | null } {
   if (dir === '') return { ancestor: '', foldedSegment: null };
   const segments = dir.split('/');
-  if (segments.length <= 3) return { ancestor: dir, foldedSegment: null };
-  return { ancestor: segments.slice(0, 3).join('/'), foldedSegment: segments[3] ?? null };
+  return {
+    ancestor: depth3Ancestor(dir),
+    foldedSegment: segments.length <= 3 ? null : (segments[3] ?? null),
+  };
 }
 
 export function buildTree(files: readonly TreeFileInput[]): DerivedTreeEntry[] {

@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildTree } from '../src/modules/tour/derive/tree.js';
 import { buildDiagram } from '../src/modules/tour/derive/diagram.js';
+import { MAX_DIAGRAM_NODES } from '../src/modules/tour/constants.js';
 import { buildChains } from '../src/modules/tour/derive/chains.js';
 import { deriveConfig, type ReadFile } from '../src/modules/tour/derive/config.js';
 
@@ -55,6 +56,37 @@ describe('buildTree', () => {
 });
 
 describe('buildDiagram', () => {
+  it('R2/Q7 — folds to the depth-3 ancestor, the same key the tree uses', () => {
+    // The defect this pins, found on the first real generation against a
+    // 512-file repo: `diagram.ts` kept each file's IMMEDIATE parent at whatever
+    // depth it happened to be while `tree.ts` folded to depth 3, so the diagram
+    // drew 116 nodes and 250 edges with labels like
+    // `client/src/app/agents/[id]/_components/AgentEditor/_components/ConfigTab`.
+    // Two private `dirOf`s in two files is how that happened.
+    const diagram = buildDiagram([
+      { fromFile: 'client/src/app/agents/[id]/_components/AgentEditor/x.ts', toFile: 'server/src/modules/tour/derive/y.ts' },
+      { fromFile: 'client/src/app/repos/[repoId]/tour/page.tsx', toFile: 'server/src/modules/brief/service.ts' },
+    ])!;
+    expect(diagram).toContain('"client/src/app"');
+    expect(diagram).toContain('"server/src/modules"');
+    // Both edges collapse onto the same directory pair, so there is ONE edge
+    // and two nodes — not four nodes and two edges.
+    expect((diagram.match(/\["/g) ?? []).length).toBe(2);
+    expect(diagram.split('-->').length - 1).toBe(1);
+    expect(diagram).not.toContain('AgentEditor');
+  });
+
+  it('caps the node count so the diagram stays a summary, keeping the busiest', () => {
+    const edges = Array.from({ length: 60 }, (_, i) => ({
+      fromFile: `pkg${String(i).padStart(3, '0')}/src/lib/a.ts`,
+      toFile: 'hub/src/lib/b.ts',
+    }));
+    const diagram = buildDiagram(edges)!;
+    expect((diagram.match(/\["/g) ?? []).length).toBe(MAX_DIAGRAM_NODES);
+    // The hub touches every edge, so it must survive the cut.
+    expect(diagram).toContain('"hub/src/lib"');
+  });
+
   it('C4 — empty file_edges with files present → null, strictly (never a placeholder)', () => {
     expect(buildDiagram([])).toBeNull();
   });

@@ -36,3 +36,9 @@ export const TOUR_MODEL_MAX_RETRIES = 0;
  * this number for a five-section schema.
  */
 export const TOUR_BUDGET_CEILING = 12_000;
+
+/** Nodes the architecture diagram may draw before it stops being a summary.
+ *  Measured: a 512-file repo aggregated to depth 3 yields ~15 directories, so
+ *  this is headroom, not a routine truncation. Before the depth-3 fold the
+ *  same repo drew 116 nodes and 250 edges. */
+export const MAX_DIAGRAM_NODES = 24;
