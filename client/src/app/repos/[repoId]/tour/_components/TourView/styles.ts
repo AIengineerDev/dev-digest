@@ -42,6 +42,18 @@ export const s = {
     textTransform: "uppercase",
     marginBottom: 10,
   } satisfies CSSProperties,
+  railLink: (dim: boolean) =>
+    ({
+      display: "block",
+      fontSize: 12.5,
+      color: dim ? "var(--text-muted)" : "var(--text-secondary)",
+      fontWeight: 500,
+      padding: "5px 0",
+      borderLeft: "2px solid transparent",
+      paddingLeft: 11,
+      marginLeft: -2,
+      textDecoration: "none",
+    }) satisfies CSSProperties,
   content: { flex: 1, minWidth: 0 } satisfies CSSProperties,
   skeletons: { display: "flex", flexDirection: "column", gap: 10, padding: 14 } satisfies CSSProperties,
   banner: {

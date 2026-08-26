@@ -31,6 +31,7 @@
   "rail": {
     "onThisPage": "On this page"
   },
+  "diagramAlt": "Diagram of the directories this architecture section covers: {dirs}",
   "difficulty": {
     "low": "Low",
     "medium": "Medium",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isNotIndexed, shortSha } from "./helpers";
+import { isNotIndexed, shortSha, sortTasksByDifficulty } from "./helpers";
 
 describe("isNotIndexed", () => {
   it("is true when there is no state yet", () => {
@@ -58,5 +58,19 @@ describe("shortSha", () => {
   it("is empty for null/undefined", () => {
     expect(shortSha(null)).toBe("");
     expect(shortSha(undefined)).toBe("");
+  });
+});
+
+describe("sortTasksByDifficulty", () => {
+  it("sorts ascending — low, medium, high (C8 UX proposal)", () => {
+    const tasks = [{ id: "a", difficulty: "high" as const }, { id: "b", difficulty: "low" as const }, { id: "c", difficulty: "medium" as const }];
+    expect(sortTasksByDifficulty(tasks).map((t) => t.id)).toEqual(["b", "c", "a"]);
+  });
+
+  it("does not mutate the input array", () => {
+    const tasks = [{ id: "a", difficulty: "high" as const }, { id: "b", difficulty: "low" as const }];
+    const original = [...tasks];
+    sortTasksByDifficulty(tasks);
+    expect(tasks).toEqual(original);
   });
 });

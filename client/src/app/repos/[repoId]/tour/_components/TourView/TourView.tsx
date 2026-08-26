@@ -14,8 +14,13 @@ import { AppShell } from "@/components/app-shell";
 import { useActiveRepo } from "@/lib/repo-context";
 import { useTour, useGenerateTour, useRepoIntelStatus, useResyncRepoIntel } from "@/lib/hooks";
 import { ApiError } from "@/lib/api";
-import { isNotIndexed } from "./helpers";
-import { SKELETON_ROWS } from "./constants";
+import { ArchitectureSection } from "./_components/ArchitectureSection";
+import { CriticalPathsSection } from "./_components/CriticalPathsSection";
+import { HowToRunSection } from "./_components/HowToRunSection";
+import { GuidedReadingSection } from "./_components/GuidedReadingSection";
+import { FirstTasksSection } from "./_components/FirstTasksSection";
+import { isNotIndexed, isRailDim, sectionFor } from "./helpers";
+import { SECTION_ORDER, SKELETON_ROWS } from "./constants";
 import { s } from "./styles";
 
 export function TourView() {
@@ -93,9 +98,73 @@ export function TourView() {
       </>
     );
   } else {
-    // Populated tour — built out in Phase B2 (rail, sections, diagram,
-    // skeleton banner) and Phase B3 (difficulty basis, stale marker).
-    body = null;
+    const filesIndexed = indexStatus.data?.filesIndexed;
+    const partialIndex = tour.index_status === "partial" || tour.index_status === "degraded";
+    const hasSkeleton = tour.skeleton_sections.length > 0;
+
+    body = (
+      <>
+        <div style={s.header}>
+          <div style={s.headerText}>
+            <h1 style={s.h1}>
+              {t("title")}{" "}
+              <span className="mono" style={s.repoName}>
+                {repo?.full_name ?? ""}
+              </span>
+            </h1>
+            <p style={s.subtitle}>
+              {filesIndexed != null ? t("header.subtitle", { count: filesIndexed }) : t("header.subtitleUnknown")}
+            </p>
+          </div>
+          <div style={s.headerActions}>
+            <Button
+              kind="ghost"
+              size="sm"
+              icon="RefreshCw"
+              loading={generate.isPending}
+              onClick={() => generate.mutate(true)}
+            >
+              {generate.isPending ? t("regenerating") : t("regenerate")}
+            </Button>
+          </div>
+        </div>
+
+        {partialIndex && (
+          <div style={s.banner}>
+            <p style={s.bannerText}>
+              {t("partialIndex.banner", { status: tour.index_status ?? "", count: tour.files_skipped ?? 0 })}
+            </p>
+          </div>
+        )}
+
+        {hasSkeleton && (
+          <div role="status" style={s.banner}>
+            <p style={s.bannerText}>{t("skeleton.banner", { error: tour.error ?? t("unknownError") })}</p>
+          </div>
+        )}
+
+        <div style={s.body}>
+          <nav style={s.rail} aria-label={t("rail.onThisPage")}>
+            <div style={s.railLabel}>{t("rail.onThisPage")}</div>
+            {SECTION_ORDER.map((kind) => {
+              const section = sectionFor(tour, kind);
+              return (
+                <a key={kind} href={`#${kind}`} style={s.railLink(isRailDim(section))}>
+                  {section.title}
+                </a>
+              );
+            })}
+          </nav>
+          <div style={s.content}>
+            <ArchitectureSection section={sectionFor(tour, "architecture_overview")} />
+            <CriticalPathsSection section={sectionFor(tour, "critical_paths")} />
+            <HowToRunSection section={sectionFor(tour, "how_to_run")} />
+            <GuidedReadingSection section={sectionFor(tour, "guided_reading")} />
+            <FirstTasksSection section={sectionFor(tour, "first_tasks")} />
+          </div>
+        </div>
+      </>
+    );
   }
 
   return (

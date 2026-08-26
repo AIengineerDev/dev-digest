@@ -1,5 +1,5 @@
 /** Constants for the Onboarding Tour screen (specs/12-onboarding-generator.md). */
-import type { OnboardingSectionKind } from "@devdigest/shared";
+import type { OnboardingSectionKind, TourDifficulty } from "@devdigest/shared";
 
 /** The screen is a two-pane rail/content layout, matching Project Context. */
 export const CONTENT_MAX_WIDTH = 1080;
@@ -22,3 +22,11 @@ export const SECTION_ORDER: OnboardingSectionKind[] = [
   "guided_reading",
   "first_tasks",
 ];
+
+/** Difficulty badge colors — never color alone (WCAG AA): the label text
+ *  itself always carries the word, this is decoration on top of it. */
+export const DIFFICULTY_COLOR: Record<TourDifficulty, string> = {
+  low: "var(--ok)",
+  medium: "var(--warn)",
+  high: "var(--crit)",
+};
