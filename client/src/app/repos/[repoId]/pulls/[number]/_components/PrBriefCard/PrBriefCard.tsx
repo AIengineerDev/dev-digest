@@ -3,7 +3,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Badge, Button, ErrorState, Icon } from "@devdigest/ui";
-import type { ReviewFocusItem, ReviewRecord, RiskSeverity } from "@devdigest/shared";
+import type { ReviewFocusItem, ReviewRecord, Risk, RiskSeverity } from "@devdigest/shared";
 import { useBrief, useGenerateBrief } from "../../../../../../../lib/hooks";
 import { ApiError } from "../../../../../../../lib/api";
 import { formatCostUsd } from "../../../../../../../lib/format";
@@ -182,19 +182,9 @@ export function PrBriefCard({
           <div style={s.section}>
             <span style={s.sectionTitle}>{t("risksTitle")}</span>
             <div style={s.riskList}>
-              {shownRisks.map((risk, i) => {
-                const RiskIcon = Icon[iconForRiskKind(risk.kind)];
-                const color = RISK_LEVEL_COLOR[risk.severity];
-                return (
-                  <div key={i} style={s.riskPill(color)}>
-                    <RiskIcon size={14} style={s.riskIcon(color)} />
-                    <div style={s.riskBody}>
-                      <span style={s.riskTitle}>{risk.title}</span>
-                      <span style={s.riskExplanation}>{risk.explanation}</span>
-                    </div>
-                  </div>
-                );
-              })}
+              {shownRisks.map((risk, i) => (
+                <RiskPill key={i} risk={risk} onFocusFile={onFocusFile} />
+              ))}
             </div>
             {hiddenRisks > 0 && <span style={s.why}>{t("moreRisks", { count: hiddenRisks })}</span>}
           </div>
@@ -236,6 +226,69 @@ export function PrBriefCard({
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * One risk, as a disclosure (R8). Collapsed it is icon + raw `kind` + title;
+ * expanded it adds the explanation and the `file_refs` the model grounded the
+ * claim on — which is the whole reason a risk is trustworthy, so it must be
+ * reachable rather than merely persisted. Each ref is the same jump-to-diff
+ * control the review-focus list uses: `groundBrief` has already guaranteed the
+ * path is a file this PR actually changes, so the target cannot be dead.
+ *
+ * A17: the raw `kind` string is rendered verbatim next to the icon. The icon
+ * lookup falls back for a `kind` the model invented (`iconForRiskKind`); the
+ * label must not, or the specific claim is silently replaced by a generic one.
+ */
+function RiskPill({ risk, onFocusFile }: { risk: Risk; onFocusFile?: (path: string) => void }) {
+  const t = useTranslations("brief");
+  const [open, setOpen] = React.useState(false);
+  const RiskIcon = Icon[iconForRiskKind(risk.kind)];
+  const Chevron = Icon[open ? "ChevronDown" : "ChevronRight"];
+  const color = RISK_LEVEL_COLOR[risk.severity];
+
+  return (
+    <div style={s.riskPill(color)}>
+      {/* The disclosure control and the disclosed body are SIBLINGS: the refs
+          below are buttons of their own, and a button inside a button is
+          invalid HTML that browsers silently re-parent. */}
+      <button
+        type="button"
+        style={s.riskToggle}
+        aria-expanded={open}
+        aria-label={t(open ? "collapseRisk" : "expandRisk", { title: risk.title })}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <RiskIcon size={14} style={s.riskIcon(color)} />
+        <span style={s.riskTitleRow}>
+          <span style={s.riskKind}>{risk.kind}</span>
+          <span style={s.riskTitle}>{risk.title}</span>
+        </span>
+        <Chevron size={14} style={s.riskChevron} />
+      </button>
+      {open && (
+        <div style={s.riskBody}>
+          <span style={s.riskExplanation}>{risk.explanation}</span>
+          {risk.file_refs.length > 0 && (
+            <span style={s.riskRefs}>
+              {risk.file_refs.map((ref) => (
+                <button
+                  key={ref}
+                  type="button"
+                  className="mono"
+                  style={s.focusButton}
+                  title={ref.length > REF_MAX_CHARS ? ref : undefined}
+                  onClick={() => onFocusFile?.(ref)}
+                >
+                  {truncateMiddle(ref, REF_MAX_CHARS)}
+                </button>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

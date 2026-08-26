@@ -35,7 +35,9 @@
   "whatLabel": "What",
   "whyLabel": "Why",
   "risksTitle": "Risks",
-  "moreRisks": "+{count} more",
+  "expandRisk": "Show details for {title}",
+  "collapseRisk": "Hide details for {title}",
+  "moreRisks": "+{count, number} more",
   "reviewFocusTitle": "Read these first",
   "counts": {
     "notReviewed": "Not reviewed yet",

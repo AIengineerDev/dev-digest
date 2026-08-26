@@ -221,6 +221,32 @@ d('POST/GET /pulls/:id/brief (Testcontainers pg)', () => {
     expect((first.json() as BriefRecord).generated_at).toBe((second.json() as BriefRecord).generated_at);
   });
 
+  it('R6 / A-2 — a cached DEGRADED row is returned as-is; only force:true spends a second call', async () => {
+    // Amendment A-2's whole point. The server used to skip the cache when the
+    // stored row was degraded, so every ordinary page view re-billed a
+    // generation while a provider was down. A degraded row stays cached and
+    // stays visible until a human presses Retry, which sends `force: true`.
+    const { pr } = await setupPr(pg.handle.db, workspaceId);
+
+    const first = await postBrief(pg.handle.db, pr.id, { llm: new ThrowingLLMProvider() });
+    expect((first.json() as BriefRecord).degraded).toBe(true);
+
+    // A second POST at the same state, WITHOUT force: the cached degraded row
+    // comes back and the (now working) provider is never called.
+    const healthy = new MockLLMProvider('anthropic', { structured: briefFixture() });
+    const second = await postBrief(pg.handle.db, pr.id, { llm: healthy });
+    expect(second.statusCode).toBe(200);
+    const cached = second.json() as BriefRecord;
+    expect(cached.degraded).toBe(true);
+    expect(cached.generated_at).toBe((first.json() as BriefRecord).generated_at);
+    expect(healthy.calls.length).toBe(0);
+
+    // force:true is the human asking for another attempt — and it succeeds.
+    const retried = await postBrief(pg.handle.db, pr.id, { llm: healthy, body: { force: true } });
+    expect((retried.json() as BriefRecord).degraded).toBe(false);
+    expect(healthy.calls.filter((c) => c.method === 'completeStructured').length).toBe(1);
+  });
+
   it('C1 — zero pr_files rows: no model call, degraded with error "no_changed_files"', async () => {
     const { pr } = await setupPr(pg.handle.db, workspaceId, { withFiles: false });
     const llm = new MockLLMProvider('anthropic', { structured: briefFixture() });
@@ -256,6 +282,10 @@ d('POST/GET /pulls/:id/brief (Testcontainers pg)', () => {
     expect(record.degraded).toBe(true);
     expect(record.error).toBe('input_over_budget');
     expect(llm.calls.length).toBe(0);
+    // R10: the refused record is the one place where "how far over did it
+    // run" IS the diagnostic, so `budget_tokens` carries the measurement
+    // rather than a hardcoded 0.
+    expect(record.budget_tokens).toBeGreaterThan(8_000);
   });
 
   it('A10 / C6 — the provider throws: 200, degraded, non-null error, cost_usd null', async () => {

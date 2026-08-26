@@ -155,6 +155,12 @@ export type AssembleResult =
       readonly ok: false;
       readonly reason: 'input_over_budget';
       readonly droppedInputs: string[];
+      /** How far over the ceiling it still ran with every droppable input
+       *  gone. R10 persists this as `budget_tokens` on the refused record —
+       *  the one record where the number IS the diagnostic, and where a
+       *  hardcoded `0` would say nothing. */
+      readonly tokens: number;
+      readonly countedTokens: number;
     };
 
 interface AssembleState {
@@ -237,7 +243,11 @@ function renderBlastBlock(blast: ShapedBlast, state: AssembleState): string {
 }
 
 function renderDerivedIntentBlock(intent: AssembleDerivedIntent): string {
-  const parts = [`Category: ${intent.category}`, `Summary: ${intent.summary}`];
+  const parts = [
+    `Category: ${intent.category}`,
+    `Confidence band: ${intent.band}`,
+    `Summary: ${intent.summary}`,
+  ];
   if (intent.inScope.length > 0) parts.push(`In scope:\n${intent.inScope.map((s) => `- ${s}`).join('\n')}`);
   if (intent.outOfScope.length > 0) {
     parts.push(`Out of scope:\n${intent.outOfScope.map((s) => `- ${s}`).join('\n')}`);
@@ -372,5 +382,5 @@ export function assembleBriefInput(input: AssembleBriefInput): AssembleResult {
     }
   }
 
-  return { ok: false, reason: 'input_over_budget', droppedInputs };
+  return { ok: false, reason: 'input_over_budget', droppedInputs, ...measured };
 }

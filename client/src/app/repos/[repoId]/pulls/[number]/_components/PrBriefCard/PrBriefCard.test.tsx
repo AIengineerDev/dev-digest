@@ -198,9 +198,20 @@ describe("PrBriefCard", () => {
   });
 
   it("a risk with an unknown kind renders a fallback icon and its raw label, without throwing (A17)", () => {
+    // `Risk.kind` is free-form model text (Q5), so the fixture must use a kind
+    // that is NOT in `RISK_ICON` — a mapped one exercises the happy path and
+    // says nothing about the fallback this test is named for.
     briefQuery.current = {
       data: brief({
-        risks: [{ kind: "concurrency", title: "Race condition", explanation: "x", severity: "medium", file_refs: [] }],
+        risks: [
+          {
+            kind: "quantum_entanglement",
+            title: "Race condition",
+            explanation: "x",
+            severity: "medium",
+            file_refs: [],
+          },
+        ],
       }),
       isLoading: false,
       isError: false,
@@ -208,6 +219,69 @@ describe("PrBriefCard", () => {
     };
     expect(() => renderCard()).not.toThrow();
     expect(screen.getByText("Race condition")).toBeInTheDocument();
+    // The raw kind survives: an unmapped icon must not silently erase the
+    // model's own claim about what kind of risk this is.
+    expect(screen.getByText("quantum_entanglement")).toBeInTheDocument();
+  });
+
+  it("R8 — a risk pill is a disclosure: explanation and file_refs appear on expand", () => {
+    briefQuery.current = {
+      data: brief({
+        risks: [
+          {
+            kind: "security",
+            title: "Token forwarded to a caller-controlled URL",
+            explanation: "The webhook handler forwards the account token to req.body.callback_url.",
+            severity: "high",
+            file_refs: ["src/api/public/webhooks.ts", "src/config.ts"],
+          },
+        ],
+      }),
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+    renderCard();
+
+    // Collapsed: the claim is visible, its evidence is not.
+    const toggle = screen.getByRole("button", { expanded: false });
+    expect(screen.queryByText(/forwards the account token/)).not.toBeInTheDocument();
+    expect(screen.queryByText("src/api/public/webhooks.ts")).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByRole("button", { expanded: true })).toBeInTheDocument();
+    expect(screen.getByText(/forwards the account token/)).toBeInTheDocument();
+    expect(screen.getByText("src/api/public/webhooks.ts")).toBeInTheDocument();
+    expect(screen.getByText("src/config.ts")).toBeInTheDocument();
+  });
+
+  it("R8 — a risk file ref jumps to that file in the diff, like a review-focus entry", () => {
+    const onFocusFile = vi.fn();
+    briefQuery.current = {
+      data: brief({
+        risks: [
+          {
+            kind: "security",
+            title: "Plaintext key",
+            explanation: "A live Stripe key is committed.",
+            severity: "high",
+            file_refs: ["src/config.ts"],
+          },
+        ],
+      }),
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+    renderCard({ onFocusFile });
+
+    fireEvent.click(screen.getByRole("button", { expanded: false }));
+    fireEvent.click(screen.getByText("src/config.ts"));
+
+    // `groundBrief` already guaranteed this path is a file the PR changed, so
+    // the jump target cannot be dead.
+    expect(onFocusFile).toHaveBeenCalledWith("src/config.ts");
   });
 
   it("middle-truncates a long `what` and keeps the full text in a title attribute (C4)", () => {

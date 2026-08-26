@@ -123,7 +123,10 @@ export class BriefService {
 
     // ---- cache check BEFORE any other work, mirroring IntentService.derive
     // steps 5-6: resolve the feature model, build the key, look up, return
-    // unless force or the cached row is itself degraded. ----------------
+    // unless `force`. A DEGRADED row is cached like any other (amendment A-2):
+    // regenerating it on an ordinary `POST` would spend money on every page
+    // view while a provider is down. The Retry control sends `force: true`
+    // (`PrBriefCard.tsx`), which is how a human asks for another attempt. -
     const [intent, indexState] = await Promise.all([
       this.container.reviewRepo.getIntent(pull.id),
       this.container.repoIntel.getIndexState(pull.repoId),
@@ -142,7 +145,7 @@ export class BriefService {
 
     if (!opts.force) {
       const existing = await this.repo.findByKey(key);
-      if (existing && !existing.degraded) {
+      if (existing) {
         log.info(`brief: reusing cached brief (state unchanged, ${pull.headSha.slice(0, 8)})`);
         return toBriefRecord(existing);
       }
@@ -218,7 +221,12 @@ export class BriefService {
       log.error(
         'brief: estimated billed input still exceeds the 8000-token budget after every droppable input — refusing',
       );
-      return this.persistDegraded(key, 'input_over_budget', [...notes, ...assembled.droppedInputs], 0);
+      return this.persistDegraded(
+        key,
+        'input_over_budget',
+        [...notes, ...assembled.droppedInputs],
+        assembled.tokens,
+      );
     }
 
     // ---- the ONE model call. maxRetries: 0 (correction C-4 / A-1) —
