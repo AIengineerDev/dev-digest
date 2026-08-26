@@ -32,12 +32,100 @@ export const OnboardingLink = z.object({
 });
 export type OnboardingLink = z.infer<typeof OnboardingLink>;
 
+/**
+ * The five sections the onboarding tour builds. Closed on purpose — R19
+ * narrows `OnboardingSection.kind` from a bare string to this enum because
+ * the set of sections is fixed by the derivation layer, not by the model.
+ * `specs/12-onboarding-generator.md` R19.
+ */
+export const OnboardingSectionKind = z.enum([
+  'architecture_overview',
+  'critical_paths',
+  'how_to_run',
+  'guided_reading',
+  'first_tasks',
+]);
+export type OnboardingSectionKind = z.infer<typeof OnboardingSectionKind>;
+
+/** low | medium | high — deliberately not `RiskSeverity`: a starter task's
+ * difficulty is not a risk level (`specs/12-onboarding-generator.md:338-340`). */
+export const TourDifficulty = z.enum(['low', 'medium', 'high']);
+export type TourDifficulty = z.infer<typeof TourDifficulty>;
+
+/**
+ * The derived numbers a difficulty label was computed from (R9): distinct
+ * caller-file count and `file_rank` percentile. `signal: 'no_index_signal'`
+ * means there was no `file_rank` row for the task's scope path, in which case
+ * difficulty defaults to `low`.
+ */
+export const TourDifficultyBasis = z.object({
+  callers: z.number().int(),
+  rank_percentile: z.number().nullable(),
+  signal: z.enum(['indexed', 'no_index_signal']),
+});
+export type TourDifficultyBasis = z.infer<typeof TourDifficultyBasis>;
+
 export const OnboardingSection = z.object({
-  kind: z.string(),
+  kind: OnboardingSectionKind,
   title: z.string(),
-  body: z.string(), // markdown
+  body: z.string().nullable(), // markdown; null when this section is a skeleton (R24)
   diagram: z.string().nullish(), // mermaid
   links: z.array(OnboardingLink),
+  tree: z
+    .array(
+      z.object({
+        path: z.string(),
+        files: z.number().int(),
+        role_mix: z.record(z.string(), z.number()),
+        top_file: z.string().nullish(),
+        note: z.string().nullable(),
+      }),
+    )
+    .optional(),
+  paths: z
+    .array(
+      z.object({
+        chain_id: z.string(),
+        files: z.array(z.string()),
+        endpoints: z.array(z.string()),
+        why: z.string().nullable(),
+        resolved: z.array(z.boolean()),
+      }),
+    )
+    .optional(),
+  run_steps: z
+    .array(
+      z.object({
+        command: z.string(),
+        why: z.string().nullable(),
+      }),
+    )
+    .optional(),
+  reading: z
+    .array(
+      z.object({
+        path: z.string(),
+        why: z.string().nullable(),
+        rank_percentile: z.number().nullable(),
+        resolved: z.boolean(),
+      }),
+    )
+    .optional(),
+  tasks: z
+    .array(
+      z.object({
+        candidate_id: z.string(),
+        title: z.string(),
+        scope: z.string(),
+        why: z.string().nullable(),
+        difficulty: TourDifficulty,
+        difficulty_basis: TourDifficultyBasis,
+        resolved: z.boolean(),
+      }),
+    )
+    .optional(),
+  empty_reason: z.string().nullish(),
+  skeleton: z.boolean().optional(), // true when this section has no model-written prose (R24)
 });
 export type OnboardingSection = z.infer<typeof OnboardingSection>;
 
@@ -45,6 +133,52 @@ export const Onboarding = z.object({
   sections: z.array(OnboardingSection),
 });
 export type Onboarding = z.infer<typeof Onboarding>;
+
+/**
+ * One trace block per generation — not per call (R7 merges spec 11's two
+ * calls into one), so this is a single set of numbers, never per-section.
+ * `budget_tokens`, `provider`, `model` and `prompt_version` are populated even
+ * on a skeleton generation; `tokens_in`/`tokens_out`/`cost_usd` are null when
+ * no call was made (R14, R15, R24).
+ */
+export const TourTrace = z.object({
+  budget_tokens: z.number().int(),
+  tokens_in: z.number().int().nullable(),
+  tokens_out: z.number().int().nullable(),
+  cost_usd: z.number().nullable(),
+  provider: z.string(),
+  model: z.string(),
+  prompt_version: z.string(),
+});
+export type TourTrace = z.infer<typeof TourTrace>;
+
+/**
+ * The persisted onboarding tour record. Cached per repo state (R12) —
+ * `repo_id`, `indexed_sha`, `indexer_version`, `prompt_version`, `provider`,
+ * `model` — with read-time re-resolution fields (`index_status`,
+ * `files_skipped`, `current_indexed_sha`) filled in at `GET`, not persisted
+ * as part of generation.
+ */
+export const TourRecord = Onboarding.extend({
+  repo_id: z.string(),
+  indexed_sha: z.string(),
+  indexer_version: z.number().int(),
+  prompt_version: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  trace: TourTrace,
+  degraded: z.boolean(),
+  error: z.string().nullable(),
+  skeleton_sections: z.array(OnboardingSectionKind),
+  dropped_inputs: z.array(z.string()),
+  dropped_refs: z.number().int(),
+  dropped_steps: z.number().int(),
+  index_status: z.string().nullish(),
+  files_skipped: z.number().int().nullish(),
+  current_indexed_sha: z.string().nullish(),
+  generated_at: z.string(),
+});
+export type TourRecord = z.infer<typeof TourRecord>;
 
 // ---- Eval ----
 export const EvalPerTrace = z.object({
