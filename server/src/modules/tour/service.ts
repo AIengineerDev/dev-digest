@@ -26,6 +26,7 @@ import { buildSkeleton, type CandidateWithSignal } from './derive/skeleton.js';
 import { computeDifficulty } from './derive/difficulty.js';
 import { groundPaths, filterSteps, filterAnnotations, applyDifficulty } from './grounding.js';
 import { mergeAnnotations } from './merge.js';
+import { resolveSections } from './resolve.js';
 
 /** Minimal logging surface `generate()` needs — `RunLogger` satisfies it,
  *  fanned over zero runIds for the standalone `POST /repos/:id/tour` call,
@@ -120,18 +121,28 @@ export class TourService {
     if (!repoRow) throw new NotFoundError('Repo not found');
 
     const choice = await resolveFeatureModel(this.container, workspaceId, 'onboarding');
-    const indexState = await this.container.repoIntel.getIndexState(repoId);
-    const key: TourStateKey = {
+    // Deliberately NOT keyed on indexedSha/indexerVersion (C19) — a re-index
+    // must not make a previously-generated tour vanish from GET; it must
+    // come back marked stale instead. `generate()`'s cache check below uses
+    // the full key; this is the one exception, and it exists only to read.
+    const row = await this.repo.findLatestForRepo({
       repoId,
-      indexedSha: indexState.lastIndexedSha,
-      indexerVersion: indexState.indexerVersion,
       promptVersion: TOUR_PROMPT_VERSION,
       provider: choice.provider,
       model: choice.model,
-    };
-    const row = await this.repo.findByKey(key);
+    });
     if (!row) return null;
-    return toTourRecord(row);
+
+    const indexState = await this.container.repoIntel.getIndexState(repoId);
+    const currentIndexedFiles = await this.container.repoIntel.getIndexedFiles(repoId);
+    const record = toTourRecord(row);
+    return {
+      ...record,
+      sections: resolveSections(record.sections, currentIndexedFiles),
+      index_status: indexState.status,
+      files_skipped: indexState.filesSkipped,
+      current_indexed_sha: indexState.lastIndexedSha,
+    };
   }
 
   /**

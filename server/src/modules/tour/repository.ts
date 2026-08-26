@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 
@@ -73,6 +73,35 @@ export class TourRepository {
 
   async findByKey(key: TourStateKey): Promise<TourRow | undefined> {
     const [row] = await this.db.select().from(t.onboardingTours).where(this.keyWhere(key));
+    return row;
+  }
+
+  /**
+   * The most recent row for this repo, at the CURRENT provider/model/prompt
+   * choice — deliberately NOT keyed on `indexedSha`/`indexerVersion` (C19). A
+   * re-index changes `indexed_sha` (which IS part of the write key), so the
+   * previously-generated row is left in place rather than updated; `GET`
+   * still needs to find it (and show both its own `indexed_sha` and the
+   * current one) rather than silently returning `null` the moment the repo
+   * is reindexed. `generate()`'s cache check uses `findByKey` (the full,
+   * exact key) — a stale sha there IS correctly a cache miss.
+   */
+  async findLatestForRepo(
+    key: Omit<TourStateKey, 'indexedSha' | 'indexerVersion'>,
+  ): Promise<TourRow | undefined> {
+    const [row] = await this.db
+      .select()
+      .from(t.onboardingTours)
+      .where(
+        and(
+          eq(t.onboardingTours.repoId, key.repoId),
+          eq(t.onboardingTours.promptVersion, key.promptVersion),
+          eq(t.onboardingTours.provider, key.provider),
+          eq(t.onboardingTours.model, key.model),
+        ),
+      )
+      .orderBy(desc(t.onboardingTours.generatedAt))
+      .limit(1);
     return row;
   }
 

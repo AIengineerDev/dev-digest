@@ -431,4 +431,33 @@ d('POST/GET /repos/:id/tour (Testcontainers pg)', () => {
     const rows = await pg.handle.db.select().from(t.onboardingTours).where(eq(t.onboardingTours.repoId, repo.id));
     expect(rows.length).toBe(1);
   });
+
+  it('C19 — a re-index changes the current sha, but GET still finds the record, marks it stale, and never discards it', async () => {
+    const repo = await setupRepo(pg.handle.db, workspaceId);
+    const llm = new MockLLMProvider('anthropic', { structured: tourAnnotations() });
+
+    const posted = await postTour(pg.handle.db, repo.id, { repoIntel: stubIntel({ healthy: true }), llm, git: PROJECT_GIT() });
+    const generated = posted.json() as TourRecord;
+    expect(generated.indexed_sha).toBe('deadbeef');
+
+    const reindexed: IndexState = { ...HEALTHY_INDEX_STATE, lastIndexedSha: 'newsha123' };
+    const after = await getTour(pg.handle.db, repo.id, stubIntel({ healthy: true, indexState: reindexed }));
+    expect(after.statusCode).toBe(200);
+    const record = after.json() as TourRecord;
+    expect(record).not.toBeNull();
+    expect(record.indexed_sha).toBe('deadbeef'); // the record's own generation-time sha, unchanged
+    expect(record.current_indexed_sha).toBe('newsha123'); // the CURRENT index's sha
+  });
+
+  it("R18 partial — GET reports the CURRENT index_status/files_skipped, not the generation-time ones", async () => {
+    const repo = await setupRepo(pg.handle.db, workspaceId);
+    const llm = new MockLLMProvider('anthropic', { structured: tourAnnotations() });
+    await postTour(pg.handle.db, repo.id, { repoIntel: stubIntel({ healthy: true }), llm, git: PROJECT_GIT() });
+
+    const partial: IndexState = { ...HEALTHY_INDEX_STATE, status: 'partial', filesSkipped: 7 };
+    const after = await getTour(pg.handle.db, repo.id, stubIntel({ healthy: true, indexState: partial }));
+    const record = after.json() as TourRecord;
+    expect(record.index_status).toBe('partial');
+    expect(record.files_skipped).toBe(7);
+  });
 });
