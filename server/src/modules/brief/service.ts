@@ -215,7 +215,9 @@ export class BriefService {
     });
 
     if (!assembled.ok) {
-      log.error('brief: assembled input still exceeds the 8000-token budget after every droppable input — refusing');
+      log.error(
+        'brief: estimated billed input still exceeds the 8000-token budget after every droppable input — refusing',
+      );
       return this.persistDegraded(key, 'input_over_budget', [...notes, ...assembled.droppedInputs], 0);
     }
 

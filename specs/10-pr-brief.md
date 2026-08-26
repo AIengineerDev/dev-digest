@@ -382,10 +382,12 @@ So the stretch is **connecting an existing wire**, not designing one.
 ## Amendments
 
 Recorded after the plan's cross-model review
-(`plans/10-pr-brief.cross-model-review.md`). Both were authorised by the CTO on
-2026-08-18. They are recorded here rather than in a superseding spec because
-each changes one clause, and a 400-line rewrite for two clauses would bury the
-change it is meant to publish. Nothing else in this document is edited.
+(`plans/10-pr-brief.cross-model-review.md`); A-3 was added later, after the
+first real generation was measured. All three were authorised by the CTO — A-1
+and A-2 on 2026-08-18, A-3 on 2026-08-26. They are recorded here rather than in
+a superseding spec because each changes one clause, and a 400-line rewrite for
+three clauses would bury the change it is meant to publish. Nothing else in this
+document is edited.
 
 ### A-1 (2026-08-18) — R3: `maxRetries` is `0`, not `1`
 
@@ -412,6 +414,50 @@ A degraded row stays cached and stays visible until a human asks for another
 attempt — which is also the behaviour that keeps a failing provider from being
 retried on every page view.
 
+### A-3 (2026-08-26) — R5: the ceiling is **billed** tokens, and the unit is named
+
+R5 as written gated on `container.tokenizer.count(system + user)`. Measured on
+the first real generation (PR #482, 2026-08-19): the gate read **612** tokens
+and Anthropic billed **2 006** — a 228 % undercount. Two causes, only one of
+them fixable in-process:
+
+1. **The structured-output schema is not in `system` or `user`.** It is sent as
+   a forced tool's `input_schema` (Anthropic) or `response_format.json_schema`
+   (OpenAI), so no counter over the two prompt strings can see it. `Brief`
+   serializes to 1 950 characters — **456** `cl100k_base` tokens today.
+2. **The provider does not tokenize with `cl100k_base`,** and wraps the request
+   in framing of its own. What that costs is not knowable in-process, and one
+   real measurement is not enough to model it as anything finer than a ratio.
+
+Nothing was over budget — 2 006 sits well under 8 000 — but the gate was
+**unsound**: an input measuring 7 900 would have been billed ~9 300 and passed.
+A ceiling that can be crossed without tripping is not a ceiling. The gpt-5
+cross-model review predicted exactly this (`cross-model-review.md`, risk 2).
+
+**R5 now reads:** the unit of the 8 000 ceiling is **billed provider input
+tokens for the single generation call**. Before the call, that number is
+estimated as
+
+```
+ceil(tokenizer.count(system + user + serialized response schema) × 2)
+```
+
+where the serialized schema is produced by the same `toJsonSchema` the adapters
+use, from the same `BriefSchema` under the same `schemaName`, so a schema edit
+moves the counted envelope in the commit that moves the billed one. The `× 2`
+factor rounds the one measurement we have (2 006 ÷ 1 068 ≈ 1.88) **up**, so the
+estimate over-states rather than under-states. Drop order, the refusal in C14
+and the `error: 'input_over_budget'` record are unchanged; what changes is the
+number they are compared against. `budget_tokens` (R10) persists this estimate,
+which makes the residual drift auditable per generation against the provider's
+own `tokens_in`.
+
+The factor is calibrated on a single generation. **Widen it, never narrow it,**
+unless a later measurement across several PRs says otherwise.
+
+**A3 and A5 (acceptance) now read** "estimated billed input" wherever they said
+"assembled input measured with `container.tokenizer.count`". The ceiling stays
+8 000.
 
 ## Open questions
 

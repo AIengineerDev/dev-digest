@@ -1,7 +1,9 @@
 /**
  * Pure input assembly (R2, R5, R7): turns the brief's fetched inputs into the
  * EXACT `{ system, user }` pair a model call would receive, gates it at
- * `BRIEF_TOKEN_BUDGET` by an injected counter, and never makes a model call —
+ * `BRIEF_TOKEN_BUDGET` by an injected counter (over the prompt strings AND the
+ * structured-output envelope, scaled — amendment A-3), and never makes a model
+ * call —
  * that is what makes the 8 000-token ceiling assertable in a hermetic test
  * (`test/brief-budget.test.ts`).
  *
@@ -14,12 +16,14 @@
  * occupy. A future implementer who wants to pass hunk bodies has to widen this
  * exported signature — a visible, reviewable act.
  */
-import { wrapUntrusted } from '@devdigest/reviewer-core';
-import type { SmartDiffRole } from '@devdigest/shared';
+import { toJsonSchema, wrapUntrusted } from '@devdigest/reviewer-core';
+import { Brief as BriefSchema, type SmartDiffRole } from '@devdigest/shared';
 import { normalizePath } from '../_shared/file-roles.js';
 import {
+  BRIEF_BILLING_SAFETY_FACTOR,
   BRIEF_DROP_ORDER,
   BRIEF_INJECTION_GUARD,
+  BRIEF_SCHEMA_NAME,
   MAX_COMMIT_SUBJECTS,
   MAX_COMMIT_SUBJECT_CHARS,
   MAX_PR_BODY_CHARS,
@@ -132,9 +136,15 @@ export type AssembleResult =
       readonly ok: true;
       readonly system: string;
       readonly user: string;
-      /** `count(system + user)` on the strings actually returned — the
-       *  identity A3's test asserts against a re-measurement. */
+      /** R5's gated number: the ESTIMATED BILLED input tokens, i.e.
+       *  `ceil(countedTokens * BRIEF_BILLING_SAFETY_FACTOR)` (amendment A-3).
+       *  This — not `countedTokens` — is what is compared to
+       *  `BRIEF_TOKEN_BUDGET` and persisted as `budget_tokens`. */
       readonly tokens: number;
+      /** `count(system + user + briefSchemaEnvelope())` on the strings
+       *  actually returned — the identity A3's test asserts against a
+       *  re-measurement. */
+      readonly countedTokens: number;
       readonly droppedInputs: string[];
       /** Changed-file paths retained in the assembly after any drop —
        *  R4's reference set is built from THIS, not from the database, so a
@@ -264,9 +274,33 @@ const SYSTEM_PROMPT = [
 ].join('\n');
 
 /**
+ * The structured-output envelope, as text, for the token gate to count
+ * (amendment A-3). `service.ts` hands `completeStructured` the SAME
+ * `BriefSchema` under the SAME `BRIEF_SCHEMA_NAME`, and both adapters serialize
+ * it with this same `toJsonSchema` — Anthropic as a forced tool's
+ * `input_schema` (`adapters/llm/anthropic.ts:132,153`), OpenAI as
+ * `response_format.json_schema` (`adapters/llm/openai.ts:103,119`). Neither
+ * lands in `system` or `user`, which is exactly why a counter over those two
+ * strings undercounted the bill by 228 % on the first real generation.
+ *
+ * Derived, never a literal: a schema edit in `@devdigest/shared` moves the
+ * counted envelope in the same commit that moves the billed one.
+ */
+export function briefSchemaEnvelope(): string {
+  const { schema } = toJsonSchema(BriefSchema, BRIEF_SCHEMA_NAME);
+  return [BRIEF_SCHEMA_NAME, `Return the result as ${BRIEF_SCHEMA_NAME}.`, JSON.stringify(schema)].join('\n');
+}
+
+/**
  * Assemble `{ system, user }`, gate at `BRIEF_TOKEN_BUDGET`, dropping inputs in
  * `BRIEF_DROP_ORDER` until it fits or every droppable input is gone. No model
  * call is made here.
+ *
+ * What is gated is the ESTIMATED BILLED input (amendment A-3): the counter runs
+ * over `system + user + briefSchemaEnvelope()` and the result is scaled by
+ * `BRIEF_BILLING_SAFETY_FACTOR`. Dropping inputs cannot shrink the envelope, so
+ * a budget so tight that the envelope alone exceeds it refuses after the full
+ * drop order, exactly as C14 requires.
  */
 export function assembleBriefInput(input: AssembleBriefInput): AssembleResult {
   const state = initialState();
@@ -315,20 +349,26 @@ export function assembleBriefInput(input: AssembleBriefInput): AssembleResult {
     return { system: SYSTEM_PROMPT, user: sections.join('\n\n') };
   };
 
-  let { system, user } = render();
-  let tokens = input.count(system + user);
+  const envelope = briefSchemaEnvelope();
+  const measure = (system: string, user: string): { countedTokens: number; tokens: number } => {
+    const countedTokens = input.count(system + user + envelope);
+    return { countedTokens, tokens: Math.ceil(countedTokens * BRIEF_BILLING_SAFETY_FACTOR) };
+  };
 
-  if (tokens <= BRIEF_TOKEN_BUDGET) {
-    return { ok: true, system, user, tokens, droppedInputs, filesUsed: filesUsedFor(input, state) };
+  let { system, user } = render();
+  let measured = measure(system, user);
+
+  if (measured.tokens <= BRIEF_TOKEN_BUDGET) {
+    return { ok: true, system, user, ...measured, droppedInputs, filesUsed: filesUsedFor(input, state) };
   }
 
   for (const step of BRIEF_DROP_ORDER) {
     STEP_APPLIERS[step](state);
     droppedInputs.push(step);
     ({ system, user } = render());
-    tokens = input.count(system + user);
-    if (tokens <= BRIEF_TOKEN_BUDGET) {
-      return { ok: true, system, user, tokens, droppedInputs, filesUsed: filesUsedFor(input, state) };
+    measured = measure(system, user);
+    if (measured.tokens <= BRIEF_TOKEN_BUDGET) {
+      return { ok: true, system, user, ...measured, droppedInputs, filesUsed: filesUsedFor(input, state) };
     }
   }
 

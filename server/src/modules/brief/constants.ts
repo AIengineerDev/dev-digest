@@ -4,11 +4,33 @@
  * those live in `@devdigest/shared`.
  */
 
-/** R5's pre-flight ceiling, measured by `container.tokenizer.count` over the
- *  exact strings sent. Lives here, not inlined, because it is one edit if the
+/** R5's pre-flight ceiling, in **billed provider input tokens** (spec
+ *  amendment A-3). Lives here, not inlined, because it is one edit if the
  *  tokenizer/model encoding drift (`server/INSIGHTS.md`) makes it too tight or
  *  too loose in practice. */
 export const BRIEF_TOKEN_BUDGET = 8_000;
+
+/**
+ * Spec amendment A-3. `BRIEF_TOKEN_BUDGET` is a ceiling on what the provider
+ * BILLS, and no counter run over the prompt strings can reach that number:
+ *
+ * - the structured-output schema is sent as a tool definition / response
+ *   format, so it is in neither `system` nor `user`. `assembleBriefInput` now
+ *   folds `briefSchemaEnvelope()` into the count, which closes the part of the
+ *   gap that is knowable in-process (456 cl100k tokens for `Brief` today);
+ * - what remains is NOT knowable in-process: the provider tokenizes with its
+ *   own encoder, not `cl100k_base`, and adds fixed request framing around the
+ *   tool block. MEASURED 2026-08-19 against PR #482: 612 counted over the
+ *   strings, 2 006 billed by Anthropic. With the envelope folded in the same
+ *   call counts 1 068, so the residual ratio is 2 006 / 1 068 ≈ 1.88.
+ *
+ * This factor rounds that measurement UP to 2 and applies it to the counted
+ * total, so the gate over-estimates rather than under-estimates. It is
+ * calibrated on ONE real generation — widen it, do not narrow it, if a later
+ * measurement disagrees. Under-estimating is the failure that matters: it lets
+ * a 7 900-token input through to a ~14 800-token bill.
+ */
+export const BRIEF_BILLING_SAFETY_FACTOR = 2;
 
 /** R6's `prompt_version` key component. Bump when the system/user prompt shape
  *  changes in a way that should invalidate the cache. */

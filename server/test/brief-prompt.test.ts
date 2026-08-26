@@ -12,7 +12,16 @@ import { BRIEF_INJECTION_GUARD, BRIEF_TOKEN_BUDGET } from '../src/modules/brief/
  * text is missing or wrong is decorative and would still pass a presence-only
  * check.
  */
-const count = (s: string): number => s.length;
+/**
+ * A quarter-of-length stand-in for a BPE encoder. `assemble.ts` does not care
+ * what the counter measures, only that it is consistent — but since amendment
+ * A-3 the gate also folds in the structured-output envelope and scales by
+ * `BRIEF_BILLING_SAFETY_FACTOR`, and a raw character count leaves so little
+ * headroom under the 8 000 ceiling that these fixtures would be testing the
+ * counter rather than the drop order. `brief-budget.test.ts` keeps the raw
+ * character counter, where over-tightness is the point.
+ */
+const count = (s: string): number => Math.ceil(s.length / 4);
 
 function baseInput(overrides: Partial<AssembleBriefInput> = {}): AssembleBriefInput {
   return {
@@ -128,12 +137,10 @@ describe('assembleBriefInput — R7 untrusted wrapping and the injection guard (
   });
 
   it('drop order is ascending: project-context and commit subjects go before the derived intent', () => {
-    // Commit subjects are capped at 30 items × 120 chars (`MAX_COMMIT_SUBJECTS`
-    // / `MAX_COMMIT_SUBJECT_CHARS`) — at most ~3 700 chars including headers —
-    // so the baseline (everything else) is sized to sit comfortably under
-    // budget on its own, but close enough that adding maxed-out subjects tips
-    // it over. Sizes are computed at runtime (not hand-tuned magic numbers) so
-    // the test cannot silently stop exercising the drop it claims to.
+    // Sizes are MEASURED here, never hand-tuned, so the test cannot silently
+    // stop exercising the drop it claims to — and since amendment A-3 the
+    // ceiling is billed tokens, so what a fixture is "worth" against it is not
+    // something a magic number can track.
     const derivedIntent = {
       category: 'feature',
       summary: 'A short derived summary that must survive the drop.',
@@ -141,22 +148,40 @@ describe('assembleBriefInput — R7 untrusted wrapping and the injection guard (
       inScope: Array.from({ length: 5 }, (_, i) => `in-scope bullet ${i} `.repeat(10)),
       outOfScope: Array.from({ length: 5 }, (_, i) => `out-of-scope bullet ${i} `.repeat(10)),
     };
-    const withoutSubjects = baseInput({
-      pr: { ...baseInput().pr, body: 'x'.repeat(4000) },
-      derivedIntent,
-    });
+    const maxedSubjects = Array.from({ length: 40 }, (_, i) => `commit subject ${i} `.repeat(10));
 
+    const tokensOf = (input: AssembleBriefInput): number => {
+      const r = assembleBriefInput(input);
+      return r.ok ? r.tokens : Number.POSITIVE_INFINITY;
+    };
+
+    // What maxed-out commit subjects are actually worth against the ceiling.
+    const small = baseInput({ derivedIntent });
+    const subjectsWorth = tokensOf({ ...small, commitSubjects: maxedSubjects }) - tokensOf(small);
+    expect(subjectsWorth).toBeGreaterThan(0);
+
+    // Pad with `core` files — never droppable — until the gap to the ceiling is
+    // narrower than the subjects, so adding them must tip it over and dropping
+    // them must be enough to recover.
+    const padFile = (i: number) => ({
+      path: `src/core/module-${String(i).padStart(4, '0')}/handler.ts`,
+      additions: 10,
+      deletions: 2,
+      role: 'core' as const,
+    });
+    let files = [...small.files];
+    for (let i = 0; i < 2000 && BRIEF_TOKEN_BUDGET - tokensOf({ ...small, files }) >= subjectsWorth; i++) {
+      files = [...files, padFile(i)];
+    }
+
+    const withoutSubjects = { ...small, files };
     const baseline = assembleBriefInput(withoutSubjects);
     expect(baseline.ok).toBe(true);
     if (!baseline.ok) return;
     expect(baseline.tokens).toBeLessThan(BRIEF_TOKEN_BUDGET);
-    // The gap to the ceiling must be smaller than what maxed commit subjects
-    // can contribute, or adding them would not tip this over at all.
-    const maxSubjectsContribution = 30 * 120 + 200; // 30 items, 120 chars each, + headers/wrapper overhead
-    expect(BRIEF_TOKEN_BUDGET - baseline.tokens).toBeLessThan(maxSubjectsContribution);
+    expect(BRIEF_TOKEN_BUDGET - baseline.tokens).toBeLessThan(subjectsWorth);
 
-    const manySubjects = Array.from({ length: 40 }, (_, i) => `commit subject ${i} `.repeat(10));
-    const result = assembleBriefInput({ ...withoutSubjects, commitSubjects: manySubjects });
+    const result = assembleBriefInput({ ...withoutSubjects, commitSubjects: maxedSubjects });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
