@@ -66,9 +66,12 @@ describe('buildDiagram', () => {
     expect(diagram).toContain('flowchart LR');
   });
 
-  it('two directories with an edge render one edge line', () => {
+  it('two directories with an edge render one edge line, with resolved node ids on both sides', () => {
     const diagram = buildDiagram([{ fromFile: 'src/api/a.ts', toFile: 'lib/util/b.ts' }]);
     expect(diagram).toContain('-->');
+    expect(diagram).not.toContain('undefined');
+    expect(diagram).toContain('["lib/util"]');
+    expect(diagram).toContain('["src/api"]');
   });
 
   it('C10 — a directory name with a newline produces a quoted, single-line label', () => {
