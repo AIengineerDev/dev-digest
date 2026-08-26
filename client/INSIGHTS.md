@@ -335,6 +335,18 @@ to display data already sitting in memory.
 
 ## Recurring Errors & Fixes
 
+- **2026-08-26** — A test for a **fallback branch** whose fixture value is a key
+  of the very map it claims to fall back from is unfalsifiable: it exercises the
+  happy path under the fallback's name, passes forever, and would keep passing if
+  the fallback were deleted. `PrBriefCard.test.tsx`'s "unknown kind renders a
+  fallback icon" used `kind: "concurrency"`, which **is** in `RISK_ICON`. This
+  shape hides wherever a `Partial<Record<string, T>>` lookup has a `?? FALLBACK`:
+  the assertion that survives ("does not throw") is true on both branches. When
+  writing one, pick a fixture value and grep the map for it, and assert on
+  something only the fallback branch produces — the raw key rendered verbatim,
+  not merely the absence of a crash.
+  `_components/PrBriefCard/helpers.ts:34` · `_components/PrBriefCard/PrBriefCard.test.tsx:199`
+
 - **2026-08-10** — React's "updating a style property during rerender when a
   conflicting property is set" warning counts `borderColor` and `borderWidth` as
   **shorthands**, not longhands — each sets all four sides. Dropping `border:` in

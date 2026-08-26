@@ -353,6 +353,20 @@ _None yet._
 
 ## Recurring Errors & Fixes
 
+- **2026-08-26** — A **spec amendment that changes a contract both sides encode
+  gets implemented on one side and silently not the other**, and the ordinary
+  test suite cannot catch it: each side's tests assert that side's half.
+  `specs/10-pr-brief.md` amendment A-2 ("a degraded cached row stays cached
+  until a human presses Retry") landed in `PrBriefCard.tsx` — which sends
+  `force: true` — and never in `modules/brief/service.ts`, which kept
+  `if (existing && !existing.degraded)` and so re-billed a model call on every
+  page view of a PR whose provider was down. It survived a full verify pass; a
+  second pass reading the amendment against **both** sides found it. When an
+  amendment lands, grep for every site that encodes the clause before writing
+  code, and put the assertion where both halves meet — here an it-test asserting
+  the provider is never called, not a client test asserting a flag is sent.
+  `server/src/modules/brief/service.ts:146` · `server/test/brief.it.test.ts:224`
+
 - **2026-08-25** — Turning an existing `@devdigest/shared` array-item field from
   absent to required (`ProjectContextDocDetail.attachments[].order`,
   `z.number().int()` with no `.nullish()`) breaks TS compilation in every

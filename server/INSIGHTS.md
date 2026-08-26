@@ -301,6 +301,21 @@ reference in every route.
   made this visible in one query. `server/src/modules/brief/service.ts` ·
   `server/src/modules/brief/assemble.ts`
 
+  **2026-08-26 — measured, and the two fixes above are not alternatives.** The
+  serialized `Brief` JSON schema is 1 950 characters = **456** `cl100k_base`
+  tokens — only a third of the 1 394-token gap. Counting it removes the part
+  that is structurally invisible; the remaining ~940 is the provider tokenizing
+  with its own encoder (not `cl100k_base`) plus the framing it wraps the tool
+  block in, and **nothing in-process can see that**. So a gate that counts the
+  schema and stops is still unsound, just less so. What shipped does both:
+  `assembleBriefInput` counts `system + user + briefSchemaEnvelope()` and scales
+  by a named `BRIEF_BILLING_SAFETY_FACTOR` that rounds the measured ratio
+  (2 006 ÷ 1 068 ≈ 1.88) **up** to 2. Derive the counted envelope from the same
+  Zod schema, `schemaName` and `toJsonSchema` the adapter serializes, never a
+  literal — otherwise a schema edit moves the billed envelope and not the
+  counted one. `server/src/modules/brief/assemble.ts:299` ·
+  `server/src/modules/brief/constants.ts:33` · `specs/10-pr-brief.md` A-3
+
 - **2026-08-18** — A Drizzle `onConflictDoUpdate({ target: [...] })` cannot
   target a **partial/expression unique index** — only a plain-column
   constraint. `pr_brief_records_state_uq` is
