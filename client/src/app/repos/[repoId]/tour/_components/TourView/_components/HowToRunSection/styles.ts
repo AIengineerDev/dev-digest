@@ -15,4 +15,16 @@ export const s = {
   commandWrap: { flex: 1, minWidth: 0, overflowX: "auto" } satisfies CSSProperties,
   command: { fontSize: 12, color: "var(--text-primary)", whiteSpace: "pre" } satisfies CSSProperties,
   why: { fontSize: 11.5, color: "var(--text-muted)", marginTop: 4 } satisfies CSSProperties,
+  copyButton: {
+    flexShrink: 0,
+    display: "grid",
+    placeItems: "center",
+    width: 24,
+    height: 24,
+    borderRadius: 5,
+    border: "none",
+    background: "transparent",
+    color: "var(--text-muted)",
+    cursor: "pointer",
+  } satisfies CSSProperties,
 } as const;

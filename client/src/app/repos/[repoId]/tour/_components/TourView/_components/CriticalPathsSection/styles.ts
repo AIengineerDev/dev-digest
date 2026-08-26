@@ -19,4 +19,10 @@ export const s = {
   deadNote: { fontSize: 11.5, color: "var(--text-muted)" } satisfies CSSProperties,
   endpoints: { display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 } satisfies CSSProperties,
   endpoint: { fontSize: 11.5 } satisfies CSSProperties,
+  openLink: {
+    fontSize: 11.5,
+    color: "var(--accent-text)",
+    textDecoration: "underline",
+    marginLeft: "auto",
+  } satisfies CSSProperties,
 } as const;

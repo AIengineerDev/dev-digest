@@ -30,3 +30,6 @@ export const DIFFICULTY_COLOR: Record<TourDifficulty, string> = {
   medium: "var(--warn)",
   high: "var(--crit)",
 };
+
+/** Display cap for a repo-relative path before it middle-truncates (C9). */
+export const PATH_MAX_CHARS = 60;

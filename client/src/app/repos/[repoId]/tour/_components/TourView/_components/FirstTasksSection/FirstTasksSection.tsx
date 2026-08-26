@@ -13,8 +13,10 @@ import { s } from "./styles";
  * First tasks (R8, R9) — up to 6 server-selected candidates, difficulty
  * computed in code and never taken from the model (R9). Sorted ascending by
  * difficulty (design proposal, spec `:301-303`) so the easiest entry is
- * top-left. The difficulty-basis line ("Low · 1 caller · rank p31") is added
- * in Phase B3.1.
+ * top-left. The difficulty basis ("Low · 1 caller · rank p31", B3.1) renders
+ * only the persisted `callers`/`rank_percentile`/`signal` — the client
+ * computes nothing, which is what keeps the label auditable and the rubric
+ * in one place (server-side, R9).
  */
 export function FirstTasksSection({ section }: { section: OnboardingSection }) {
   const t = useTranslations("onboarding");
@@ -40,6 +42,11 @@ export function FirstTasksSection({ section }: { section: OnboardingSection }) {
             <Badge color={DIFFICULTY_COLOR[task.difficulty]} bg="transparent" style={{ border: "1px solid var(--border-strong)" }}>
               {t(`difficulty.${task.difficulty}`)}
             </Badge>
+            <div style={s.basis}>
+              {task.difficulty_basis.signal === "no_index_signal"
+                ? t("difficultyBasis.noSignal")
+                : `${t("difficultyBasis.callers", { count: task.difficulty_basis.callers })} · ${t("difficultyBasis.rank", { percentile: task.difficulty_basis.rank_percentile ?? 0 })}`}
+            </div>
           </div>
         ))}
       </div>

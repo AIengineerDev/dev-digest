@@ -16,4 +16,5 @@ export const s = {
   title: { fontSize: 13, fontWeight: 600, lineHeight: 1.35 } satisfies CSSProperties,
   scope: { fontSize: 11, color: "var(--text-muted)", margin: "7px 0" } satisfies CSSProperties,
   why: { fontSize: 12, color: "var(--text-secondary)", marginBottom: 8 } satisfies CSSProperties,
+  basis: { fontSize: 11, color: "var(--text-muted)", marginTop: 6 } satisfies CSSProperties,
 } as const;

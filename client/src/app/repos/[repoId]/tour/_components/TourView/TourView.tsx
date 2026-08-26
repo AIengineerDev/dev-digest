@@ -19,7 +19,7 @@ import { CriticalPathsSection } from "./_components/CriticalPathsSection";
 import { HowToRunSection } from "./_components/HowToRunSection";
 import { GuidedReadingSection } from "./_components/GuidedReadingSection";
 import { FirstTasksSection } from "./_components/FirstTasksSection";
-import { isNotIndexed, isRailDim, sectionFor } from "./helpers";
+import { isNotIndexed, isRailDim, sectionFor, shortSha } from "./helpers";
 import { SECTION_ORDER, SKELETON_ROWS } from "./constants";
 import { s } from "./styles";
 
@@ -86,7 +86,7 @@ export function TourView() {
               {t("generate.body")} {t("generate.estimate")}
             </>
           }
-          cta={t("generate.cta")}
+          cta={generate.isPending ? t("generate.generating") : t("generate.cta")}
           onCta={() => generate.mutate(false)}
           ctaLoading={generate.isPending}
         />
@@ -101,6 +101,11 @@ export function TourView() {
     const filesIndexed = indexStatus.data?.filesIndexed;
     const partialIndex = tour.index_status === "partial" || tour.index_status === "degraded";
     const hasSkeleton = tour.skeleton_sections.length > 0;
+    // C-3: staleness reads the existing useRepoIntelStatus hook (B1.4 already
+    // depends on it), never a Track A response field — that is what keeps
+    // this track independent of the server track.
+    const currentSha = indexStatus.data?.lastIndexedSha;
+    const stale = !!currentSha && currentSha !== tour.indexed_sha;
 
     body = (
       <>
@@ -114,6 +119,7 @@ export function TourView() {
             </h1>
             <p style={s.subtitle}>
               {filesIndexed != null ? t("header.subtitle", { count: filesIndexed }) : t("header.subtitleUnknown")}
+              {stale && ` · ${t("header.stale", { sha: shortSha(tour.indexed_sha) })}`}
             </p>
           </div>
           <div style={s.headerActions}>
@@ -122,6 +128,7 @@ export function TourView() {
               size="sm"
               icon="RefreshCw"
               loading={generate.isPending}
+              disabled={generate.isPending}
               onClick={() => generate.mutate(true)}
             >
               {generate.isPending ? t("regenerating") : t("regenerate")}
@@ -140,6 +147,15 @@ export function TourView() {
         {hasSkeleton && (
           <div role="status" style={s.banner}>
             <p style={s.bannerText}>{t("skeleton.banner", { error: tour.error ?? t("unknownError") })}</p>
+            <Button
+              kind="secondary"
+              size="sm"
+              icon="RefreshCw"
+              loading={generate.isPending}
+              onClick={() => generate.mutate(true)}
+            >
+              {t("retry")}
+            </Button>
           </div>
         )}
 
@@ -157,9 +173,17 @@ export function TourView() {
           </nav>
           <div style={s.content}>
             <ArchitectureSection section={sectionFor(tour, "architecture_overview")} />
-            <CriticalPathsSection section={sectionFor(tour, "critical_paths")} />
+            <CriticalPathsSection
+              section={sectionFor(tour, "critical_paths")}
+              repoFullName={repo?.full_name}
+              indexedSha={tour.indexed_sha}
+            />
             <HowToRunSection section={sectionFor(tour, "how_to_run")} />
-            <GuidedReadingSection section={sectionFor(tour, "guided_reading")} />
+            <GuidedReadingSection
+              section={sectionFor(tour, "guided_reading")}
+              repoFullName={repo?.full_name}
+              indexedSha={tour.indexed_sha}
+            />
             <FirstTasksSection section={sectionFor(tour, "first_tasks")} />
           </div>
         </div>

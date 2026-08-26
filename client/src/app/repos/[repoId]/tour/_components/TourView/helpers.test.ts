@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isNotIndexed, shortSha, sortTasksByDifficulty } from "./helpers";
+import { isNotIndexed, shortSha, sortTasksByDifficulty, truncateMiddle } from "./helpers";
 
 describe("isNotIndexed", () => {
   it("is true when there is no state yet", () => {
@@ -72,5 +72,19 @@ describe("sortTasksByDifficulty", () => {
     const original = [...tasks];
     sortTasksByDifficulty(tasks);
     expect(tasks).toEqual(original);
+  });
+});
+
+describe("truncateMiddle", () => {
+  it("leaves a short value untouched", () => {
+    expect(truncateMiddle("src/index.ts", 60)).toBe("src/index.ts");
+  });
+
+  it("middle-truncates a long value, keeping the full length recoverable from the ends (C9)", () => {
+    const long = "src/" + "a".repeat(200) + "/x.ts";
+    const truncated = truncateMiddle(long, 60);
+    expect(truncated.length).toBeLessThan(long.length);
+    expect(truncated).toContain("…");
+    expect(long.startsWith(truncated.split("…")[0]!)).toBe(true);
   });
 });

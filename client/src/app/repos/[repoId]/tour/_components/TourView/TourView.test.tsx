@@ -58,6 +58,8 @@ vi.mock("@/lib/hooks", () => ({
 
 import { TourView } from "./TourView";
 
+Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+
 afterEach(() => {
   cleanup();
   generateMutation.mutate.mockClear();
@@ -394,5 +396,143 @@ describe("TourView — populated (Phase B2)", () => {
     renderView();
     const titles = screen.getAllByText(/^Task \d$/).map((el) => el.textContent);
     expect(titles).toEqual(["Task 2", "Task 5", "Task 1", "Task 4", "Task 0", "Task 3"]);
+  });
+});
+
+describe("TourView — auditable, honest, in-flight (Phase B3)", () => {
+  it("renders the difficulty basis inline from persisted numbers, and 'no index signal' when unranked (A5)", () => {
+    tourQuery.current = {
+      data: fullTour(
+        {},
+        {
+          first_tasks: {
+            tasks: [
+              {
+                candidate_id: "t1",
+                title: "Add a health probe",
+                scope: "src/api/health.ts",
+                why: null,
+                difficulty: "low",
+                difficulty_basis: { callers: 1, rank_percentile: 31, signal: "indexed" },
+                resolved: true,
+              },
+              {
+                candidate_id: "t2",
+                title: "Unranked task",
+                scope: "src/x.ts",
+                why: null,
+                difficulty: "low",
+                difficulty_basis: { callers: 0, rank_percentile: null, signal: "no_index_signal" },
+                resolved: true,
+              },
+            ],
+          },
+        },
+      ),
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+    renderView();
+    expect(screen.getByText(/1 caller/)).toBeInTheDocument();
+    expect(screen.getByText(/rank p31/)).toBeInTheDocument();
+    expect(screen.getByText("no index signal")).toBeInTheDocument();
+  });
+
+  it("a dead (unresolved) reading entry renders no href/onClick — asserted as absence, not a class (A10)", () => {
+    tourQuery.current = {
+      data: fullTour(
+        {},
+        {
+          guided_reading: {
+            reading: [{ path: "src/deleted.ts", why: "Was the entry point.", rank_percentile: 90, resolved: false }],
+          },
+        },
+      ),
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+    renderView();
+    expect(screen.getByText("No longer in the repo")).toBeInTheDocument();
+    const pathEl = screen.getByText("src/deleted.ts");
+    expect(pathEl.tagName).not.toBe("A");
+    expect(pathEl.closest("a")).toBeNull();
+  });
+
+  it("a resolved reading entry links to the host provider at the tour's indexed_sha (Q3)", () => {
+    tourQuery.current = {
+      data: fullTour(
+        { indexed_sha: "cafebabe1234" },
+        { guided_reading: { reading: [{ path: "src/server.ts", why: "Start here.", rank_percentile: 95, resolved: true }] } },
+      ),
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+    renderView();
+    const link = screen.getByRole("link", { name: "src/server.ts" });
+    expect(link).toHaveAttribute("href", "https://github.com/acme/payments-api/blob/cafebabe1234/src/server.ts");
+    expect(link).toHaveAttribute("target", "_blank");
+  });
+
+  it("shows a stale marker naming the record's own generated-against sha when the index has moved, and fires no mutation on rerender (A11, C-3)", () => {
+    indexStatusQuery.current = {
+      data: {
+        status: "full",
+        filesIndexed: 130,
+        filesSkipped: 0,
+        lastIndexedSha: "newsha1234567",
+        updatedAt: "2026-08-21T00:00:00.000Z",
+      },
+      isLoading: false,
+    };
+    tourQuery.current = { data: fullTour({ indexed_sha: "oldsha1234567" }), isLoading: false, isError: false, error: null };
+    const { rerender } = renderView();
+    expect(screen.getByText(/oldsha1/)).toBeInTheDocument();
+    expect(generateMutation.mutate).not.toHaveBeenCalled();
+
+    rerender(
+      <NextIntlClientProvider locale="en" messages={{ onboarding: messages }}>
+        <TourView />
+      </NextIntlClientProvider>,
+    );
+    expect(generateMutation.mutate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the previous tour fully visible and disables Regenerate while a mutation is pending (C11)", () => {
+    tourQuery.current = { data: fullTour(), isLoading: false, isError: false, error: null };
+    generateMutation.isPending = true;
+    renderView();
+    expect(screen.getByText("Bootstraps every request.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Regenerating/ })).toBeDisabled();
+  });
+
+  it("Retry on the skeleton banner sends force:true and is a button, never automatic on load (Q9, A9)", () => {
+    tourQuery.current = {
+      data: fullTour({ skeleton_sections: ["how_to_run"], degraded: true, error: "model timed out" }),
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+    renderView();
+    expect(generateMutation.mutate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Retry/ }));
+    expect(generateMutation.mutate).toHaveBeenCalledWith(true);
+  });
+
+  it("the Copy control is a labelled button that copies the full command, even a very long one (C9)", async () => {
+    const longCommand = `docker compose up -d ${"service-".repeat(20)}`;
+    tourQuery.current = {
+      data: fullTour({}, { how_to_run: { run_steps: [{ command: longCommand, why: null }] } }),
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+    renderView();
+    const button = screen.getByRole("button", { name: "Copy command" });
+    fireEvent.click(button);
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(longCommand);
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 });

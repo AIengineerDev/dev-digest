@@ -54,3 +54,11 @@ export function sectionFor(tour: Pick<TourRecord, "sections">, kind: OnboardingS
 export function isRailDim(section: OnboardingSection): boolean {
   return !!section.empty_reason || !!section.skeleton;
 }
+
+/** Middle-truncate a long path/command for display, keeping the full value
+ *  available via `title` and Copy (C9). */
+export function truncateMiddle(value: string, max: number): string {
+  if (value.length <= max) return value;
+  const half = Math.floor((max - 1) / 2);
+  return `${value.slice(0, half)}…${value.slice(value.length - half)}`;
+}
