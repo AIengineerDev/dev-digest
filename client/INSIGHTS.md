@@ -103,6 +103,43 @@ to display data already sitting in memory.
 
 ## Codebase Patterns
 
+- **2026-08-26** — `activeKeyFor`'s substring chain (`components/app-shell/helpers.ts`)
+  is **order-dependent**, and this is not hypothetical: it already bit R20's tour
+  route (`if (pathname.includes("/onboarding")) return "onboarding-tour"` fired
+  for `/onboarding`, the unrelated add-repo wizard, until the entry was
+  repointed to `/tour`). Any future route whose path is a substring of, or
+  contains, an earlier `.includes()` check's string will silently steal that
+  check's nav key instead of falling through — `.includes()` has no notion of
+  "this is a different route," only "this string appears somewhere in the
+  path." When adding a route here, grep the existing chain for your new
+  segment as a substring in both directions before trusting the order you
+  inserted it at.
+  `client/src/components/app-shell/helpers.ts:25`
+
+- **2026-08-26** — `RepoIntelService.getIndexState` (`server/src/modules/
+  repo-intel/service.ts:192-204`) returns the **same `status: 'degraded'`**
+  for two different situations: a repo that has never been indexed at all
+  (synthesized, `reason: 'no_data'`, `lastIndexedSha: ''`, because no
+  `repo_index_state` row exists yet) and a repo that was indexed but hit real
+  problems partway through. `status` alone cannot tell them apart, which
+  matters because spec R18 wants different UI for each ("not indexed yet,
+  disabled Generate" vs. "degraded, but generation proceeds with a banner").
+  The distinguishing signal is the **empty `lastIndexedSha`** alongside
+  `degraded` — any client gating a not-indexed state on this hook (as the
+  Onboarding Tour's `isNotIndexed` does) needs both checks, not just `status`.
+  `client/src/app/repos/[repoId]/tour/_components/TourView/helpers.ts:11`
+
+- **2026-08-26** — `EmptyState` (`src/vendor/ui/primitives/EmptyState.tsx`)
+  takes `icon`/`title`/`body`/`cta`/`onCta`/`ctaLoading` and renders **exactly
+  one** CTA button — it does not accept or render `children` at all, despite
+  looking like a wrapping layout component. Passing JSX between its tags is
+  silently dropped, not a type error (its props type has no `children`, so
+  TSX only catches it if you also violate another prop). A state that needs a
+  second action (e.g. "Resync" beside a disabled "Generate") has to be built
+  as plain markup rather than composed with `<EmptyState>...</EmptyState>`, as
+  `PrBriefCard`'s degraded state and the tour's not-indexed state both do.
+  `client/src/vendor/ui/primitives/EmptyState.tsx:5`
+
 - **2026-08-25** — Any row that already renders through a per-row `useQueries`
   detail fetch (agent/skill `ContextTab`'s `["context-doc", repoId, path]` map,
   `ContextTab.tsx:78-87`) can add an inline preview for free: the query already
