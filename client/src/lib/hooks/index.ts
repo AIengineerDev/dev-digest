@@ -70,3 +70,5 @@ export { useRunTrace } from "./trace";
 
 export { useRepoIntelStatus, useResyncRepoIntel } from "./repo-intel";
 export type { RepoIntelState } from "./repo-intel";
+
+export { useTour, useGenerateTour } from "./tour";

@@ -1,17 +1,63 @@
 {
   "title": "Onboarding Tour",
-  "sections": "Sections",
-  "sectionCount": "{count} sections",
+  "sectionCount": "{count, number} sections",
   "regenerate": "Regenerate",
   "regenerating": "Regenerating…",
   "unknownError": "Unknown error",
   "generate": {
     "title": "Generate onboarding tour",
-    "body": "DevDigest indexes the repo and specs, then writes a 5-section guided tour: overview, architecture, key modules, getting started, and conventions & gotchas.",
+    "body": "DevDigest indexes the repo and writes a guided tour: architecture, critical paths, how to run, a reading order, and first tasks.",
+    "estimate": "Up to ~12,000 tokens, 30–60s.",
     "cta": "Generate onboarding tour",
     "generating": "Generating…"
   },
   "loadError": {
     "title": "Couldn’t load the onboarding tour"
-  }
+  },
+  "notIndexed": {
+    "title": "This repository isn’t indexed yet",
+    "body": "The onboarding tour is built from the code index. Resync the repository to build one.",
+    "resync": "Resync",
+    "generate": "Generate onboarding tour"
+  },
+  "partialIndex": {
+    "banner": "The index is {status} — {count, plural, one {# file was} other {# files were}} skipped. The tour below reflects what was indexed."
+  },
+  "header": {
+    "subtitle": "Generated from index of {count, number} files",
+    "subtitleUnknown": "Generated from this repository’s index",
+    "stale": "Generated against {sha} — the index has moved since"
+  },
+  "rail": {
+    "onThisPage": "On this page"
+  },
+  "difficulty": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High"
+  },
+  "difficultyBasis": {
+    "callers": "{count, plural, one {# caller} other {# callers}}",
+    "rank": "rank p{percentile}",
+    "noSignal": "no index signal"
+  },
+  "skeleton": {
+    "banner": "The model call didn’t produce prose for this tour: {error}. Everything below is derived directly from the index and is still accurate.",
+    "sectionMarker": "No summary generated"
+  },
+  "empty": {
+    "criticalPaths": "No dependency chains found — the import graph is empty or too shallow.",
+    "howToRun": "No runnable configuration found in this repository.",
+    "firstTasks": "Nothing obvious to start on — this repository is unusually tidy.",
+    "notAvailableForLanguage": "Not available for this repository’s languages."
+  },
+  "deadPath": {
+    "note": "No longer in the repo"
+  },
+  "copy": {
+    "label": "Copy command",
+    "copied": "Copied"
+  },
+  "open": "Open",
+  "retry": "Retry"
 }
