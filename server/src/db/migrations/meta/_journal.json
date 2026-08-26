@@ -120,6 +120,13 @@
       "when": 1787191295192,
       "tag": "0016_material_wolfsbane",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787777317881,
+      "tag": "0017_amusing_chimera",
+      "breakpoints": true
     }
   ]
 }

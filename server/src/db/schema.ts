@@ -34,7 +34,7 @@ import { reviews, findings, prIntent, prBrief, prBriefRecords } from './schema/r
 import { skills, skillVersions } from './schema/skills';
 import { agents, agentVersions, agentSkills } from './schema/agents';
 import { memory, conventions } from './schema/knowledge';
-import { codeChunks, symbols, references, onboarding } from './schema/context';
+import { codeChunks, symbols, references, onboarding, onboardingTours } from './schema/context';
 import { evalCases, evalRuns, conformanceChecks, composedReviews } from './schema/eval';
 import { ciInstallations, ciRuns } from './schema/ci';
 import { agentRuns, runTraces, multiAgentRuns } from './schema/runs';
@@ -74,6 +74,7 @@ export const schema = {
   symbols,
   references,
   onboarding,
+  onboardingTours,
   evalCases,
   evalRuns,
   conformanceChecks,

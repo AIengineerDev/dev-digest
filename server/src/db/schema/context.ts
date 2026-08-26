@@ -9,7 +9,9 @@ import {
   vector,
   index,
   uniqueIndex,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { workspaces } from './core';
 import { repos } from './repos';
 
@@ -124,3 +126,58 @@ export const onboarding = pgTable('onboarding', {
   json: jsonb('json').notNull(),
   generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow().notNull(),
 });
+
+/**
+ * `onboarding_tours` — the onboarding tour's cache, keyed by repo state
+ * (specs/12-onboarding-generator.md T3, R12). A **new** table, not a migration
+ * of `onboarding` above: that table is `{repo_id PK, json, generated_at}` and
+ * cannot express R12's six-component state key, and it has zero producers and
+ * zero consumers, so it is left untouched.
+ *
+ * The composite primary key is `(repo_id, indexed_sha, indexer_version,
+ * prompt_version, provider, model)` — every component is non-null
+ * (`repo_index_state.lastIndexedSha` and `indexerVersion` are both `notNull`,
+ * `schema/repo-intel.ts`), unlike `pr_brief_records`'s two nullable key
+ * components. That is what lets this table use a plain composite PK and a
+ * native `onConflictDoUpdate` — it does not inherit `pr_brief_records`'s
+ * `COALESCE`-over-a-partial-unique-index workaround
+ * (`server/INSIGHTS.md`, 2026-08-18) or its non-atomic select-then-write.
+ *
+ * `sections`, `skeleton_sections`, `dropped_inputs` and `trace` are `jsonb`:
+ * each is read/written as one document (the full `TourRecord.sections` array,
+ * the R15 trace block), never queried by an individual field — except
+ * `budget_tokens` vs `tokens_in`, read with the supported `trace->>'budget_tokens'`
+ * jsonb path (A18's manual measurement).
+ */
+export const onboardingTours = pgTable(
+  'onboarding_tours',
+  {
+    repoId: uuid('repo_id')
+      .notNull()
+      .references(() => repos.id, { onDelete: 'cascade' }),
+    indexedSha: text('indexed_sha').notNull(),
+    indexerVersion: integer('indexer_version').notNull(),
+    promptVersion: text('prompt_version').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    sections: jsonb('sections').$type<unknown[]>().notNull().default(sql`'[]'::jsonb`),
+    degraded: boolean('degraded').notNull().default(false),
+    error: text('error'),
+    skeletonSections: jsonb('skeleton_sections')
+      .$type<string[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    droppedInputs: jsonb('dropped_inputs').$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    droppedRefs: integer('dropped_refs').notNull().default(0),
+    droppedSteps: integer('dropped_steps').notNull().default(0),
+    indexStatus: text('index_status'),
+    filesSkipped: integer('files_skipped'),
+    trace: jsonb('trace').$type<Record<string, unknown>>().notNull(),
+    generatedAt: timestamp('generated_at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({
+      columns: [t.repoId, t.indexedSha, t.indexerVersion, t.promptVersion, t.provider, t.model],
+    }),
+  }),
+);
