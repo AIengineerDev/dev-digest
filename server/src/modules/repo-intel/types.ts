@@ -121,6 +121,19 @@ export interface FileRankRow {
   percentile: number;
 }
 
+/** One import edge: `fromFile` imports `toFile`. Facade shape for `getFileEdges`. */
+export interface FileEdgeRow {
+  fromFile: string;
+  toFile: string;
+}
+
+/** Per-file endpoints/crons. Facade shape for `getFileFacts`. */
+export interface FileFactsRow {
+  filePath: string;
+  endpoints: string[];
+  crons: string[];
+}
+
 export interface RepoMapResult {
   text: string;
   tokens: number;
@@ -169,4 +182,12 @@ export interface RepoIntel {
     opts?: { exclude?: string[] },
   ): Promise<string[]>;
   getCriticalPaths(repoId: string): Promise<string[][]>;
+
+  // --- Onboarding tour reads (specs/12-onboarding-generator.md T2) --------
+  /** Every indexed file path, ranked (one row per indexed file, no limit). */
+  getIndexedFiles(repoId: string, limit?: number): Promise<string[]>;
+  /** Every import edge for the repo. */
+  getFileEdges(repoId: string): Promise<FileEdgeRow[]>;
+  /** Endpoints/crons declared by the given files. */
+  getFileFacts(repoId: string, files: string[]): Promise<FileFactsRow[]>;
 }

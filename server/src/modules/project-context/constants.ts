@@ -1,18 +1,12 @@
 /** Constants for the project-context module (specs/09-project-context.md). */
 
 /**
- * Extensions discovery walks for. `.mdx` is deliberately excluded — it is
- * code-bearing (JSX embedded in Markdown) and would need a different renderer
- * (spec Q2).
+ * `DOC_EXTENSIONS` and `MAX_DOCUMENTS` now live in `_shared/doc-discovery.ts`
+ * (specs/12-onboarding-generator.md T2, alongside `discoverDocuments` itself),
+ * re-exported here so this module's other importers
+ * (`service.ts`, `test/project-context/discovery.test.ts`) are unchanged.
  */
-export const DOC_EXTENSIONS = ['.md', '.markdown'] as const;
-
-/**
- * Discovery cap, mirroring `repo-intel`'s `MAX_INDEXED_FILES` (spec NF-scale).
- * Past this the list states it was truncated rather than silently dropping the
- * tail (spec C3).
- */
-export const MAX_DOCUMENTS = 1000;
+export { DOC_EXTENSIONS, MAX_DOCUMENTS } from '../_shared/doc-discovery.js';
 
 /**
  * In-process token-count cache size, keyed by content hash (spec C5, NF-latency).

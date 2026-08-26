@@ -33,6 +33,8 @@ import type {
   BlastCallerRow,
   BlastChangedSymbol,
   BlastResult,
+  FileEdgeRow,
+  FileFactsRow,
   FileRankRow,
   IndexResult,
   IndexState,
@@ -706,6 +708,32 @@ export class RepoIntelService implements RepoIntel {
       paths.push(chain);
     }
     return paths;
+  }
+
+  // ---------------------------------------------------------------------
+  // Onboarding tour reads (specs/12-onboarding-generator.md T2) — plain
+  // read-only passthroughs, same degraded-empty guard as their neighbours.
+  // ---------------------------------------------------------------------
+
+  /** Every indexed file path, ranked (one row per indexed file, no limit). */
+  async getIndexedFiles(repoId: string, limit?: number): Promise<string[]> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    const rows = await this.repo.getRankedPaths(repoId, limit ?? 100_000);
+    return rows.map((r) => r.path);
+  }
+
+  /** Every import edge for the repo. */
+  async getFileEdges(repoId: string): Promise<FileEdgeRow[]> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    return this.repo.getEdges(repoId);
+  }
+
+  /** Endpoints/crons declared by the given files. */
+  async getFileFacts(repoId: string, files: string[]): Promise<FileFactsRow[]> {
+    if (!this.container.config.repoIntelEnabled) return [];
+    if (files.length === 0) return [];
+    const rows = await this.repo.getFileFacts(repoId, files);
+    return rows.map((r) => ({ filePath: r.filePath, endpoints: r.endpoints, crons: r.crons }));
   }
 }
 
