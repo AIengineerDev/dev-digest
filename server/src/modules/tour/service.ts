@@ -1,10 +1,31 @@
-import type { OnboardingSectionKind, TourRecord } from '@devdigest/shared';
+import type { FeatureModelChoice, OnboardingSection, OnboardingSectionKind, TourRecord } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
-import { NotFoundError } from '../../platform/errors.js';
+import { ExternalServiceError, NotFoundError } from '../../platform/errors.js';
+import { renderPrompt } from '../../platform/prompts.js';
 import type { RunLogger } from '../../platform/run-logger.js';
 import { resolveFeatureModel } from '../_shared/feature-models.js';
+import { withFeatureProviderContext } from '../_shared/provider-errors.js';
+import { discoverDocuments } from '../_shared/doc-discovery.js';
 import { TourRepository, type TourRow, type TourStateKey } from './repository.js';
-import { TOUR_PROMPT_VERSION } from './constants.js';
+import {
+  TOUR_MODEL_MAX_RETRIES,
+  TOUR_MODEL_MAX_TOKENS,
+  TOUR_MODEL_TIMEOUT_MS,
+  TOUR_PROMPT_VERSION,
+  TOUR_SCHEMA_NAME,
+} from './constants.js';
+import { TourAnnotations } from './schemas.js';
+import { assembleTourInput, type AssembleTourInput } from './assemble.js';
+import { buildTree } from './derive/tree.js';
+import { buildDiagram } from './derive/diagram.js';
+import { buildChains } from './derive/chains.js';
+import { deriveConfig, type ReadFile } from './derive/config.js';
+import { buildReading } from './derive/reading.js';
+import { buildCandidates, type DerivedCandidate } from './derive/candidates.js';
+import { buildSkeleton, type CandidateWithSignal } from './derive/skeleton.js';
+import { computeDifficulty } from './derive/difficulty.js';
+import { groundPaths, filterSteps, filterAnnotations, applyDifficulty } from './grounding.js';
+import { mergeAnnotations } from './merge.js';
 
 /** Minimal logging surface `generate()` needs — `RunLogger` satisfies it,
  *  fanned over zero runIds for the standalone `POST /repos/:id/tour` call,
@@ -18,6 +39,10 @@ const ALL_SECTION_KINDS: OnboardingSectionKind[] = [
   'guided_reading',
   'first_tasks',
 ];
+
+/** How many top-ranked files feed the reading list, the symbol-signature
+ *  block (P8) and the unresolved-reference generator's re-parse. */
+const READING_POOL_SIZE = 20;
 
 function toTourRecord(row: TourRow): TourRecord {
   return {
@@ -40,6 +65,30 @@ function toTourRecord(row: TourRow): TourRecord {
     current_indexed_sha: row.indexedSha,
     generated_at: row.generatedAt.toISOString(),
   };
+}
+
+function dirOf(path: string): string {
+  const idx = path.lastIndexOf('/');
+  return idx === -1 ? '(root)' : path.slice(0, idx) || '(root)';
+}
+
+export interface BudgetComparison {
+  ratio: number;
+  withinTolerance: boolean;
+}
+
+/**
+ * A18 — is the counted `budget_tokens` within 15% of what the provider
+ * actually billed (`tokens_in`)? Hermetic and boundary-tested; the
+ * MEASUREMENT (whether a real generation lands inside that band) is J1's
+ * manual step — only a real provider reports `usage.input_tokens`.
+ */
+export function compareBudgetToBilled(budget: number, tokensIn: number): BudgetComparison {
+  if (budget <= 0) return { ratio: Infinity, withinTolerance: false };
+  const ratio = tokensIn / budget;
+  // A tiny epsilon absorbs float error at the exact 15% boundary (e.g.
+  // 850/1000 - 1 can land at -0.15000000000000002, not exactly -0.15).
+  return { ratio, withinTolerance: Math.abs(ratio - 1) <= 0.15 + 1e-9 };
 }
 
 /**
@@ -132,15 +181,18 @@ export class TourService {
       }
     }
 
-    return this.runGeneration(repoRow, choice, indexState, key, log);
+    return this.runGeneration(
+      repoRow,
+      choice,
+      { indexStatus: indexState.status, filesSkipped: indexState.filesSkipped },
+      key,
+      log,
+    );
   }
 
   /** C1's rendered refusal. Ephemeral — no `repository` call at all, so it
    *  can never collide with, or be confused for, a persisted row. */
-  private notIndexedRefusal(
-    repoId: string,
-    choice: { provider: string; model: string },
-  ): TourRecord {
+  private notIndexedRefusal(repoId: string, choice: FeatureModelChoice): TourRecord {
     return {
       sections: ALL_SECTION_KINDS.map((kind) => ({
         kind,
@@ -178,19 +230,290 @@ export class TourService {
   }
 
   /**
-   * The real generation pipeline (R2-R9, R14-R17, R24) — built out phase by
-   * phase (A2 derivation/skeleton, A3 assembly, A4 the call/grounding/merge).
-   * Unreachable from any Phase A1 test: every A1 case takes the not-indexed
-   * refusal or the cache-hit path above.
+   * The real generation pipeline (R2-R9, R14-R17, R24):
+   *   1. fetch every derivable input from the repoIntel facade + git,
+   *   2. build the complete skeleton (A2, no model call yet),
+   *   3. assemble + budget-gate the one prompt (A3),
+   *   4. exactly one `completeStructured` call, wrapped so a missing key
+   *      degrades instead of 5xx-ing (A4.2/A4.3),
+   *   5. filter + ground the response, merge it onto the skeleton by id,
+   *   6. persist with the single R15 trace block.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async runGeneration(
-    _repoRow: { id: string; owner: string; name: string; clonePath: string | null },
-    _choice: { provider: string; model: string },
-    _indexState: { lastIndexedSha: string; indexerVersion: number; status: string; filesSkipped: number },
-    _key: TourStateKey,
-    _log: TourLogger,
+    repoRow: { id: string; owner: string; name: string; clonePath: string | null },
+    choice: FeatureModelChoice,
+    indexInfo: { indexStatus: string; filesSkipped: number },
+    key: TourStateKey,
+    log: TourLogger,
   ): Promise<TourRecord> {
-    throw new Error('tour generation not yet implemented — lands in Phase A2-A4');
+    const repoRef = { owner: repoRow.owner, name: repoRow.name };
+    const intel = this.container.repoIntel;
+
+    const indexedFiles = await intel.getIndexedFiles(repoRow.id);
+    const fileRanks = await intel.getFileRank(repoRow.id, indexedFiles);
+    const percentileByPath = new Map(fileRanks.map((r) => [r.path, r.percentile]));
+    const percentileOf = (path: string): number | null => percentileByPath.get(path) ?? null;
+
+    const edges = await intel.getFileEdges(repoRow.id);
+    const criticalPathsRaw = await intel.getCriticalPaths(repoRow.id);
+    const fileFacts = await intel.getFileFacts(repoRow.id, indexedFiles);
+
+    const readFile: ReadFile = (path) => this.container.git.readFile(repoRef, path);
+
+    // ---- documents (P6 + candidates' "documented" set) --------------------
+    let discoveredDocPaths: string[] = [];
+    const documentedFiles = new Set<string>();
+    const promptDocuments: { path: string; content: string }[] = [];
+    if (repoRow.clonePath) {
+      const discovery = await discoverDocuments(repoRow.clonePath).catch(() => ({ docs: [], truncated: false }));
+      discoveredDocPaths = discovery.docs.map((d) => d.path);
+      for (const doc of discovery.docs) {
+        if (doc.tooLarge) continue;
+        try {
+          const content = await readFile(doc.path);
+          documentedFiles.add(doc.path);
+          for (const file of indexedFiles) {
+            if (content.includes(file)) documentedFiles.add(file);
+          }
+          const isReadme = /^readme\.md$/i.test(doc.path);
+          const isArchLike = /(architecture|contributing|overview)/i.test(doc.path);
+          if ((isReadme || isArchLike) && promptDocuments.length < 2) {
+            promptDocuments.push({ path: doc.path, content: content.slice(0, 4_000) });
+          }
+        } catch {
+          // unreadable doc — skip, not a failure
+        }
+      }
+    }
+
+    // ---- how-to-run config facts (R4, R5) -----------------------------------
+    const config = await deriveConfig(readFile);
+
+    // ---- reading pool: rank-ordered, feeds reading/signatures/unresolved ---
+    const rankedPool = await intel.getTopFilesByRank(repoRow.id, READING_POOL_SIZE);
+    const symbolRows = await intel.getSymbolsInFiles(repoRow.id, rankedPool);
+    const unresolvedRefs = await intel.getUnresolvedReferences(repoRow.id, rankedPool);
+
+    // ---- chains + reading -------------------------------------------------
+    const chains = buildChains(criticalPathsRaw, fileFacts);
+    const chainHeads = new Set(criticalPathsRaw.map((c) => c[0]).filter((f): f is string => !!f));
+    const reading = buildReading(rankedPool, chainHeads, percentileOf);
+
+    // ---- candidates (R8) — grep in its own timeout, inside candidates.ts ---
+    const endpointFacts = fileFacts.filter((f) => f.endpoints.length > 0);
+    const candidates: DerivedCandidate[] = await buildCandidates({
+      allFiles: indexedFiles,
+      unresolvedRefs,
+      endpointFacts,
+      documentedFiles,
+      grep: async (pattern) => this.container.codeIndex.grep(repoRef, pattern),
+    });
+
+    // ---- difficulty inputs (R9) — one getBlastRadius per candidate scope ---
+    const candidatesWithSignal: CandidateWithSignal[] = [];
+    for (const candidate of candidates) {
+      const blast = await intel.getBlastRadius(repoRow.id, [candidate.scope]);
+      const callers = new Set(blast.callers.map((c) => c.file)).size;
+      candidatesWithSignal.push({ candidate, callers, rankPercentile: percentileOf(candidate.scope) });
+    }
+
+    // ---- the skeleton (A2, R24) — the base case, not an error path --------
+    const tree = buildTree(indexedFiles.map((path) => ({ path, percentile: percentileOf(path) })));
+    const diagram = buildDiagram(edges);
+    const skeleton = buildSkeleton({ tree, diagram, chains, config, reading, candidates: candidatesWithSignal });
+
+    // ---- assembly (A3) — no model call yet ---------------------------------
+    const directoryEdgeFacts = [
+      ...new Set(edges.map((e) => `${dirOf(e.fromFile)} ${dirOf(e.toFile)}`)),
+    ]
+      .map((pair) => pair.split(' ') as [string, string])
+      .filter(([from, to]) => from !== to)
+      .map(([from, to]) => ({ from, to }));
+
+    const systemPrompt = await renderPrompt('onboarding.system.md', { language: 'English' });
+    const repoFacts = [
+      `${repoRow.owner}/${repoRow.name}`,
+      `index status: ${indexInfo.indexStatus}`,
+      `files skipped: ${indexInfo.filesSkipped}`,
+      `indexed files: ${indexedFiles.length}`,
+    ].join(', ');
+
+    const assembleInput: AssembleTourInput = {
+      system: systemPrompt,
+      repoFacts,
+      tree: tree.map((t) => ({ path: t.path, files: t.files, roleMix: t.role_mix, topFile: t.top_file, folded: t.folded })),
+      directoryEdges: directoryEdgeFacts,
+      chains: chains.chains.map((c) => ({ chain_id: c.chain_id, files: c.files, endpoints: c.endpoints })),
+      documents: promptDocuments,
+      rankedReading: reading.reading.map((r) => ({ path: r.path, rank_percentile: r.rank_percentile })),
+      symbolSignatures: symbolRows
+        .filter((s): s is typeof s & { signature: string } => s.signature !== null)
+        .map((s) => ({ file: s.file, symbol: s.name, signature: s.signature })),
+      config: {
+        packageManager: config.packageManager,
+        scripts: config.scripts,
+        envExampleVars: config.envExampleVars,
+        composeServices: config.composeServices,
+        dockerfilePresent: config.dockerfilePresent,
+        whitelist: config.whitelist,
+      },
+      candidates: candidates.map((c) => ({ candidate_id: c.candidate_id, kind: c.kind, scope: c.scope, line: c.line, snippet: c.snippet })),
+      difficultyInputs: candidatesWithSignal.map((c) => ({
+        candidate_id: c.candidate.candidate_id,
+        callers: c.callers,
+        rank_percentile: c.rankPercentile,
+      })),
+      count: (s) => this.container.tokenizer.count(s),
+    };
+
+    const assembled = assembleTourInput(assembleInput);
+
+    const referenceFiles = [...indexedFiles, ...tree.map((t) => t.path), ...discoveredDocPaths];
+    const difficultyByCandidateId = new Map(
+      candidatesWithSignal.map((c) => [c.candidate.candidate_id, computeDifficulty(c.callers, c.rankPercentile)]),
+    );
+
+    if (!assembled.ok) {
+      log.error('tour: estimated input still exceeds the 12 000-token ceiling after every droppable input — refusing');
+      return this.persistSkeleton(key, skeleton, choice, {
+        error: 'input_over_budget',
+        droppedInputs: assembled.droppedInputs,
+        budgetTokens: assembled.tokens,
+        indexStatus: indexInfo.indexStatus,
+        filesSkipped: indexInfo.filesSkipped,
+      });
+    }
+
+    // ---- the ONE model call (A8) -------------------------------------------
+    let result;
+    try {
+      result = await withFeatureProviderContext(
+        { id: 'onboarding', label: 'Onboarding Tour', provider: choice.provider, model: choice.model },
+        async () => {
+          const llm = await this.container.llm(choice.provider as 'openai' | 'anthropic' | 'openrouter');
+          return log.step(
+            'Generating onboarding tour',
+            () =>
+              llm.completeStructured<TourAnnotations>({
+                model: choice.model,
+                schema: TourAnnotations,
+                schemaName: TOUR_SCHEMA_NAME,
+                maxTokens: TOUR_MODEL_MAX_TOKENS,
+                timeoutMs: TOUR_MODEL_TIMEOUT_MS,
+                maxRetries: TOUR_MODEL_MAX_RETRIES,
+                messages: [
+                  { role: 'system', content: assembled.system },
+                  { role: 'user', content: assembled.user },
+                ],
+              }),
+            { kind: 'tool' },
+          );
+        },
+      );
+    } catch (err) {
+      // C15 — a truncated/schema-invalid response is a TOTAL parse failure,
+      // never trusted field-by-field.
+      const isMalformed = err instanceof ExternalServiceError;
+      const message = isMalformed ? 'malformed_response' : (err as Error).message;
+      log.error(`tour: generation failed — ${message}`);
+      return this.persistSkeleton(key, skeleton, choice, {
+        error: message,
+        droppedInputs: assembled.droppedInputs,
+        budgetTokens: assembled.tokens,
+        indexStatus: indexInfo.indexStatus,
+        filesSkipped: indexInfo.filesSkipped,
+      });
+    }
+
+    // ---- filter (R5, R8) → merge (R24) → ground (R10) → difficulty (R9) ---
+    const knownIds = {
+      treeDirs: new Set(tree.map((t) => t.path)),
+      chainIds: new Set(chains.chains.map((c) => c.chain_id)),
+      readingPaths: new Set(reading.reading.map((r) => r.path)),
+      candidateIds: new Set(candidates.map((c) => c.candidate_id)),
+    };
+    const filtered = filterAnnotations(result.data, knownIds);
+    const merged = mergeAnnotations(skeleton, filtered.annotations);
+    const stepsResult = filterSteps(merged.sections, config.whitelist);
+    if (stepsResult.dropped.length > 0) {
+      log.info(`tour: dropped ${stepsResult.dropped.length} non-whitelisted command(s): ${stepsResult.dropped.join(', ')}`);
+    }
+    const groundedResult = groundPaths(stepsResult.sections, referenceFiles);
+    if (groundedResult.dropped.length > 0) {
+      log.info(`tour: dropped ${groundedResult.dropped.length} ungrounded ref(s): ${groundedResult.dropped.join(', ')}`);
+    }
+    const finalSections = applyDifficulty(groundedResult.sections, difficultyByCandidateId);
+
+    const trace = {
+      budget_tokens: assembled.tokens,
+      tokens_in: result.tokensIn,
+      tokens_out: result.tokensOut,
+      cost_usd: result.costUsd,
+      provider: choice.provider,
+      model: choice.model,
+      prompt_version: TOUR_PROMPT_VERSION,
+    };
+
+    const row = await this.repo.upsert({
+      ...key,
+      sections: finalSections,
+      degraded: false,
+      error: null,
+      skeletonSections: merged.skeletonSections,
+      droppedInputs: assembled.droppedInputs,
+      droppedRefs: groundedResult.droppedRefs + filtered.droppedRefs,
+      droppedSteps: stepsResult.droppedSteps,
+      indexStatus: indexInfo.indexStatus,
+      filesSkipped: indexInfo.filesSkipped,
+      trace,
+      generatedAt: new Date(),
+    });
+
+    const comparison = compareBudgetToBilled(assembled.tokens, result.tokensIn);
+    if (!comparison.withinTolerance) {
+      log.info(
+        `tour: billed input tokens (${result.tokensIn}) is outside 15% of the pre-flight budget (${assembled.tokens}) — ratio ${comparison.ratio.toFixed(2)}`,
+      );
+    }
+
+    log.result(`tour: generated (${choice.model}, ${result.tokensIn}t in / ${result.tokensOut}t out)`);
+    return toTourRecord(row);
+  }
+
+  private async persistSkeleton(
+    key: TourStateKey,
+    skeleton: OnboardingSection[],
+    choice: FeatureModelChoice,
+    opts: {
+      error: string;
+      droppedInputs: string[];
+      budgetTokens: number;
+      indexStatus: string;
+      filesSkipped: number;
+    },
+  ): Promise<TourRecord> {
+    const row = await this.repo.upsert({
+      ...key,
+      sections: skeleton,
+      degraded: true,
+      error: opts.error,
+      skeletonSections: ALL_SECTION_KINDS,
+      droppedInputs: opts.droppedInputs,
+      droppedRefs: 0,
+      droppedSteps: 0,
+      indexStatus: opts.indexStatus,
+      filesSkipped: opts.filesSkipped,
+      trace: {
+        budget_tokens: opts.budgetTokens,
+        tokens_in: null,
+        tokens_out: null,
+        cost_usd: null,
+        provider: choice.provider,
+        model: choice.model,
+        prompt_version: TOUR_PROMPT_VERSION,
+      },
+      generatedAt: new Date(),
+    });
+    return toTourRecord(row);
   }
 }
