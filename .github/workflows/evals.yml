@@ -1,0 +1,167 @@
+name: evals
+
+# Skill evals. Deliberately NOT a normal gate: these runs spend real money and
+# are non-deterministic, so on a pull request they run in `smoke` mode — they
+# fail on infrastructure (a run that produced nothing, an unparseable fixture, a
+# leak in the fixture) and never on a hit rate. Judging whether a skill is worth
+# its tokens needs several repetitions on a strong model; that is the
+# workflow_dispatch path, invoked by a human.
+#
+# PREREQUISITE, not yet landed: the harness needs `--provider openrouter`,
+# `--gate smoke|strict`, an env-only key, and skip-instead-of-throw for an
+# unmatched `--suite`. Until those exist the eval job is a no-op, because it
+# also skips whenever OPENROUTER_API_KEY is absent.
+
+on:
+  pull_request:
+    paths:
+      - ".claude/skills/**"
+      - "skills/**"
+      - ".claude/agents/**"
+      - "**/AGENTS.md"
+      - "**/CLAUDE.md"
+      - "evals/**"
+      - "server/src/db/seed-*.ts"
+      - "docs/agent-prompts/**"
+      - ".github/workflows/evals.yml"
+      - ".github/scripts/pick-eval-suites.mjs"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "OpenRouter model id (blank = pick by scope)"
+        required: false
+        default: ""
+      provider:
+        description: "openrouter | anthropic"
+        required: false
+        default: "openrouter"
+      reps:
+        description: "Repetitions per arm (harness caps at 2)"
+        required: false
+        default: "1"
+      gate:
+        description: "smoke (infrastructure only) | strict (hit rates too)"
+        required: false
+        default: "smoke"
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Which suites does this change actually need? A changed skill with no evals
+  # is named and skipped, never failed.
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      suites: ${{ steps.pick.outputs.suites }}
+      full: ${{ steps.pick.outputs.full }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: pick
+        run: node .github/scripts/pick-eval-suites.mjs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+  eval:
+    needs: scope
+    if: needs.scope.outputs.suites != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(needs.scope.outputs.suites) }}
+    # The `secrets` context is NOT available in a step `if:` — only `env` is.
+    # Mapping the keys here is what makes the skip-on-fork branch below work at
+    # all; branching on `secrets.*` directly reads fine and never fires.
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: evals/package-lock.json
+
+      - run: npm ci
+        working-directory: evals
+
+      # evals/ type-checks against ../reviewer-core/src, so tsc resolves THAT
+      # package's bare imports (`openai`, `zod`) against reviewer-core's own
+      # node_modules, which nothing else installs. Same workaround as
+      # server-unit.yml, and it fails the same confusing way without it.
+      - name: install reviewer-core deps (path-aliased source)
+        run: npm ci
+        working-directory: reviewer-core
+
+      - run: npm run typecheck
+        working-directory: evals
+
+      # Free checks, before anything is spent. Regenerating the diffs also runs
+      # the fixture's leak guard, which fails when a fixture explains its own
+      # plants — that silently makes every arm score alike.
+      - name: fixture is clean and its diffs are current
+        run: |
+          set -euo pipefail
+          for root in skills .claude/skills; do
+            gen="$root/${{ matrix.suite }}/evals/make-diffs.sh"
+            [ -x "$gen" ] || continue
+            "$gen"
+            git diff --exit-code -- "$root/${{ matrix.suite }}/evals/diffs" \
+              || { echo "::error::diffs are stale — run $gen and commit"; exit 1; }
+          done
+
+      - name: what would run
+        run: npm run eval -- --list --suite "${{ matrix.suite }}"
+        working-directory: evals
+
+      # Forks and unconfigured repos get a green skip, not a red failure.
+      - name: no key, skipping
+        if: env.OPENROUTER_API_KEY == '' && env.ANTHROPIC_API_KEY == ''
+        run: |
+          echo "::notice::no OPENROUTER_API_KEY / ANTHROPIC_API_KEY — eval skipped"
+          echo "### ${{ matrix.suite }}: skipped (no API key)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: run
+        if: env.OPENROUTER_API_KEY != '' || env.ANTHROPIC_API_KEY != ''
+        working-directory: evals
+        env:
+          # Gemini for the repo-wide sweep, which fires rarely and is worth the
+          # extra accuracy; the cheap-but-not-cheapest deepseek for a single
+          # skill's PR. `deepseek-v4-flash` is deliberately NOT the default: the
+          # sharpest plants are scored on whether the model NAMES a mechanism,
+          # and flash pattern-matches (docs/agent-prompts/choosing-a-model.md).
+          EVAL_PROVIDER: ${{ inputs.provider || 'openrouter' }}
+          EVAL_MODEL: >-
+            ${{ inputs.model
+                || (needs.scope.outputs.full == 'true'
+                    && 'google/gemini-2.5-pro'
+                    || 'deepseek/deepseek-v4-pro') }}
+          EVAL_REPS: ${{ inputs.reps || '1' }}
+          EVAL_GATE: ${{ inputs.gate || 'smoke' }}
+        run: |
+          npm run eval -- \
+            --suite "${{ matrix.suite }}" \
+            --provider "$EVAL_PROVIDER" \
+            --model "$EVAL_MODEL" \
+            --reps "$EVAL_REPS" \
+            --gate "$EVAL_GATE" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: keep the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-${{ matrix.suite }}
+          path: evals/results/*
+          if-no-files-found: ignore
+          retention-days: 30
