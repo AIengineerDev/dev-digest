@@ -84,7 +84,7 @@ named-message rule, `skeleton` is R24, and the three GET fields are R13's stale
 marker and R18's partial-index banner. The plan is more complete than the spec's
 contract table, not in conflict with it. Recorded as a spec question rather than
 silently reconciled: the honest fix is a clause in spec 12's *Contract changes*,
-which is `specreator`'s to write, not the planner's or mine.
+which is `spec-creator`'s to write, not the planner's or mine.
 
 ### 5. Q4 is a rollout risk, not only an open question
 

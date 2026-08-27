@@ -105,9 +105,9 @@ pull up Postgres via testcontainers. While iterating, scope it:
 
 - Read `specs/` before building a feature that spans more than one package —
   intent and done-criteria live there. Single-package work goes in that
-  package's `specs/` instead. Specs are authored by the `specreator` agent, which
+  package's `specs/` instead. Specs are authored by the `spec-creator` agent, which
   only ever **creates** them: a revision is a new numbered file, never an edit.
-- Run `specreator` then `implementation-planner` by hand, one at a time, then
+- Run `spec-creator` then `implementation-planner` by hand, one at a time, then
   `/impl <plan path>` to drive build → verify → review → accept → ship. It is
   stage-at-a-time and resumable from `plans/*.run.md`.
 - Read `plans/` for how an agreed spec gets built — phases or parallel tracks,
@@ -130,10 +130,10 @@ pull up Postgres via testcontainers. While iterating, scope it:
 - Read `e2e/README.md` before writing or debugging a browser flow.
 - Read `mcp/AGENTS.md` before adding or changing an MCP tool — the token budget
   it has to stay under is not inferable from the code.
-- `/retro` is a **human-invoked** retrospective on a multi-agent run: it measures
+- `/workflow-retro` is a **human-invoked** retrospective on a multi-agent run: it measures
   what the session cost and proposes prompt changes, with durable findings in
   `docs/retro/ledger.md`. No agent or skill may launch it — offer it, never run
-  it. `/retro deep` widens the scope to every session, for trends.
+  it. `/workflow-retro deep` widens the scope to every session, for trends.
 - Read `INSIGHTS.md` at repo root for decisions that span more than one package.
 - Use the `engineering-insights` skill to read or record an insight — it maps a
   touched path to the right `INSIGHTS.md` and holds the format and quality bar.

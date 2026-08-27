@@ -28,9 +28,9 @@ adds *Decisions — do not re-open these* and *Traps*, `07-smart-diff.md` adds
 *Thresholds*. Extend the shape when the feature needs it; never drop a section
 from the minimum.
 
-## Written by `specreator`
+## Written by `spec-creator`
 
-The [`specreator`](../.claude/agents/specreator.md) agent is the author. It
+The [`spec-creator`](../.claude/agents/spec-creator.md) agent is the author. It
 **creates** spec files and can write nowhere else — a `PreToolUse` hook enforces
 that, including a block on overwriting a file that already exists. So:
 

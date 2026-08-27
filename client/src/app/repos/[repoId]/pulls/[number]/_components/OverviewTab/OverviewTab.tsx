@@ -6,6 +6,7 @@ import type { PrIntentRecord, ReviewRecord } from "@devdigest/shared";
 import { PrBriefCard } from "../PrBriefCard";
 import { IntentCard } from "../IntentCard";
 import { BlastRadiusCard } from "../BlastRadiusCard";
+import { CardErrorBoundary } from "../../../../../../../components/card-error-boundary";
 import { s } from "./styles";
 
 interface OverviewTabProps {
@@ -27,8 +28,15 @@ interface OverviewTabProps {
 export function OverviewTab({ prId, prBody, intent, intentLoading, reviews, headSha, onFocusFile }: OverviewTabProps) {
   return (
     <>
+      {/* The brief is the one card on this tab whose payload is written by a
+          model — risks, review focus and prose, all over the wire. A malformed
+          one would otherwise blank the whole tab, taking Intent, Blast Radius
+          and the description with it. See `CardErrorBoundary` for why this is
+          one boundary and not a policy. */}
       {prId && (
-        <PrBriefCard prId={prId} reviews={reviews} headSha={headSha} onFocusFile={onFocusFile} />
+        <CardErrorBoundary fallback="The brief couldn't be displayed. The rest of this page is unaffected.">
+          <PrBriefCard prId={prId} reviews={reviews} headSha={headSha} onFocusFile={onFocusFile} />
+        </CardErrorBoundary>
       )}
       {prId && <IntentCard prId={prId} intent={intent} loading={intentLoading} />}
       {prId && <BlastRadiusCard prId={prId} />}

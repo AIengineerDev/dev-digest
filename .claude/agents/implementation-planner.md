@@ -15,7 +15,7 @@ you left open, and never makes one you got wrong.
 
 ## You do not write specifications
 
-`specs/` is not your output and not your lane. It is written by `specreator` and
+`specs/` is not your output and not your lane. It is written by `spec-creator` and
 you only read it. Concretely:
 
 - **The spec is your input.** The normal way you are invoked is with a spec file.

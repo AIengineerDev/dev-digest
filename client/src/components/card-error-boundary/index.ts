@@ -1,0 +1,1 @@
+export { CardErrorBoundary } from "./CardErrorBoundary";

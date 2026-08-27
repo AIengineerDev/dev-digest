@@ -31,7 +31,7 @@ e2e/test-results/
 # rules and doc surfaces — it is worth no more than the repo it was written for.
 #
 # `.claude/hooks/` and `.claude/settings.json` are shared for the same reason:
-# `specreator` is fenced to `specs/` by a PreToolUse hook, not by its prompt, so
+# `spec-creator` is fenced to `specs/` by a PreToolUse hook, not by its prompt, so
 # an agent set that travels without the hook that bounds it is a set whose stated
 # guarantees are false. `settings.local.json` stays personal and stays ignored.
 .claude/*

@@ -304,5 +304,5 @@ Not in the plan above. A human decides whether the spec changes.
 - Architecture review — a separate agent
 - Security review — a separate agent (the untrusted-boundary and path-containment claims in T2/A3 are asserted by tests here, not audited here)
 - The `vendor/ui/nav.ts` exception — a human decides before B1 starts
-- Whether the R1 audit finding changes the spec — `specreator`'s and the CTO's call, not the implementer's
+- Whether the R1 audit finding changes the spec — `spec-creator`'s and the CTO's call, not the implementer's
 - Any change to `SUPPORTED_EXT`, the code index, or `.gitignore` handling in the walk

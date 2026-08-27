@@ -585,7 +585,7 @@ Not in the plan above. Each changes what gets built, which is the spec's busines
 - **Security review** — a separate agent, and it **should** be run. This feature adds a second prompt-assembly path that deliberately bypasses `assemblePrompt` and therefore the repo's one shared `INJECTION_GUARD`, and it is the first feature in this product that invites a human to paste a model-adjacent string into a shell. R5, R16, A15 and A16 are the plan's answer; an independent reviewer should confirm it.
 - **`plan-verifier`** — this plan goes to a model of a different family for an independent read before execution.
 - **Deciding the audit's assumptions.** Every row marked "assumed as" is a human's to overturn. The implementer executes them as written; they do not get re-litigated inside a phase.
-- **Whether the spec changes.** The ten audit rows and every *Recommendation* are `specreator`'s and the CTO's business. A spec revision is a new numbered file, never an edit (`specs/README.md:36-38`).
+- **Whether the spec changes.** The ten audit rows and every *Recommendation* are `spec-creator`'s and the CTO's business. A spec revision is a new numbered file, never an edit (`specs/README.md:36-38`).
 - **Q4's model default.** Keep `openrouter`/`deepseek/deepseek-v4-flash`. If J1 step 5 shows it cannot hold this schema, changing it is a CTO decision, not a phase.
 - **Any change to `repo-intel`'s indexing, `SUPPORTED_EXT`, or `getBlastRadius`'s one-hop reach** (N5, N6).
 - **`mcp/`** — no tour tool, and the token budget it must stay under is a separate decision.

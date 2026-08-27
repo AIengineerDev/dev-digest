@@ -1,6 +1,6 @@
 ---
-name: retro
-description: Retrospective on a finished multi-agent run — measures what the session cost, harvests what the agents said they could not do, and proposes concrete edits to the agent prompts and skills. Human-invoked only: type /retro (or /retro deep). Never run it on your own initiative, never as the tail of another workflow, and never because a run just finished. Evaluates the agent system, not the product code.
+name: workflow-retro
+description: Retrospective on a finished multi-agent run — measures what the session cost, harvests what the agents said they could not do, and proposes concrete edits to the agent prompts and skills. Human-invoked only: type /workflow-retro (or /workflow-retro deep). Never run it on your own initiative, never as the tail of another workflow, and never because a run just finished. Evaluates the agent system, not the product code.
 version: 2.0.0
 disable-model-invocation: true
 ---
@@ -18,8 +18,8 @@ chose.
 
 | Typed | Scope | Use when |
 | --- | --- | --- |
-| `/retro` | **In-context.** This session only: the agent reports still in the conversation, the run file, and `measure.mjs` with no flags (this session's transcript). | The default. The run just happened and you were here for it |
-| `/retro deep` | Adds `measure.mjs --all` across every session, the existing ledger entries, and `git log` over the run's window. | Looking for a trend, or reconstructing a run you were not present for |
+| `/workflow-retro` | **In-context.** This session only: the agent reports still in the conversation, the run file, and `measure.mjs` with no flags (this session's transcript). | The default. The run just happened and you were here for it |
+| `/workflow-retro deep` | Adds `measure.mjs --all` across every session, the existing ledger entries, and `git log` over the run's window. | Looking for a trend, or reconstructing a run you were not present for |
 
 `deep` costs meaningfully more and mostly answers a different question — *is
 this getting better or worse* rather than *how did this run go*. Do not reach
@@ -51,10 +51,10 @@ is yours.
 ## Step 1 — measure
 
 ```
-node .claude/skills/retro/measure.mjs              # this session
-node .claude/skills/retro/measure.mjs --session <id>
-node .claude/skills/retro/measure.mjs --all        # every session, for trends
-node .claude/skills/retro/measure.mjs --json
+node .claude/skills/workflow-retro/measure.mjs              # this session
+node .claude/skills/workflow-retro/measure.mjs --session <id>
+node .claude/skills/workflow-retro/measure.mjs --all        # every session, for trends
+node .claude/skills/workflow-retro/measure.mjs --json
 ```
 
 Paste its `## Measured` output into the retro **verbatim**. Do not round, retype
@@ -79,7 +79,7 @@ they are not decoration — they are the retro's primary source. Collect them:
 
 | Agent | Section | Reads as |
 | --- | --- | --- |
-| `specreator` | Could not establish | what the spec is guessing at |
+| `spec-creator` | Could not establish | what the spec is guessing at |
 | `implementation-planner` | Requirement audit · Recommendations | where the spec was unbuildable as written |
 | `implementer` | Deviations · NOT verified here · Follow-ups | where the plan was wrong or incomplete |
 | `architecture-reviewer` | Not established · Considered and not a finding | what no one could judge |
@@ -176,7 +176,7 @@ Look for these specifically — they are the changes past runs actually needed:
 | The same file cited by three agents' reports | Either it belongs in the task string, or it belongs in `AGENTS.md` where every agent already reads |
 | Main-session output rivalling the subagents' | The driver did work it should have delegated — usually reading, before spawning |
 | A limits section empty across every agent | The prompt requirement to fill it is being skipped; make it a field in the report template rather than a paragraph |
-| A stage that asked the human twice | The upstream artifact was underspecified — the change belongs to `specreator` or `implementation-planner`, not to the agent that asked |
+| A stage that asked the human twice | The upstream artifact was underspecified — the change belongs to `spec-creator` or `implementation-planner`, not to the agent that asked |
 
 You may also propose changes to **this skill** and to `measure.mjs`. A retro
 that cannot improve its own instrument is a retro that will keep measuring the

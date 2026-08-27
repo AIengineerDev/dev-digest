@@ -26,7 +26,7 @@ The agents carry their own rules. Do not restate them here or in task strings �
 
 ## This skill starts from a plan
 
-Writing the spec (`specreator`) and the plan (`implementation-planner`) are
+Writing the spec (`spec-creator`) and the plan (`implementation-planner`) are
 **separate, manual steps**, run by a human before this skill is invoked. Do not
 spawn either of them to start a run. If there is no plan, say so and stop — the
 answer is to go run the planner, not to improvise one here.
@@ -175,19 +175,19 @@ Spawn **`doc-writer`** with the shipped change and the spec.
 It is the only agent that may flip the spec's `Status:` to `shipped` —
 `plan-verifier` is explicitly forbidden from touching that line. **Do not end a
 run before this stage.** A spec left on `draft` is read by the next agent as
-current intent, and the next `specreator` will hit its stop rule on a feature
+current intent, and the next `spec-creator` will hit its stop rule on a feature
 that is already built.
 
 Then two records, and they do not overlap:
 
 - **`engineering-insights`** — what the run taught about the **product code**.
   Only what clears its bar; silence is a valid outcome.
-**Do not run `/retro` yourself.** It is human-invoked only
+**Do not run `/workflow-retro` yourself.** It is human-invoked only
 (`disable-model-invocation: true`) and running a retrospective is a decision
 about spending tokens that belongs to whoever is paying for them. What you may
 do is **offer it in one sentence** at the end of the run — it is the only thing
 that can tell you the fan-out was theoretical or that a model override never
-applied — and then stop. If the human types `/retro`, that skill takes over.
+applied — and then stop. If the human types `/workflow-retro`, that skill takes over.
 
 ## The closing report
 

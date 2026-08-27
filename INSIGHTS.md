@@ -19,7 +19,7 @@ move it into `docs/` and delete it here.
 ### 2026-08-18 — The build chain buys judgement only where it changes a verdict
 
 **What:** the agent set is now mixed-model on purpose, not uniformly `opus`.
-`specreator` and `implementation-planner` stay `opus` — they decide *what* gets
+`spec-creator` and `implementation-planner` stay `opus` — they decide *what* gets
 built, and a wrong requirement is the one error every later stage inherits.
 `architecture-reviewer` moved to `sonnet`. `plan-verifier` keeps `opus` in its
 frontmatter but the `/impl` skill spawns **pass 1 with a `sonnet` override**,
@@ -110,7 +110,7 @@ input but left responses unchecked, so contract drift surfaced in the browser.
   test half-built work. Pass 2 takes `specs/NN-*.md` at the end, and is the only
   check that can catch **a requirement the planner dropped**: any check against
   the plan is blind to it, because the plan is already missing it. This is what
-  the `R1…Rn` ids in a `specreator` spec are for. Two orderings fall out of it
+  the `R1…Rn` ids in a `spec-creator` spec are for. Two orderings fall out of it
   and are not arbitrary: `test-writer` runs *after* the architecture loop,
   because findings move files and a test written against the old placement is a
   test rewritten; and pass 1's `Items that were not checkable` list — the
@@ -263,7 +263,7 @@ _None yet._
   cases. What a hook still cannot do: the `Agent` grant is all-or-nothing, so
   "may only spawn `researcher`" remains prose — a hook cannot see which agent
   type a subagent call names.
-  `.claude/hooks/specreator-guard.mjs:52` · `.claude/settings.json:6`
+  `.claude/hooks/spec-creator-guard.mjs:52` · `.claude/settings.json:6`
 
 - **2026-08-17** — An entrypoint **cannot catch a throw from a module it imports
   statically**: static imports are evaluated before the entry module's own body

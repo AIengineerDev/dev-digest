@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PreToolUse guard for the `specreator` subagent.
+// PreToolUse guard for the `spec-creator` subagent.
 //
 // Specreator writes specifications and nothing else. This hook is the
 // enforcement — the prompt states the rule, this file makes it true even when
@@ -47,7 +47,7 @@ try {
   pass()
 }
 
-if (event.agent_type !== 'specreator') pass()
+if (event.agent_type !== 'spec-creator') pass()
 
 const tool = event.tool_name
 
@@ -75,7 +75,7 @@ if (tool === 'Bash') {
   ]) {
     if (re.test(cmd)) {
       deny(
-        `specreator's shell is read-only and this command contains ${why}. ` +
+        `spec-creator's shell is read-only and this command contains ${why}. ` +
           `Use Bash only for git log/show/blame, ls, rg and similar. ` +
           `Write the spec with the Write tool.`,
       )
@@ -89,14 +89,14 @@ if (tool === 'Bash') {
 // agreed spec is a record, and a change to it is a new version, not an edit.
 if (tool !== 'Write') {
   deny(
-    `specreator may only create new files with Write; \`${tool}\` is blocked. ` +
+    `spec-creator may only create new files with Write; \`${tool}\` is blocked. ` +
       `To revise an agreed spec, write a new numbered spec file that supersedes it.`,
   )
 }
 
 const filePath = event.tool_input?.file_path
 if (typeof filePath !== 'string' || filePath.length === 0) {
-  deny('specreator: Write called without a file_path.')
+  deny('spec-creator: Write called without a file_path.')
 }
 
 const root = event.cwd ?? process.cwd()
@@ -104,7 +104,7 @@ const abs = resolve(root, filePath)
 const rel = relative(root, abs)
 
 if (rel.startsWith('..') || rel.startsWith(sep) || rel.length === 0) {
-  deny(`specreator may only write inside the repository. \`${filePath}\` is outside \`${root}\`.`)
+  deny(`spec-creator may only write inside the repository. \`${filePath}\` is outside \`${root}\`.`)
 }
 
 // Allowed: `specs/<name>.md` at the root, or `<package>/specs/<name>.md`.
@@ -115,19 +115,19 @@ const posix = rel.split(sep).join('/')
 
 if (!SPEC_PATH.test(posix)) {
   deny(
-    `specreator may only write \`specs/<name>.md\` or \`<package>/specs/<name>.md\`. ` +
+    `spec-creator may only write \`specs/<name>.md\` or \`<package>/specs/<name>.md\`. ` +
       `\`${posix}\` is outside its lane. Single-package work goes in that package's specs/; ` +
       `cross-package work goes in the root specs/.`,
   )
 }
 
 if (posix.endsWith('/README.md') || posix === 'specs/README.md') {
-  deny(`specreator does not edit the specs/ README — that file documents the convention it follows.`)
+  deny(`spec-creator does not edit the specs/ README — that file documents the convention it follows.`)
 }
 
 if (existsSync(abs)) {
   deny(
-    `\`${posix}\` already exists and specreator only creates new specs. ` +
+    `\`${posix}\` already exists and spec-creator only creates new specs. ` +
       `Pick the next free number, or hand the revision to a human.`,
   )
 }

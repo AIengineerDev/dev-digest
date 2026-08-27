@@ -68,4 +68,4 @@ pattern list silently drifts. **This must be fixed before Phase A3 runs.**
    plan.
 
 Items 1, 3 and 4 are plan edits. Items 2 and 5 are spec edits, and a revised
-spec is a new numbered file — `specreator` cannot amend an agreed one.
+spec is a new numbered file — `spec-creator` cannot amend an agreed one.
