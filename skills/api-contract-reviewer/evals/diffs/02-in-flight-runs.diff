@@ -1,0 +1,48 @@
+diff --git a/packages/public-api/contracts/runs.ts b/packages/public-api/contracts/runs.ts
+index f084f4c..72fe540 100644
+--- a/packages/public-api/contracts/runs.ts
++++ b/packages/public-api/contracts/runs.ts
+@@ -1,7 +1,7 @@
+ import { z } from 'zod';
+ 
+ /** Where a review run is in its lifecycle. */
+-export const RunStatus = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']);
++export const RunStatus = z.enum(['running', 'succeeded', 'failed', 'cancelled']);
+ export type RunStatus = z.infer<typeof RunStatus>;
+ 
+ export const RunSummary = z.object({
+@@ -9,7 +9,7 @@ export const RunSummary = z.object({
+   pr_id: z.string(),
+   agent_name: z.string(),
+   status: RunStatus,
+-  cost_usd: z.number(),
++  cost_usd: z.number().nullable(),
+   tokens_in: z.number().int(),
+   tokens_out: z.number().int(),
+   started_at: z.string(),
+diff --git a/packages/public-api/routes/runs.ts b/packages/public-api/routes/runs.ts
+index c303e2b..ed0a4fd 100644
+--- a/packages/public-api/routes/runs.ts
++++ b/packages/public-api/routes/runs.ts
+@@ -7,11 +7,8 @@ const DEFAULT_LIMIT = 20;
+ export async function runRoutes(app: FastifyInstance, store: RunStore): Promise<void> {
+   app.get('/repos/:repoId/runs', {
+     schema: { response: { 200: RunListResponse } },
+-    handler: async (req, reply) => {
++    handler: async (req) => {
+       const { repoId } = req.params as { repoId: string };
+-      const repo = await store.getRepo(repoId);
+-      if (!repo) return reply.code(404).send({ error: 'repo_not_found' });
+-
+       const q = req.query as { cursor?: string; limit?: string };
+       const page = await store.listRuns(repoId, {
+         cursor: q.cursor,
+@@ -30,7 +27,7 @@ function toSummary(row: Awaited<ReturnType<RunStore['getRun']>> & {}): RunSummar
+     id: row.id,
+     pr_id: row.prId,
+     agent_name: row.agentName,
+-    status: row.status,
++    status: row.status === 'queued' ? 'running' : row.status,
+     cost_usd: row.costUsd,
+     tokens_in: row.tokensIn,
+     tokens_out: row.tokensOut,

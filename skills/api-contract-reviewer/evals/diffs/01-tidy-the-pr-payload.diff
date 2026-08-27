@@ -1,0 +1,40 @@
+diff --git a/packages/public-api/contracts/pulls.ts b/packages/public-api/contracts/pulls.ts
+index d184a42..67bbac7 100644
+--- a/packages/public-api/contracts/pulls.ts
++++ b/packages/public-api/contracts/pulls.ts
+@@ -9,8 +9,7 @@ export const PrSummary = z.object({
+   number: z.number().int(),
+   title: z.string(),
+   state: PrState,
+-  head_sha: z.string(),
+-  last_reviewed_sha: z.string().nullable(),
++  headSha: z.string(),
+   additions: z.number().int(),
+   deletions: z.number().int(),
+   updated_at: z.string(),
+diff --git a/packages/public-api/package.json b/packages/public-api/package.json
+index 6e967b5..0e0cc34 100644
+--- a/packages/public-api/package.json
++++ b/packages/public-api/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@devdigest/public-api",
+-  "version": "2.3.4",
++  "version": "2.3.5",
+   "description": "The published HTTP contract for the DevDigest review API.",
+   "type": "module",
+   "exports": {
+diff --git a/packages/public-api/routes/pulls.ts b/packages/public-api/routes/pulls.ts
+index 9fe245d..059a6eb 100644
+--- a/packages/public-api/routes/pulls.ts
++++ b/packages/public-api/routes/pulls.ts
+@@ -39,8 +39,7 @@ function toSummary(row: Awaited<ReturnType<PullStore['getPull']>> & {}): PrSumma
+     number: row.number,
+     title: row.title,
+     state: row.state,
+-    head_sha: row.headSha,
+-    last_reviewed_sha: row.lastReviewedSha,
++    headSha: row.headSha,
+     additions: row.additions,
+     deletions: row.deletions,
+     updated_at: row.updatedAt.toISOString(),

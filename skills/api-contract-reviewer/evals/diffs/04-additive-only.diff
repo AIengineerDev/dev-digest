@@ -1,0 +1,90 @@
+diff --git a/packages/public-api/contracts/pulls.ts b/packages/public-api/contracts/pulls.ts
+index d184a42..54e27be 100644
+--- a/packages/public-api/contracts/pulls.ts
++++ b/packages/public-api/contracts/pulls.ts
+@@ -14,6 +14,7 @@ export const PrSummary = z.object({
+   additions: z.number().int(),
+   deletions: z.number().int(),
+   updated_at: z.string(),
++  draft: z.boolean().optional(),
+ });
+ export type PrSummary = z.infer<typeof PrSummary>;
+ 
+@@ -29,3 +30,14 @@ export const PrListResponse = z.object({
+   next_cursor: z.string().nullable(),
+ });
+ export type PrListResponse = z.infer<typeof PrListResponse>;
++
++export const PrReviewer = z.object({
++  login: z.string(),
++  state: z.enum(['requested', 'approved', 'changes_requested']),
++});
++export type PrReviewer = z.infer<typeof PrReviewer>;
++
++export const PrReviewerListResponse = z.object({
++  items: z.array(PrReviewer),
++});
++export type PrReviewerListResponse = z.infer<typeof PrReviewerListResponse>;
+diff --git a/packages/public-api/contracts/runs.ts b/packages/public-api/contracts/runs.ts
+index f084f4c..ec5b07e 100644
+--- a/packages/public-api/contracts/runs.ts
++++ b/packages/public-api/contracts/runs.ts
+@@ -1,7 +1,7 @@
+ import { z } from 'zod';
+ 
+ /** Where a review run is in its lifecycle. */
+-export const RunStatus = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled']);
++export const RunStatus = z.enum(['queued', 'running', 'succeeded', 'failed', 'cancelled', 'timed_out']);
+ export type RunStatus = z.infer<typeof RunStatus>;
+ 
+ export const RunSummary = z.object({
+diff --git a/packages/public-api/package.json b/packages/public-api/package.json
+index 6e967b5..3f458a9 100644
+--- a/packages/public-api/package.json
++++ b/packages/public-api/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@devdigest/public-api",
+-  "version": "2.3.4",
++  "version": "2.4.0",
+   "description": "The published HTTP contract for the DevDigest review API.",
+   "type": "module",
+   "exports": {
+diff --git a/packages/public-api/routes/pulls.ts b/packages/public-api/routes/pulls.ts
+index 9fe245d..9edce7f 100644
+--- a/packages/public-api/routes/pulls.ts
++++ b/packages/public-api/routes/pulls.ts
+@@ -1,5 +1,10 @@
+ import type { FastifyInstance } from 'fastify';
+-import { PrListQuery, PrListResponse, PrSummary } from '../contracts/pulls.js';
++import {
++  PrListQuery,
++  PrListResponse,
++  PrReviewerListResponse,
++  PrSummary,
++} from '../contracts/pulls.js';
+ import type { PullStore } from '../store.js';
+ 
+ const DEFAULT_LIMIT = 20;
+@@ -31,6 +36,14 @@ export async function pullRoutes(app: FastifyInstance, store: PullStore): Promis
+       return toSummary(row);
+     },
+   });
++  app.get('/repos/:repoId/pulls/:number/reviewers', {
++    schema: { response: { 200: PrReviewerListResponse } },
++    handler: async (req) => {
++      const { repoId, number } = req.params as { repoId: string; number: string };
++      const rows = await store.listReviewers(repoId, Number(number));
++      return { items: rows };
++    },
++  });
+ }
+ 
+ function toSummary(row: Awaited<ReturnType<PullStore['getPull']>> & {}): PrSummary {
+@@ -44,5 +57,6 @@ function toSummary(row: Awaited<ReturnType<PullStore['getPull']>> & {}): PrSumma
+     additions: row.additions,
+     deletions: row.deletions,
+     updated_at: row.updatedAt.toISOString(),
++    draft: row.draft,
+   };
+ }

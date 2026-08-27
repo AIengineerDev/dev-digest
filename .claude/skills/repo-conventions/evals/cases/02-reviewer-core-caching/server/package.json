@@ -1,0 +1,12 @@
+{
+  "name": "@devdigest/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "arch": "depcruise --config .dependency-cruiser.cjs --ignore-known --output-type err src"
+  },
+  "dependencies": { "fastify": "^5.2.0", "zod": "^3.24.1" }
+}

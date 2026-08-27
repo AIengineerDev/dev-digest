@@ -1,0 +1,128 @@
+{
+  "$comment": "Machine-readable scorecard. README.md's table mirrors this file; keep the two in step. `file` and `patterns` are case-insensitive regexes: a planted change counts as FOUND when one grounded finding's file matches `file` and its title+rationale+suggestion matches every entry in `patterns`.",
+  "agent": {
+    "$comment": "What the harness attaches. `seed:` resolves an export of server/src/db/seed-api-contract.ts (an import-free data module); `file:` is relative to this directory. The `skills` list is the ONLY thing that differs between the two arms.",
+    "prompt": "seed:API_CONTRACT_REVIEWER_PROMPT",
+    "arms": [
+      {
+        "name": "without-skills",
+        "skills": [],
+        "baseline": true
+      },
+      {
+        "name": "with-skills",
+        "skills": [
+          "seed:breaking-change",
+          "seed:response-schema",
+          "seed:semver-discipline",
+          "file:../deprecation-policy.md"
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "01-tidy-the-pr-payload",
+      "title": "Tidy up the PR summary payload",
+      "expected": [
+        {
+          "id": "01-a",
+          "what": "head_sha renamed to headSha with no compatibility alias — existing clients read undefined, silently",
+          "file": "pulls\\.ts",
+          "patterns": [
+            "head_?sha",
+            "renam|alias|undefined|compat|back(ward)?s?[- ]compat"
+          ]
+        },
+        {
+          "id": "01-b",
+          "what": "last_reviewed_sha removed outright, with no deprecation window",
+          "file": "pulls\\.ts",
+          "patterns": [
+            "last_reviewed_sha",
+            "remov|delet|deprecat"
+          ]
+        },
+        {
+          "id": "01-c",
+          "what": "a breaking change shipped as a patch bump (2.3.4 -> 2.3.5)",
+          "file": "package\\.json",
+          "patterns": [
+            "major|patch|semver|version"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "02-in-flight-runs",
+      "title": "Report in-flight runs honestly",
+      "expected": [
+        {
+          "id": "02-a",
+          "what": "cost_usd narrowed from number to nullable — every consumer that formatted it now formats null",
+          "file": "runs\\.ts",
+          "patterns": [
+            "cost_usd",
+            "null"
+          ]
+        },
+        {
+          "id": "02-b",
+          "what": "RunStatus lost the 'queued' value and the route now reports those runs as 'running'",
+          "file": "runs\\.ts",
+          "patterns": [
+            "queued",
+            "enum|remov|status|meaning"
+          ]
+        },
+        {
+          "id": "02-c",
+          "what": "an unknown repo returns 200 with an empty page instead of 404",
+          "file": "runs\\.ts",
+          "patterns": [
+            "404|not.?found",
+            "200|empty|status code"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "03-findings-surface",
+      "title": "Clean up the findings surface",
+      "expected": [
+        {
+          "id": "03-a",
+          "what": "route path moved from /findings to /review-findings with no alias",
+          "file": "findings\\.ts",
+          "patterns": [
+            "review-findings",
+            "path|route|url|endpoint"
+          ]
+        },
+        {
+          "id": "03-b",
+          "what": "agentId added as a REQUIRED query parameter — every existing request now 422s",
+          "file": "findings\\.ts",
+          "patterns": [
+            "agentid",
+            "requir"
+          ]
+        },
+        {
+          "id": "03-c",
+          "what": "the 'suggestion' severity was renamed to 'nit' — clients switching on it fall through",
+          "file": "findings\\.ts",
+          "patterns": [
+            "suggestion|'nit'|\\bnit\\b",
+            "enum|remov|renam|sever"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "04-additive-only",
+      "title": "Additive only (control)",
+      "expected": []
+    }
+  ]
+}

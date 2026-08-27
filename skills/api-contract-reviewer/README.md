@@ -34,12 +34,31 @@ three have named the problem.
 ## The experiment these are for
 
 1. Open a PR that renames a response field or changes a route signature.
-2. Review it with an agent that has **no** skills linked — the rename reads as
-   cleanup and is not reported.
-3. Link these four to the `API Contract Reviewer` and review the same PR again —
-   the rename is reported as a breaking change, with the callers it breaks and
-   the deprecation window it needs.
+2. Review it with an agent that has **no** skills linked.
+3. Link these four to the `API Contract Reviewer` and review the same PR again.
 
-The difference between the two runs is the whole argument for skills, and it is
+The difference between the two runs is the argument for skills, and it is
 visible in the run trace: the second run's `## Skills / rules` slot is non-null
 and carries the token cost of these bodies.
+
+## Measuring it instead of asserting it
+
+[`evals/`](./evals) — this folder's own eval suite — is that experiment,
+checked in and repeatable: nine planted
+contract breaks across three diffs plus an additive control, an answer key, and
+a harness that runs both arms and scores them.
+
+The harness that runs it is the repo-root `evals/` package:
+
+```sh
+cd <repo root>/evals && npm install
+npm run eval -- --suite api-contract-reviewer
+```
+
+Read [`evals/README.md`](./evals/README.md) for what is planted and what the
+first runs measured. The short version, and it is not the flattering one: on
+`claude-opus-5` and `claude-haiku-4-5` **both arms found all nine**. The claim
+that an unskilled reviewer reads the rename as tidy-up holds against the cheap
+default model these skills were written for (`deepseek/deepseek-v4-flash`), not
+against Claude — there, the skills changed the vocabulary of the finding and
+roughly halved the output tokens, but not what was found.

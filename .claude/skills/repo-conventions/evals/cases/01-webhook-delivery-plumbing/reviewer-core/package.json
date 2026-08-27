@@ -1,0 +1,11 @@
+{
+  "name": "@devdigest/reviewer-core",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": { "openai": "^4.77.0", "zod": "^3.24.1" }
+}

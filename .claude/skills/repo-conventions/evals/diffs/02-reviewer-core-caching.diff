@@ -1,0 +1,107 @@
+diff --git a/reviewer-core/package.json b/reviewer-core/package.json
+index f2f43b4..39b1618 100644
+--- a/reviewer-core/package.json
++++ b/reviewer-core/package.json
+@@ -5,7 +5,11 @@
+   "scripts": {
+     "test": "vitest run",
+     "typecheck": "tsc --noEmit -p tsconfig.json",
+-    "build": "tsc --noEmit -p tsconfig.json"
++    "build": "tsc -p tsconfig.json"
+   },
+-  "dependencies": { "openai": "^4.77.0", "zod": "^3.24.1" }
++  "dependencies": {
++    "openai": "^4.77.0",
++    "zod": "^3.24.1"
++  },
++  "main": "dist/index.js"
+ }
+diff --git a/reviewer-core/src/prompt.ts b/reviewer-core/src/prompt.ts
+index 6a9bd92..64a0144 100644
+--- a/reviewer-core/src/prompt.ts
++++ b/reviewer-core/src/prompt.ts
+@@ -1,4 +1,4 @@
+-import { INJECTION_GUARD, wrapUntrusted } from './guard.js';
++import { INJECTION_GUARD } from './guard.js';
+ 
+ export interface PromptParts {
+   system: string;
+@@ -13,7 +13,9 @@ export function assemblePrompt(parts: PromptParts) {
+   if (parts.skills?.length) {
+     sections.push(`## Skills / rules\n${parts.skills.join('\n\n')}`);
+   }
+-  sections.push(`## Diff to review\n${wrapUntrusted('diff', parts.diff)}`);
++  // Fencing added ~4k characters of delimiters per review; the diff is already
++  // under its own heading, so the heading carries the same signal.
++  sections.push(`## Diff to review\n${parts.diff}`);
+   return {
+     messages: [
+       { role: 'system' as const, content: `${parts.system}\n\n${INJECTION_GUARD}` },
+diff --git a/reviewer-core/src/review/run.ts b/reviewer-core/src/review/run.ts
+index 7a12cb7..8378853 100644
+--- a/reviewer-core/src/review/run.ts
++++ b/reviewer-core/src/review/run.ts
+@@ -1,7 +1,13 @@
++import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
++import { createHash } from 'node:crypto';
++import { homedir } from 'node:os';
++import { join } from 'node:path';
+ import type { LLMProvider, Review, UnifiedDiff } from '@devdigest/shared';
+ import { assemblePrompt } from '../prompt.js';
+ import { groundFindings, groundingSummary } from '../grounding.js';
+ 
++const CACHE_DIR = join(homedir(), '.devdigest', 'review-cache');
++
+ export interface ReviewInput {
+   systemPrompt: string;
+   model: string;
+@@ -9,6 +15,10 @@ export interface ReviewInput {
+   llm: LLMProvider;
+   skills?: string[];
+   task?: string;
++  /** Reuse a cached review for an identical prompt. */
++  cache?: boolean;
++  /** Return the model's findings as-is, without the citation gate. */
++  skipGrounding?: boolean;
+ }
+ 
+ export async function reviewPullRequest(input: ReviewInput) {
+@@ -18,16 +28,36 @@ export async function reviewPullRequest(input: ReviewInput) {
+     diff: input.diff.raw,
+     task: input.task,
+   });
++  const key = createHash('sha256').update(JSON.stringify(a.messages)).digest('hex');
++  const cacheFile = join(CACHE_DIR, `${key}.json`);
++  if (input.cache) {
++    try {
++      return JSON.parse(readFileSync(cacheFile, 'utf8'));
++    } catch {
++      // cold cache
++    }
++  }
++
+   const res = await input.llm.completeStructured<Review>({
+     model: input.model,
+     messages: a.messages,
+     schemaName: 'Review',
+   });
++
+   const ground = groundFindings(res.data.findings, input.diff);
+-  return {
+-    review: { ...res.data, findings: ground.kept },
++  const out = {
++    review: {
++      ...res.data,
++      findings: input.skipGrounding ? res.data.findings : ground.kept,
++    },
+     grounding: groundingSummary(ground),
+     tokensIn: res.tokensIn,
+     tokensOut: res.tokensOut,
+   };
++
++  if (input.cache) {
++    mkdirSync(CACHE_DIR, { recursive: true });
++    writeFileSync(cacheFile, JSON.stringify(out));
++  }
++  return out;
+ }

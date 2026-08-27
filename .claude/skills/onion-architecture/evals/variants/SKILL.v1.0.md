@@ -1,7 +1,7 @@
 ---
 name: onion-architecture
 description: Enforce the onion/ports-and-adapters layering in server/ — which file a piece of backend code belongs in, which direction imports may point, when a module earns a service layer, who owns transactions and error translation, and how a new external dependency becomes a port. Use BEFORE adding a route, service, repository, or adapter under server/src, before wiring anything into the DI container, and when `pnpm arch` fails. Backend only; the client's layering lives in frontend-ui-architecture.
-version: 1.2.0
+version: 1.0.0
 ---
 
 # Onion architecture
@@ -83,26 +83,6 @@ category and may be imported directly.
 The test for which one you have: *would a test ever want to swap this out?* If
 yes, it is a port. If it is a pure function, a test just calls it.
 
-### An adapter's own timeout sits strictly below the job timeout
-
-An adapter that can block — LLM, GitHub, git, HTTP — carries its own timeout,
-and that number is **not free to choose**. `JobRunner` kills a handler at
-`DEFAULT_JOB_TIMEOUT`, 300s (`src/platform/jobs.ts`). An adapter timeout equal
-to or above it means the two race: the job is killed at the same instant the
-adapter would have failed, so the run dies with a generic job timeout instead of
-the adapter's error, and every per-provider branch downstream — retry, fallback,
-the message the user reads — never runs.
-
-The existing LLM adapters sit at 240s for exactly this reason, and both files
-say so at the constant. A new blocking adapter must pick a number **below 300s**
-and say why at the definition, or raise `DEFAULT_JOB_TIMEOUT` deliberately in
-the same commit.
-
-This is invisible in review unless you know the number. `300_000` in a new
-adapter reads like a sensible five-minute ceiling; it is the one value that
-guarantees the error is swallowed.
-
-
 Never import a port's concrete class outside `container.ts`. That is what
 `src/adapters/mocks.ts` and `ContainerOverrides` exist for.
 
@@ -137,28 +117,6 @@ Translate at the boundary, in this direction:
 - Nothing about `reviewer-core`: it is already a pure engine with no I/O.
 - Nothing that `server/AGENTS.md` already covers (commands, migrations, route
   schemas).
-
-## A cost guarantee is a build rule, not a review comment
-
-When a feature promises the user something about what it *costs* — this opens
-instantly, this never calls a model, this reads only what is already stored —
-that promise has to become a `dependency-cruiser` rule in the same PR.
-
-`smart-diff-spends-nothing` is the pattern to copy: it forbids
-`modules/smart-diff/**` from importing `src/adapters/llm`, `reviewer-core` or
-`modules/reviews`. Its comment says why in one line — "a product promise, so it
-is a build failure and not a review comment".
-
-The reasoning generalises: a guarantee that only a reviewer enforces is not
-enforced. The code satisfying it today proves nothing about the code six months
-from now, when someone adds one import to fix a rendering gap and no gate
-objects. **A PR that states a cost guarantee and adds no rule is incomplete even
-when every line in it is correct** — and that is the case worth catching,
-because nothing about it looks wrong.
-
-Read the PR description, the module's doc comment and its route comments for the
-promise. If one is there, look for the rule; if the rule is missing, that is the
-finding.
 
 ## Enforcement
 
@@ -196,13 +154,9 @@ from the baseline in the same commit.
 3. Any new external system is a port in `@devdigest/shared`, constructed only in
    `container.ts`.
 4. No service was added that only forwards to a repository.
-5. Any new blocking adapter's timeout is strictly below `DEFAULT_JOB_TIMEOUT`
-   (300s), with the reason at the constant.
-6. Any cost guarantee the PR states is enforced by a `dependency-cruiser` rule
-   added in the same PR.
-7. Transactions open in a service, not in a route or a repository.
-8. Database errors were translated before leaving the repository.
-9. `pnpm typecheck` passes.
+5. Transactions open in a service, not in a route or a repository.
+6. Database errors were translated before leaving the repository.
+7. `pnpm typecheck` passes.
 
 ---
 
@@ -210,6 +164,5 @@ from the baseline in the same commit.
 
 | Version | Change |
 | --- | --- |
-| 1.2.0 | Adds the two rules a reviewer cannot reach by general reasoning, both measured at 0/5 without them and 5/5 with them over five runs (`evals/README.md`): an adapter timeout must sit strictly **below** `DEFAULT_JOB_TIMEOUT` (300s), and a stated **cost guarantee** must ship a `dependency-cruiser` rule in the same PR. Two further candidate rules — module registration, and `adapters/**` not importing `modules/**` — were measured and **deliberately not added**: the reviewer already found both 5/5 without them, so writing them down would have cost ~1300 characters in every run and bought nothing. Also corrects the frontmatter version, which said 1.0.0 while this table already listed 1.1.0. |
 | 1.1.0 | Adds `smart-diff-spends-nothing` — the first feature-specific rule, enforcing a cost guarantee rather than a layer boundary. |
 | 1.0.0 | First version. Names the layering already present in `server/src`, adds the enforced rule set (`.dependency-cruiser.cjs`, `pnpm arch`) with a baseline of the 11 violations measured 2026-08-09, and sets the criterion for when a module earns a service layer. |

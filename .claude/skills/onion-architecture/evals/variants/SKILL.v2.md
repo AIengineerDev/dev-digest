@@ -1,7 +1,7 @@
 ---
 name: onion-architecture
 description: Enforce the onion/ports-and-adapters layering in server/ — which file a piece of backend code belongs in, which direction imports may point, when a module earns a service layer, who owns transactions and error translation, and how a new external dependency becomes a port. Use BEFORE adding a route, service, repository, or adapter under server/src, before wiring anything into the DI container, and when `pnpm arch` fails. Backend only; the client's layering lives in frontend-ui-architecture.
-version: 1.2.0
+version: 1.4.0
 ---
 
 # Onion architecture
@@ -68,6 +68,32 @@ Otherwise `routes.ts` → `repository.ts` is a finished module, not debt. Four
 modules here are deliberately two-layer on this basis: `polling`, `pulls`,
 `settings`, `workspace`.
 
+## A module is not a module until it is registered
+
+`src/modules/index.ts` is a **static registry**: one import plus one entry per
+module. Nothing autoloads. A `modules/<m>/routes.ts` that exports a perfectly
+good Fastify plugin and is not named there is dead code — the routes are never
+mounted, every request to them 404s, and nothing in the package fails. Not the
+type-check, not `pnpm arch`, not the unit suite.
+
+This is the one failure in this skill's scope that **passes every gate**, which
+is exactly why it needs a rule of its own rather than a mention.
+
+**Adding a module means touching two files, always:**
+
+1. `modules/<m>/routes.ts` — `export default async function <m>Routes(app)`.
+2. `modules/index.ts` — the import line and the entry in `modules`.
+
+The same shape applies to anything else that only works once it is named in a
+file every feature edits: a hook in its barrel, a message key in the locale
+file, an arch rule the module's own spec claims as enforcement. Those files
+merge cleanly from any branch, so the omission survives review and shows up as
+a 404 in a rebuilt branch.
+
+**When reviewing a diff that adds a module**, the registry entry is the first
+thing to look for, and its absence is a blocker rather than a note: the feature
+does not run at all. Read it as inert, not as incomplete.
+
 ## Ports and adapters
 
 A new external dependency becomes a **port** when the core needs to name it and
@@ -82,6 +108,32 @@ category and may be imported directly.
 
 The test for which one you have: *would a test ever want to swap this out?* If
 yes, it is a port. If it is a pure function, a test just calls it.
+
+### An adapter never imports from a module
+
+Adapters are **driven**: the core names them, they do not name the core. So
+`src/adapters/**` may import `@devdigest/shared`, `src/platform/**` and other
+adapters — and never `src/modules/**`, in either direction of intent. Not a
+type, not a constant, not a helper.
+
+The tempting case is a constant. A delivery adapter wants the module's
+`DELIVERY_TIMEOUT_MS` or `MAX_ATTEMPTS` instead of duplicating the number, and
+reaching for it reads like ordinary DRY. It is the wrong direction: the adapter
+now cannot be constructed, tested, or reused without the feature that happens to
+use it today, and the module can no longer change its own constant without
+reaching into the edge.
+
+The fix is always one of two:
+
+- the value belongs to the **caller** — the module passes it in, as an argument
+  or a constructor option, and the adapter carries its own default;
+- the value is genuinely shared — it moves to `@devdigest/shared`.
+
+**No `pnpm arch` rule catches this today.** `no-cross-module-internals` only
+governs `modules/**` → `modules/**`; nothing constrains `adapters/**` →
+`modules/**`. Check it by reading the import block of every file added under
+`src/adapters/`, and treat a hit the way this skill treats any promise that only
+a reviewer enforces: report it, and add the rule.
 
 ### An adapter's own timeout sits strictly below the job timeout
 
@@ -196,13 +248,17 @@ from the baseline in the same commit.
 3. Any new external system is a port in `@devdigest/shared`, constructed only in
    `container.ts`.
 4. No service was added that only forwards to a repository.
-5. Any new blocking adapter's timeout is strictly below `DEFAULT_JOB_TIMEOUT`
+5. A new module was added to the registry in `src/modules/index.ts` — an import
+   line and an entry. Without it the routes are never mounted.
+6. No file added under `src/adapters/` imports from `src/modules/` — not a type,
+   not a constant. `pnpm arch` does not check this one.
+7. Any new blocking adapter's timeout is strictly below `DEFAULT_JOB_TIMEOUT`
    (300s), with the reason at the constant.
-6. Any cost guarantee the PR states is enforced by a `dependency-cruiser` rule
+8. Any cost guarantee the PR states is enforced by a `dependency-cruiser` rule
    added in the same PR.
-7. Transactions open in a service, not in a route or a repository.
-8. Database errors were translated before leaving the repository.
-9. `pnpm typecheck` passes.
+9. Transactions open in a service, not in a route or a repository.
+10. Database errors were translated before leaving the repository.
+11. `pnpm typecheck` passes.
 
 ---
 
@@ -210,6 +266,8 @@ from the baseline in the same commit.
 
 | Version | Change |
 | --- | --- |
-| 1.2.0 | Adds the two rules a reviewer cannot reach by general reasoning, both measured at 0/5 without them and 5/5 with them over five runs (`evals/README.md`): an adapter timeout must sit strictly **below** `DEFAULT_JOB_TIMEOUT` (300s), and a stated **cost guarantee** must ship a `dependency-cruiser` rule in the same PR. Two further candidate rules — module registration, and `adapters/**` not importing `modules/**` — were measured and **deliberately not added**: the reviewer already found both 5/5 without them, so writing them down would have cost ~1300 characters in every run and bought nothing. Also corrects the frontmatter version, which said 1.0.0 while this table already listed 1.1.0. |
+| 1.4.0 | Adds **`adapters/**` may not import `modules/**`** — the one cross-module direction no `dependency-cruiser` rule covers (`no-cross-module-internals` governs `modules/**` → `modules/**` only), and the one that reads like ordinary DRY when it is a constant. |
+| 1.3.0 | Adds two checks that a reviewer cannot reach by general reasoning: an adapter timeout must sit strictly **below** `DEFAULT_JOB_TIMEOUT` (300s) or the job kills the handler at the same instant and swallows the adapter's error (`src/platform/jobs.ts:43`), and a stated **cost guarantee** must ship a `dependency-cruiser` rule in the same PR, after `smart-diff-spends-nothing`. |
+| 1.2.0 | Adds **module registration** — `src/modules/index.ts` is a static registry, and an unregistered module is inert while passing typecheck, `pnpm arch` and the unit suite. Recorded in root `INSIGHTS.md` (2026-08-16) after Smart Diff shipped its registration on a different branch and returned 404 when rebuilt alone. |
 | 1.1.0 | Adds `smart-diff-spends-nothing` — the first feature-specific rule, enforcing a cost guarantee rather than a layer boundary. |
 | 1.0.0 | First version. Names the layering already present in `server/src`, adds the enforced rule set (`.dependency-cruiser.cjs`, `pnpm arch`) with a baseline of the 11 violations measured 2026-08-09, and sets the criterion for when a module earns a service layer. |
