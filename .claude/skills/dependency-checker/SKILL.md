@@ -1,6 +1,6 @@
 ---
 name: dependency-checker
-description: Audit this repository's external dependencies across all six packages — what each package installs, what it weighs, where two packages disagree on a version, and what to do about it. Use for "audit our dependencies", "what is making the install so big", "which packages do we share", "is this dependency worth it", "can we drop X", "why is the client bundle heavy", before adding a new runtime dependency, and before a dependency-bump PR. Produces a written report with a diagram and a ranked action list. External packages only — the direction of imports INSIDE server/src belongs to onion-architecture, and where a client file goes belongs to frontend-ui-architecture.
+description: Audit this repository's external dependencies across all six packages — what each package installs, what it weighs, where two packages disagree on a version, and what to do about it. Use for "audit our dependencies", "what is making the install so big", "which packages do we share", "is this dependency worth it", "can we drop X", "why is the client bundle heavy", before adding a new runtime dependency, and before a dependency-bump PR. Produces a written report with a diagram and a ranked action list. External packages only — the direction of imports INSIDE server/src belongs to onion-architecture, where a client file goes belongs to frontend-ui-architecture, and which package manager a package uses belongs to repo-conventions.
 version: 1.0.0
 ---
 
@@ -134,7 +134,9 @@ Two standing rules for this repository:
 - **Never run the wrong package manager in a package.** `server` and `client`
   are pnpm; `reviewer-core`, `e2e`, `mcp` and `evals` are npm. An `npm install`
   in `server/` writes a second lockfile and the next `pnpm install
-  --frozen-lockfile` in CI fails.
+  --frozen-lockfile` in CI fails. Reviewing a diff that *commits* the second
+  lockfile is `repo-conventions`' job, not this skill's — do not restate it in a
+  report, or both skills are paid for on every run to say the same thing.
 - **Never propose converting the repo to a workspace as a side effect.** The
   standalone-package split is a recorded decision with per-package CI path
   filters resting on it (root `INSIGHTS.md`, 2026-07-31). It is an ADR, not a

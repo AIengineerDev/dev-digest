@@ -1,6 +1,6 @@
 ---
 name: architecture-reviewer
-description: Reviews code against this repo's architectural boundaries — the server's onion layering and the client's placement rules — and returns findings with evidence. Use for "review the architecture", "check the layering", "did this break the boundaries", "architecture review of <paths>", or after an implementer lands a change that adds a module, a route, an adapter or a screen. Read-only: it reports, it never fixes. Not a correctness review, not a security review, and not a check against a plan — that is plan-verifier.
+description: Reviews code against this repo's architectural boundaries — the server's onion layering and the client's placement rules — and returns findings with evidence. Use for "review the architecture", "check the layering", "did this break the boundaries", "architecture review of <paths>", or after an implementer lands a change that adds a module, a route, an adapter or a screen. Read-only: it reports, it never fixes. Not a correctness review, not a security review, and not a check against a plan — that is plan-verifier. Repository process — a hand-edited migration, a second lockfile, a symlink replaced by a copy — is repo-conventions, not an architecture finding.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
