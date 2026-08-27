@@ -29,14 +29,23 @@ Drizzle ORM + Postgres (pgvector) · Zod · Vitest · agent-browser (e2e)
 | Task            | Command                                                    |
 | --------------- | ---------------------------------------------------------- |
 | Boot everything | `./scripts/dev.sh` (Postgres + API :3001 + web :3000)      |
-| Server          | `cd server && pnpm dev \| build \| typecheck \| test`      |
+| Server          | `cd server && pnpm dev \| build \| typecheck \| test \| arch` |
 | Migrations      | `cd server && pnpm db:generate` then `pnpm db:migrate`     |
-| Client          | `cd client && pnpm dev \| build \| typecheck \| test`      |
+| Client          | `cd client && pnpm dev \| build \| typecheck \| test \| lint` |
 | Engine          | `cd reviewer-core && npm test \| npm run typecheck`        |
 | E2E (hermetic)  | `cd e2e && npm run e2e:hermetic`                            |
 | MCP server      | `cd mcp && npm test \| npm run typecheck`                   |
 
 Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
+
+Two gates are **baselined**, so green means "nothing new", not "clean":
+`server pnpm arch` ignores an 11-entry known-violations file, and
+`client pnpm lint` exits 0 with 43 pre-existing warnings. Never regenerate the
+arch baseline and never `lint --fix` them as part of a feature.
+
+`server pnpm test` is unfiltered and includes the 15 `*.it.test.ts` files, which
+pull up Postgres via testcontainers. While iterating, scope it:
+`pnpm exec vitest run --reporter=dot --exclude '**/*.it.test.ts' test/<topic>`.
 
 ## Where things live
 
@@ -96,9 +105,21 @@ Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 
 - Read `specs/` before building a feature that spans more than one package —
   intent and done-criteria live there. Single-package work goes in that
-  package's `specs/` instead.
+  package's `specs/` instead. Specs are authored by the `spec-creator` agent, which
+  only ever **creates** them: a revision is a new numbered file, never an edit.
+- Run `spec-creator` then `implementation-planner` by hand, one at a time, then
+  `/impl <plan path>` to drive build → verify → review → accept → ship. It is
+  stage-at-a-time and resumable from `plans/*.run.md`.
+- Read `plans/` for how an agreed spec gets built — phases or parallel tracks,
+  with the gate commands that prove each one. `plans/NN-*.plan.md` matches
+  `specs/NN-*.md` by number. Written by `implementation-planner`, checked by
+  `plan-verifier`.
 - Read `docs/` for how the system works today across packages, before changing
   anything that already runs.
+- Read `design-mocks/INDEX.md` when the work has a design — 28 extracted screen
+  and component modules. **Never** open `DevDigest Design (standalone).html` at
+  the repo root; it is a 1.8 MB base64 bundle and reading it wastes the context
+  window.
 - Read `TESTING.md` when adding a test or touching CI.
 - Read `docs/agent-prompts/` when changing a built-in agent's system prompt or
   choosing a model.
@@ -109,6 +130,10 @@ Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 - Read `e2e/README.md` before writing or debugging a browser flow.
 - Read `mcp/AGENTS.md` before adding or changing an MCP tool — the token budget
   it has to stay under is not inferable from the code.
+- `/workflow-retro` is a **human-invoked** retrospective on a multi-agent run: it measures
+  what the session cost and proposes prompt changes, with durable findings in
+  `docs/retro/ledger.md`. No agent or skill may launch it — offer it, never run
+  it. `/workflow-retro deep` widens the scope to every session, for trends.
 - Read `INSIGHTS.md` at repo root for decisions that span more than one package.
 - Use the `engineering-insights` skill to read or record an insight — it maps a
   touched path to the right `INSIGHTS.md` and holds the format and quality bar.

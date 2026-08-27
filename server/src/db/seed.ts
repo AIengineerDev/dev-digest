@@ -192,6 +192,100 @@ export async function seed(db: Db): Promise<{ workspaceId: string; userId: strin
       derivedAt: new Date(),
     });
 
+    // A PR Brief for the demo PR, seeded for exactly the reason the intent
+    // above is: generating one costs a model call (specs/10-pr-brief.md R3),
+    // and neither the seed nor the e2e stack may make one. The state key must
+    // match what `BriefService` computes for this PR or the card will offer to
+    // generate instead of rendering — `repoIndexedSha` is null because the
+    // seeded repo is never indexed, and provider/model are `risk_brief`'s
+    // registered defaults (`contracts/platform.ts`), which is what
+    // `resolveFeatureModel` returns for a workspace with no override.
+    //
+    // Every `file_refs` and `review_focus.ref` below is a path present in
+    // `pr_files` above. That is not decoration: `groundBrief` drops any ref
+    // that does not resolve, so an invented path here would silently vanish
+    // from the card and quietly weaken the flow that asserts on it.
+    await db.insert(t.prBriefRecords).values({
+      prId: pr!.id,
+      headSha: 'a1b2c3d4e5f6',
+      intentFingerprint: 'seed-482',
+      repoIndexedSha: null,
+      promptVersion: 1,
+      provider: 'anthropic',
+      model: 'claude-haiku-4-5',
+      what: 'Adds a token-bucket rate limiter in front of the public API routes and returns 429 once a caller exceeds its bucket.',
+      why: 'Unauthenticated clients can currently exhaust the public API; the limiter caps per-caller throughput without touching authentication.',
+      riskLevel: 'high',
+      risks: [
+        {
+          kind: 'security',
+          title: 'Live Stripe key committed in plaintext',
+          explanation:
+            'src/config.ts carries an sk_live_… value in the diff. It is readable by anyone with repository access and is already in the branch history, so rotating it is required regardless of whether this PR merges.',
+          severity: 'high',
+          file_refs: ['src/config.ts'],
+        },
+        {
+          kind: 'security',
+          title: 'Account token forwarded to a caller-controlled URL',
+          explanation:
+            'The webhook handler reads callback_url from the request body and sends the account API token to it as an Authorization header, so any caller can name a host and be handed the token.',
+          severity: 'high',
+          file_refs: ['src/api/public/webhooks.ts'],
+        },
+        {
+          kind: 'correctness',
+          title: 'The 429 branch omits the Retry-After header',
+          explanation:
+            'The PR scope promises 429 with Retry-After, but the limiter returns a bare 429, so a well-behaved client has nothing to back off against.',
+          severity: 'medium',
+          file_refs: ['src/middleware/ratelimit.ts', 'src/api/public/index.ts'],
+        },
+        {
+          kind: 'performance',
+          title: 'N+1 query on the user list, hit harder under the limiter',
+          explanation:
+            'The user-list endpoint issues one posts lookup per user. Retries provoked by the new limiter multiply that load rather than shedding it.',
+          severity: 'medium',
+          file_refs: ['src/api/users.ts'],
+        },
+      ],
+      reviewFocus: [
+        {
+          kind: 'file',
+          ref: 'src/config.ts',
+          reason: 'live Stripe key (sk_live_…) committed in plaintext',
+        },
+        {
+          kind: 'file',
+          ref: 'src/api/public/webhooks.ts',
+          reason: 'request callback_url forwards the account token to a caller-controlled URL',
+        },
+        {
+          kind: 'file',
+          ref: 'src/middleware/ratelimit.ts',
+          reason: '429 branch omits the Retry-After header the PR scope promises',
+        },
+        {
+          kind: 'file',
+          ref: 'src/api/users.ts',
+          reason: 'N+1 query — one posts lookup per user, hit harder under the new limiter',
+        },
+      ],
+      tokensIn: 2006,
+      tokensOut: 412,
+      costUsd: 0.005671,
+      // The pre-flight ESTIMATE (spec amendment A-3), not `tokensIn` — the two
+      // being different numbers is the point: their drift is what makes the
+      // gate auditable per generation.
+      budgetTokens: 2136,
+      droppedInputs: ['blast:degraded'],
+      droppedRefs: 0,
+      degraded: false,
+      error: null,
+      generatedAt: new Date(),
+    });
+
     // a sample review + findings so the PR shows results before the first run
     const [review] = await db
       .insert(t.reviews)

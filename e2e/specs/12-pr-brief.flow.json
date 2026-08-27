@@ -1,0 +1,168 @@
+{
+  "name": "PR Overview shows the Brief card, and a review-focus entry jumps to that file in the diff",
+  "description": "A7/A8's browser lane. From PR #482's Overview tab, confirm the Brief card renders what was generated: the risk level, what and why, a risk pill that expands to its explanation and grounded file refs, and the ordered Read these first list. Then click a review-focus entry and confirm it lands on the diff with that file expanded. The brief is SEEDED, not generated here: generation is the one step of this feature that costs a model call, and no flow may make one — same reasoning as 11-pr-intent. Regenerate is deliberately never clicked. Assumes a freshly-seeded DB (see e2e/README.md).",
+  "steps": [
+    {
+      "cmd": [
+        "open",
+        "{BASE}/"
+      ],
+      "label": "load the app root"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/pulls"
+      ],
+      "label": "land on the PR list"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "#482"
+      ],
+      "label": "the PR list has finished loading — the first fetch syncs from GitHub and is slow"
+    },
+    {
+      "cmd": [
+        "find",
+        "text",
+        "#482",
+        "click"
+      ],
+      "label": "open the PR row (by number — the title is CSS-truncated in the list)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "/pulls/482"
+      ],
+      "label": "navigate to the PR detail route"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "PR detail data settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "High risk"
+      ],
+      "label": "A7 — the risk_level badge renders as a band, never a bare number"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Adds a token-bucket rate limiter in front of the public API"
+      ],
+      "label": "A7 — `what` is on the page"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Unauthenticated clients can currently exhaust"
+      ],
+      "label": "A7 — `why` is on the page"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Live Stripe key committed in plaintext"
+      ],
+      "label": "A7 — a risk pill renders its title"
+    },
+    {
+      "cmd": [
+        "find",
+        "text",
+        "The 429 branch omits the Retry-After header",
+        "click"
+      ],
+      "label": "R8 — expand a risk pill (collapsed, it shows only kind and title)"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "a well-behaved client has nothing to back off against"
+      ],
+      "label": "R8 — the explanation is revealed by the disclosure, not rendered inline"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "src/api/public/index.ts"
+      ],
+      "label": "R8 — the risk's grounded file_refs render. This path appears in NO review-focus entry, so it can only have come from the expanded risk"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Read these first"
+      ],
+      "label": "A7 — the review-focus section renders"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "forwards the account token to a caller-controlled URL"
+      ],
+      "label": "A7 — a focus entry's reason is listed, not just the heading"
+    },
+    {
+      "cmd": [
+        "find",
+        "text",
+        "src/api/public/webhooks.ts",
+        "click"
+      ],
+      "label": "A6 — click a review-focus entry of kind `file`"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--url",
+        "tab=diff"
+      ],
+      "label": "A6 — it navigates to the diff tab on the same page"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--load",
+        "networkidle"
+      ],
+      "label": "the diff settles"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "webhookHandler"
+      ],
+      "label": "A6 — the target file is expanded, not merely scrolled to a collapsed header"
+    },
+    {
+      "cmd": [
+        "wait",
+        "--text",
+        "Regenerate"
+      ],
+      "label": "the Regenerate control is offered (deliberately not clicked — it would spend a model call)"
+    }
+  ]
+}

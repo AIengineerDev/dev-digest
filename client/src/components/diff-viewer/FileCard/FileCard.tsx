@@ -17,6 +17,7 @@ import {
   type DiffCommentApi,
 } from "../comments";
 import {
+  diffFileDomId,
   diffLineDomId,
   marksForLine,
   primaryMark,
@@ -95,19 +96,23 @@ export function FileCard({
 
   // Scrolling to a finding is a DOM operation on a node that does not exist
   // until the card is expanded, which is the one thing an effect is for here.
+  // `target.line == null` is a FILE-level reveal (a brief's review-focus entry
+  // with no line) — it scrolls to the card itself rather than a line inside it.
   const target = reveal?.path === file.path ? reveal : null;
   React.useEffect(() => {
     if (!target) return;
     setOpen(true);
-    // One frame so React can commit the expansion before the line has a node —
-    // then twice more, because sibling cards expanding alongside this one keep
-    // moving it until the page settles.
+    // One frame so React can commit the expansion before the target has a
+    // node — then twice more, because sibling cards expanding alongside this
+    // one keep moving it until the page settles.
     let frame = 0;
     const aim = () => {
       frame = requestAnimationFrame(() => {
+        const domId =
+          target.line == null ? diffFileDomId(file.path) : diffLineDomId(file.path, target.line);
         document
-          .getElementById(diffLineDomId(file.path, target.line))
-          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+          .getElementById(domId)
+          ?.scrollIntoView({ behavior: "smooth", block: target.line == null ? "start" : "center" });
       });
     };
     aim();
@@ -135,7 +140,7 @@ export function FileCard({
   };
 
   return (
-    <div style={s.fileCard}>
+    <div style={s.fileCard} id={diffFileDomId(file.path)}>
       <div onClick={() => setOpen((o) => !o)} style={s.fileHeader}>
         <Icon.ChevronRight size={13} style={chevronFor(open)} />
         <Icon.FileText size={14} style={s.fileIcon} />
@@ -192,7 +197,7 @@ export function FileCard({
                 threads={threadsForLine(ln, matched)}
                 commenting={commenting}
                 marks={marksForLine(ln, marks)}
-                revealed={target != null && ln.newNo === target.line}
+                revealed={target != null && target.line != null && ln.newNo === target.line}
                 onOpenFinding={onOpenFinding}
               />
             ))

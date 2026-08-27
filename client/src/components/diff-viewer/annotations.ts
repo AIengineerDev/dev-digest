@@ -46,14 +46,17 @@ export function primaryMark(
 export type DiffAnnotations = ReadonlyMap<string, readonly DiffFindingMark[]>;
 
 /**
- * A request to scroll to one line and highlight it.
+ * A request to scroll to one line and highlight it — or, when `line` is
+ * `null`, to scroll to and expand the FILE itself. A `ReviewFocusItem` from
+ * the PR brief may name a whole file with no line (`review_focus[].line` is
+ * `null`able), and there is otherwise no anchor to land it on.
  *
  * `nonce` exists so clicking the same badge twice scrolls twice: without it the
  * prop is deep-equal to its previous value and nothing re-fires.
  */
 export interface DiffReveal {
   path: string;
-  line: number;
+  line: number | null;
   nonce: number;
 }
 
@@ -64,6 +67,12 @@ export interface DiffReveal {
  */
 export function diffLineDomId(path: string, line: number): string {
   return `diff-line-${path}-L${line}`;
+}
+
+/** DOM id of a file's card — the anchor for a file-level (no-line) reveal.
+ *  Same `getElementById`-only rule as `diffLineDomId`. */
+export function diffFileDomId(path: string): string {
+  return `diff-file-${path}`;
 }
 
 /** Marks anchored to a parsed line. Findings address the new file, so a deleted

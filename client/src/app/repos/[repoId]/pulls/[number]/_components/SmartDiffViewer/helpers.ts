@@ -22,23 +22,11 @@ import {
   UNKNOWN_MARK_SEVERITY,
 } from "./constants";
 
-/**
- * The findings the badges describe: every review of the PR's CURRENT head.
- *
- * This must be the same rule the server used to build `finding_lines`, or the
- * count and the severity disagree. Not "the newest review row" — one "run all
- * agents" writes one review per agent, so the newest row is one agent's
- * opinion. `isStaleRun` supplies the tolerant null handling: a review with no
- * recorded head counts as current, because we cannot say otherwise.
- */
-export function findingsAtHead(
-  reviews: readonly ReviewRecord[] | undefined,
-  headSha: string | null | undefined,
-): FindingRecord[] {
-  return (reviews ?? [])
-    .filter((r) => r.kind === "review" && !isStaleRun(r.head_sha, headSha))
-    .flatMap((r) => r.findings);
-}
+// `findingsAtHead` moved to `../reviewsAtHead` — it is the PR's-current-head
+// scoping rule shared with `PrBriefCard`'s counts row, not something owned by
+// Smart Diff. Re-exported here so this file's own consumers do not need a
+// second import for one function.
+export { findingsAtHead } from "../reviewsAtHead";
 
 /**
  * The findings the badges deliberately leave out: those of reviews that ran

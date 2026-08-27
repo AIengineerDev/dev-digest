@@ -142,6 +142,47 @@ reference in every route.
 
 ## Codebase Patterns
 
+- **2026-08-26** — When a cache table's primary key includes a value expected
+  to drift out from under a READ (here: `onboarding_tours`'s key includes
+  `indexed_sha`/`indexer_version`, and a resync changes them), the write path's
+  cache-check and the read path's lookup need DIFFERENT keys, not the same one
+  loosened everywhere. `TourService.generate()`'s cache-hit check still uses
+  the full 6-column `findByKey` — a stale sha there is correctly a cache miss,
+  triggering regeneration. `TourService.get()` instead calls a new
+  `findLatestForRepo(repoId, promptVersion, provider, model)` — deliberately
+  omitting `indexedSha`/`indexerVersion` — so a re-index doesn't make the
+  previously-generated row invisible to a plain page view; the response then
+  carries both the row's own `indexed_sha` and a freshly-fetched
+  `current_indexed_sha` so the client can render a "stale" banner instead of
+  silently regenerating. Generalizes to any R12-shaped cache key: the row that
+  answers "what do we have" is not always the row `onConflictDoUpdate` targets.
+  `src/modules/tour/repository.ts` (`findLatestForRepo`) ·
+  `src/modules/tour/service.ts` (`get`)
+
+- **2026-08-18** — `RepoIntelService.getIndexState(repoId).lastIndexedSha` is
+  `''` (empty string), never `null`, for a repo that has no `repo_index_state`
+  row (the seeded demo's permanent state, `server/INSIGHTS.md`, 2026-08-13) —
+  the facade synthesises a degraded `IndexState` literal rather than making the
+  field optional. A caller that needs "never indexed" to mean SQL NULL (e.g. a
+  cache key with a nullable column plus a `COALESCE`d unique index, like
+  `pr_brief_records`) must map it itself: `indexState.lastIndexedSha || null`.
+  Storing the facade's `''` verbatim works today but reads as a real (if odd)
+  sha string instead of "no index", and silently drifts from a schema that was
+  deliberately built to distinguish the two.
+  `src/modules/repo-intel/service.ts:190-206` · `src/modules/brief/service.ts:107`
+
+- **2026-08-19** — When a plan requires a hermetic unit test for an assembler-shaped
+  class that reads one DB table (mirroring `SkillAssembler`'s
+  `constructor(db: Db)`), do not copy that constructor shape verbatim — it can
+  only be tested via `*.it.test.ts` + Postgres, which is what `SkillAssembler`'s
+  own only test (`test/skills-assembly.it.test.ts`) does. `ProjectContextAssembler`
+  instead takes an injected `AttachmentSource` interface (the narrow read it
+  needs), not a raw `Db` it builds its own repository from; the container still
+  wires the real `ProjectContextRepository`, but `test/project-context/
+  assembler.test.ts` passes an in-memory stub and needs no Docker. The dedup
+  (C11), tail-drop (C12) and disabled-skill (C14) cases in
+  `specs/09-project-context.md` all needed this to stay in the fast lane.
+  `src/modules/project-context/assembler.ts:26` (`AttachmentSource`)
 - **2026-08-09** — A `RunLogger` fanned over an EMPTY `runIds` array is a valid,
   reusable "best-effort logger with no run" — `event()`/`info()`/`step()` just
   iterate zero SSE targets and skip straight to the stdout mirror. `POST
@@ -207,7 +248,7 @@ reference in every route.
   that is correct — a test just calls them. `pnpm arch` enforces exactly this
   split, so the test for a new adapter is "would a test ever want to swap it
   out?", not "does it live in adapters/". `src/adapters/index.ts:1`
-- **2026-08-09** — 5 of the 11 baseline `pnpm arch` violations are import cycles,
+- **2026-08-09** — 5 of the baseline `pnpm arch` violations are import cycles,
   and nearly all run through the composition root: `platform/container.ts`
   imports concrete module classes (`AgentsRepository`, `ReviewRepository`,
   `RepoIntelService` at `container.ts:26-29`) while those modules import
@@ -259,6 +300,65 @@ reference in every route.
 
 ## Tool & Library Notes
 
+- **2026-08-19** — A pre-flight token gate that counts only the prompt strings
+  **undercounts what the provider bills by the structured-output schema**, and
+  the gap is not small. Measured on the first real PR Brief generation
+  (`pr_brief_records`, PR #482, 4 changed files): our gate measured **612**
+  tokens over `system + user`; Anthropic billed `usage.input_tokens` = **2006**.
+  The 1 394-token difference is the tool/JSON-schema envelope `completeStructured`
+  adds, which never appears in either string, so no amount of care in
+  `assembleBriefInput` can see it. Consequence for any budget expressed as an
+  acceptance criterion: an input measuring 7 900 against an 8 000 ceiling passes
+  the gate and is billed ~9 300. The gate is still worth having — it is the only
+  bound available *before* spending — but it must either count a serialized copy
+  of the response schema alongside the strings, or the ceiling must be set with
+  an explicit envelope allowance and named as such. Do not compare a local
+  `tokenizer.count` to a provider ceiling without measuring the envelope first;
+  persisting both numbers (`budget_tokens` and `tokens_in` on the record) is what
+  made this visible in one query. `server/src/modules/brief/service.ts` ·
+  `server/src/modules/brief/assemble.ts`
+
+  **2026-08-26 — measured, and the two fixes above are not alternatives.** The
+  serialized `Brief` JSON schema is 1 950 characters = **456** `cl100k_base`
+  tokens — only a third of the 1 394-token gap. Counting it removes the part
+  that is structurally invisible; the remaining ~940 is the provider tokenizing
+  with its own encoder (not `cl100k_base`) plus the framing it wraps the tool
+  block in, and **nothing in-process can see that**. So a gate that counts the
+  schema and stops is still unsound, just less so. What shipped does both:
+  `assembleBriefInput` counts `system + user + briefSchemaEnvelope()` and scales
+  by a named `BRIEF_BILLING_SAFETY_FACTOR` that rounds the measured ratio
+  (2 006 ÷ 1 068 ≈ 1.88) **up** to 2. Derive the counted envelope from the same
+  Zod schema, `schemaName` and `toJsonSchema` the adapter serializes, never a
+  literal — otherwise a schema edit moves the billed envelope and not the
+  counted one. `server/src/modules/brief/assemble.ts:299` ·
+  `server/src/modules/brief/constants.ts:33` · `specs/10-pr-brief.md` A-3
+
+- **2026-08-18** — A Drizzle `onConflictDoUpdate({ target: [...] })` cannot
+  target a **partial/expression unique index** — only a plain-column
+  constraint. `pr_brief_records_state_uq` is
+  `UNIQUE (pr_id, head_sha, COALESCE(intent_fingerprint,''), COALESCE(repo_indexed_sha,''), prompt_version, provider, model)`
+  (needed because two of those columns are legitimately nullable and Postgres
+  rejects NULL in a plain unique index the way `repo_map_cache`'s composite PK
+  uses). Passing `target: [t.prBriefRecords.prId, t.prBriefRecords.headSha, …]`
+  would generate `ON CONFLICT (pr_id, head_sha, …)`, which does not match this
+  constraint at all and Postgres rejects at runtime. The workaround —
+  `BriefRepository.upsert`, select-by-key then `update`-by-id or `insert` — is
+  not atomic against a genuine race, which is fine here (`server/INSIGHTS.md`,
+  2026-08-09, "nothing here is atomic") but is the reason ANY future
+  `COALESCE`-based unique index needs the same select-then-write shape, not a
+  native upsert. `src/modules/brief/repository.ts:100-127`
+- **2026-08-19** — `MockGitClient.readFile` (`src/adapters/mocks.ts:293-295`)
+  never throws — an unknown path degrades to `''`, unlike the real
+  `SimpleGitClient.readFile` (a bare `fs.readFile`, ENOENT on a missing file).
+  A test asserting a "document unreadable / missing on disk" code path (e.g.
+  specs/09-project-context.md R10, C7) against the base mock silently exercises
+  the *empty-content* branch instead, not the *catch* branch — both return, so
+  nothing fails, but the wrong line ran. Use a small subclass overriding
+  `readFile` to throw for unknown paths (see
+  `test/project-context/attachments.it.test.ts`'s `ThrowsOnMissingGitClient`,
+  or `test/project-context/assembler.test.ts`'s throwing stub) when the
+  assertion is specifically about the unreadable path, not the found-but-empty one.
+
 - **2026-08-10** — `text('col', { enum: [...] })` in Drizzle is a **TypeScript-only**
   union over a plain Postgres `text` column — `\d skills` shows no check
   constraint and no PG enum type. Adding a value (`'imported_file'` to
@@ -279,6 +379,65 @@ reference in every route.
 
 
 ## Recurring Errors & Fixes
+
+- **2026-08-26** — A `Write`/`Edit` tool call can silently insert a literal NUL
+  byte (`\x00`) where a plain space was intended inside a template-literal
+  expression (e.g. `` `${a} ${b}` `` landing on disk as `` `${a}\x00${b}` ``).
+  `tsc` does not flag it — a `\x00` is a legal character inside a template
+  string — and a loosely-worded test can pass anyway: `buildDiagram`'s edge-pair
+  key used this pattern, `pair.split(' ')` silently returned the whole
+  undelimited string as one element, both `ids.get()` lookups resolved to
+  `undefined`, and the only assertion at the time (`.toContain('-->')`) was
+  satisfied by the resulting `"undefined --> undefined"` line. Caught only by
+  scanning the file for `\x00` (`python3 -c "b'\x00' in open(path,'rb').read()"`,
+  or `file <path>` reporting `data` instead of `ASCII/Unicode text`) and by
+  tightening the assertion to check for real node labels and the absence of the
+  literal string `"undefined"`. When a template-literal join produces a
+  surprising result and the source LOOKS correct, check for this before
+  assuming the logic is wrong. `src/modules/tour/derive/diagram.ts:43`
+
+- **2026-08-19** — The integration lane is now big enough to starve itself.
+  After merging two features it holds **19 `*.it.test.ts` files**, each pulling
+  up its own Postgres through testcontainers. Run together,
+  `pnpm exec vitest run .it.test` produced one failure —
+  `skills-assembly.it.test.ts > an over-budget assembly drops the tail` — after
+  **289 s** on a test that takes **10.5 s in isolation and passes**. The
+  hermetic lane (258 tests) was green in the same tree. So a single red in a
+  full `.it.test` run is now more likely to be contention than a defect:
+  re-run the named file alone before believing it. If it recurs, the fix is to
+  cap concurrency for that lane (`--poolOptions.threads.maxThreads`) rather
+  than to raise `testTimeout` again — it is already 120 s, and a timeout that
+  large stops distinguishing "slow" from "hung".
+  `server/vitest.config.ts:16` · `server/test/skills-assembly.it.test.ts`
+
+- **2026-08-19** — `test/prompt-callers.test.ts` and `test/prompt-structured.test.ts`
+  fail on this branch's trunk as of commit `2dbaa58` ("feat(context): contracts,
+  engine labelling and shared walk limits") — **pre-existing, not caused by any
+  later change**: confirmed by `git stash` of an unrelated Track A diff and
+  re-running the same two files, which failed identically. Both still call
+  `assemblePrompt({ ..., specs: ['a string'] })`, the shape `ReviewInput.specs`/
+  `PromptParts.specs` had before that commit widened it to
+  `Array<{source, text}>` (specs/09-project-context.md contract change,
+  `reviewer-core/src/prompt.ts:99`). `wrapUntrusted` then reads `s.source`/
+  `s.text` off a bare string and throws `Cannot read properties of undefined
+  (reading 'replaceAll')` (`reviewer-core/src/prompt.ts:47`). Fix is a one-line
+  fixture change in each file (`specs: [{ source: 'security-baseline.md', text:
+  '...' }]`); not fixed here because neither file is in `server/test/
+  project-context/**` or `server/test/reviews/**`. A bare `cd server && pnpm
+  test` will show these 2 files / 5 tests red until someone in-scope updates them.
+  `server/test/prompt-callers.test.ts:20` · `server/test/prompt-structured.test.ts:19`
+
+- **2026-08-19** — The `pnpm arch` known-violations baseline is smaller than
+  every doc that quotes it: `server/.dependency-cruiser-known-violations.json`
+  has **10** entries (5 `no-circular`, 3 `routes-no-db`, 1 `helpers-are-pure`,
+  1 `no-cross-module-internals`) as of this date, not the "11" / "4
+  `routes-no-db`" repeated in `.claude/skills/onion-architecture/SKILL.md` and
+  in `plans/09-project-context.plan.md`. One `routes-no-db` violation was
+  fixed between when those docs were written and now, and nothing updated the
+  count. Trust `pnpm arch`'s own `‼ N known violations ignored` line (or the
+  file's length) over any doc-stated number before treating a gate result as
+  "matches baseline" — do not chase a phantom "missing violation".
+  `server/.dependency-cruiser-known-violations.json`
 
 - **2026-08-14** — `agent_runs.status = 'done'` used to be written **before**
   the `run_traces` row, so a consumer that polls for a terminal status and then
@@ -345,6 +504,16 @@ reference in every route.
   the host half; only the port is configurable. `src/app.ts:90`
 
 ## Open Questions
+
+- **2026-08-18** — `test/settings-models.it.test.ts` currently fails on
+  `pnpm test` (unfiltered) with the repo in its `plans/10-pr-brief.plan.md` P0
+  state: it asserts `resolveFeatureModel(..., 'risk_brief')` still resolves to
+  the registry default `{ provider: 'openai', model: 'gpt-4.1' }`, but P0
+  changed `FEATURE_MODELS`'s `risk_brief` entry to `anthropic`/`claude-haiku-4-5`
+  (`contracts/platform.ts:60-66`, Q7) and this test was not updated in the same
+  change. Not fixed here — the file is outside `modules/brief/`'s scope for
+  this track. Whoever lands next in `modules/settings/` should update the
+  expected default. `test/settings-models.it.test.ts:54-56`
 
 - **2026-08-06** — The latest-completed-run cost aggregate on
   `GET /repos/:id/pulls` has no automated coverage; all cost tests landed

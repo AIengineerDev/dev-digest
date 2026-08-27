@@ -29,9 +29,16 @@ e2e/test-results/
 # AGENTS.md tells every agent to run `engineering-insights`, so the skill has to
 # travel with the repo, and the agent set encodes this repo's own gates, layering
 # rules and doc surfaces — it is worth no more than the repo it was written for.
+#
+# `.claude/hooks/` and `.claude/settings.json` are shared for the same reason:
+# `spec-creator` is fenced to `specs/` by a PreToolUse hook, not by its prompt, so
+# an agent set that travels without the hook that bounds it is a set whose stated
+# guarantees are false. `settings.local.json` stays personal and stays ignored.
 .claude/*
 !.claude/skills/
 !.claude/agents/
+!.claude/hooks/
+!.claude/settings.json
 .claude/settings.local.json
 
 # Failure screenshots from the browser suite — regenerated per run, never committed

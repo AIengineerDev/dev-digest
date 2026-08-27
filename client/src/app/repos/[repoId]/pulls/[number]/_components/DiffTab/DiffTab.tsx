@@ -20,6 +20,10 @@ interface DiffTabProps {
   headSha: string | null;
   /** Inline commenting is offered only on open PRs (GitHub rejects otherwise). */
   canComment?: boolean;
+  /** The file a brief's review-focus entry was clicked through to (B3) — a
+   *  URL param (`?file=`) rather than local state, same reasoning as `?tab`
+   *  and `?finding`. */
+  focusFile?: string | null;
   /** Jumps to a finding's card in the Findings tab — same page, no reload. */
   onOpenFinding?: (findingId: string) => void;
 }
@@ -31,6 +35,7 @@ export function DiffTab({
   reviews,
   headSha,
   canComment,
+  focusFile,
   onOpenFinding,
 }: DiffTabProps) {
   const t = useTranslations("prReview.smartDiff");
@@ -47,7 +52,7 @@ export function DiffTab({
   // Owned here, not inside SmartDiffViewer: Smart and Original are the same
   // findings in a different order, and the toggle must not decide whether the
   // reviewer sees them at all.
-  const marks = useFindingMarks(prId, reviews, headSha);
+  const marks = useFindingMarks(prId, reviews, headSha, focusFile);
 
   const commenting: DiffCommentApi = {
     comments: comments ?? [],

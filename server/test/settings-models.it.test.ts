@@ -4,7 +4,7 @@ import { buildApp } from '../src/app.js';
 import { loadConfig } from '../src/platform/config.js';
 import { seed } from '../src/db/seed.js';
 import * as t from '../src/db/schema.js';
-import type { SecretsProvider } from '@devdigest/shared';
+import { FEATURE_MODELS, type SecretsProvider } from '@devdigest/shared';
 import {
   resolveFeatureModel,
   getFeatureModelOverride,
@@ -32,10 +32,16 @@ d('Settings: feature models + secrets status (Testcontainers pg)', () => {
     const app = await buildApp({ config: config(), db: pg.handle.db, overrides: {} });
 
     // No override yet → registry default; getFeatureModelOverride is undefined.
+    // The expectation is READ FROM the registry rather than hardcoded: what this
+    // asserts is "an unset feature resolves to its registry default", not which
+    // model that happens to be. Hardcoding it made a legitimate default change
+    // (the `onboarding` Q4 repoint, commit `bc27b04`) look like a regression in
+    // a test that has nothing to do with the tour.
+    const onboardingDefault = FEATURE_MODELS.find((f) => f.id === 'onboarding')!;
     expect(await getFeatureModelOverride(app.container, workspaceId, 'onboarding')).toBeUndefined();
     expect(await resolveFeatureModel(app.container, workspaceId, 'onboarding')).toEqual({
-      provider: 'openrouter',
-      model: 'deepseek/deepseek-v4-flash',
+      provider: onboardingDefault.defaultProvider,
+      model: onboardingDefault.defaultModel,
     });
 
     // Persist an override through the normal PUT /settings path.
@@ -52,8 +58,8 @@ d('Settings: feature models + secrets status (Testcontainers pg)', () => {
     });
     // An unset feature still resolves to its own registry default.
     expect(await resolveFeatureModel(app.container, workspaceId, 'risk_brief')).toEqual({
-      provider: 'openai',
-      model: 'gpt-4.1',
+      provider: 'anthropic',
+      model: 'claude-haiku-4-5',
     });
 
     await app.close();

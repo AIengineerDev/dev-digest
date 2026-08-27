@@ -61,6 +61,8 @@ export {
   useRunEvents,
   usePrIntent,
   useDeriveIntent,
+  useBrief,
+  useGenerateBrief,
 } from "./reviews";
 export type { ActiveRun, CreateCommentInput, RunReviewInput } from "./reviews";
 
@@ -68,3 +70,5 @@ export { useRunTrace } from "./trace";
 
 export { useRepoIntelStatus, useResyncRepoIntel } from "./repo-intel";
 export type { RepoIntelState } from "./repo-intel";
+
+export { useTour, useGenerateTour } from "./tour";

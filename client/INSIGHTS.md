@@ -49,6 +49,23 @@ to display data already sitting in memory.
 
 ## What Works
 
+- **2026-08-25** — Both blockers in the "2026-08-25" `What Doesn't Work` entry
+  below are now closed, without touching `useSetContextAttachments` at all: a
+  second, target-centric endpoint, `PUT /repos/:id/context/order`
+  (`useSetContextOrder`, `server/src/modules/project-context/service.ts:setOrder`),
+  writes ONLY the calling target's rows (`repository.ts:setOrderForTarget`
+  scopes its `UPDATE` on `repoId + targetKind + targetId + path`, never reading
+  or writing a sibling target), and `ProjectContextDocDetail.attachments[]` now
+  carries `order` so a reload reflects a drag. The agent-side `ContextTab` drags
+  exactly like `SkillsTab` (local `order` state reseeded on a content
+  signature, not array identity) but this DOES cost a new
+  `react-hooks/set-state-in-effect` warning — the client `pnpm lint` baseline
+  moved from 42 to 43 for this reason alone, the same rule `SkillsTab.tsx:59`
+  already carries. Anyone re-measuring "the baseline" after this should expect
+  43, not 42, and should not try to fix either occurrence — it's the accepted
+  cost of the reseed-from-server pattern for a reorderable list.
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/ContextTab/ContextTab.tsx:17`
+
 - **2026-08-06** — The `null` vs `0` cost rule is pinned in exactly two files:
   `src/lib/format.test.ts` asserts both directions (`null`/`undefined`/`NaN` →
   `—`, `0` → `$0.00`, and `0.00002` → `<$0.0001` so a real cost never renders as
@@ -62,9 +79,108 @@ to display data already sitting in memory.
 
 ## What Doesn't Work
 
-_None yet._
+- **2026-08-25** — A drag-reorder UI for project-context attachments cannot be
+  built against the shipped endpoints, on the agent (or any non-skill) side of
+  D2's reversal, without a server change — verified by reading, not guessed.
+  Two independent blockers: (1) `PUT /repos/:id/context/attachments` computes
+  `order` **server-side as a per-target append**
+  (`server/src/modules/project-context/service.ts:130-166`) — every target in
+  the submitted array gets `max(existing)+1` on every call, not just the one
+  you meant to reorder, so resubmitting a document to bump one target's order
+  silently reorders it for every *other* attached target too (a sibling skill
+  or agent's assembled context shifts without that owner touching anything —
+  the exact class of cross-actor corruption D2 exists to prevent). (2) Even if
+  that were acceptable, there is **no way to read the order back**: neither
+  `GET /repos/:id/context` nor `GET /repos/:id/context/doc` returns it —
+  `ProjectContextDocDetail.attachments` is `{target_kind, target_id}` only,
+  `order` is dropped (`client/src/vendor/shared/contracts/platform.ts:299-320`,
+  the response-only `ProjectContextAttachment` type that carries it is never
+  fetched by any client hook). A row order set client-side would revert to
+  path-sort on the next reload. The Agent Editor's Context tab therefore ships
+  without persisted reordering — rows are path-sorted — and this is the "stop
+  and report" outcome the PR brief explicitly allowed for exactly this case.
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/ContextTab/ContextTab.tsx:1`
 
 ## Codebase Patterns
+
+- **2026-08-26** — `activeKeyFor`'s substring chain (`components/app-shell/helpers.ts`)
+  is **order-dependent**, and this is not hypothetical: it already bit R20's tour
+  route (`if (pathname.includes("/onboarding")) return "onboarding-tour"` fired
+  for `/onboarding`, the unrelated add-repo wizard, until the entry was
+  repointed to `/tour`). Any future route whose path is a substring of, or
+  contains, an earlier `.includes()` check's string will silently steal that
+  check's nav key instead of falling through — `.includes()` has no notion of
+  "this is a different route," only "this string appears somewhere in the
+  path." When adding a route here, grep the existing chain for your new
+  segment as a substring in both directions before trusting the order you
+  inserted it at.
+  `client/src/components/app-shell/helpers.ts:25`
+
+- **2026-08-26** — `RepoIntelService.getIndexState` (`server/src/modules/
+  repo-intel/service.ts:192-204`) returns the **same `status: 'degraded'`**
+  for two different situations: a repo that has never been indexed at all
+  (synthesized, `reason: 'no_data'`, `lastIndexedSha: ''`, because no
+  `repo_index_state` row exists yet) and a repo that was indexed but hit real
+  problems partway through. `status` alone cannot tell them apart, which
+  matters because spec R18 wants different UI for each ("not indexed yet,
+  disabled Generate" vs. "degraded, but generation proceeds with a banner").
+  The distinguishing signal is the **empty `lastIndexedSha`** alongside
+  `degraded` — any client gating a not-indexed state on this hook (as the
+  Onboarding Tour's `isNotIndexed` does) needs both checks, not just `status`.
+  `client/src/app/repos/[repoId]/tour/_components/TourView/helpers.ts:11`
+
+- **2026-08-26** — `EmptyState` (`src/vendor/ui/primitives/EmptyState.tsx`)
+  takes `icon`/`title`/`body`/`cta`/`onCta`/`ctaLoading` and renders **exactly
+  one** CTA button — it does not accept or render `children` at all, despite
+  looking like a wrapping layout component. Passing JSX between its tags is
+  silently dropped, not a type error (its props type has no `children`, so
+  TSX only catches it if you also violate another prop). A state that needs a
+  second action (e.g. "Resync" beside a disabled "Generate") has to be built
+  as plain markup rather than composed with `<EmptyState>...</EmptyState>`, as
+  `PrBriefCard`'s degraded state and the tour's not-indexed state both do.
+  `client/src/vendor/ui/primitives/EmptyState.tsx:5`
+
+- **2026-08-25** — Any row that already renders through a per-row `useQueries`
+  detail fetch (agent/skill `ContextTab`'s `["context-doc", repoId, path]` map,
+  `ContextTab.tsx:78-87`) can add an inline preview for free: the query already
+  carries `ProjectContextDocDetail.content`, keyed identically to
+  `useProjectContextDoc`, so a preview panel takes `detail`/`isLoading`/`isError`
+  as props from that same map instead of calling the hook again — no new
+  request, same cache entry the Project Context page's own `DocViewer` reads.
+  Also worth knowing before gating a preview on size: `too_large` on
+  `ProjectContextDoc` is attach-only — `getDocument` (`server/src/modules/
+  project-context/service.ts:107-115`) always reads and returns the FULL file,
+  never truncates, and `DocViewer` itself renders the full body for a too-large
+  doc and only disables the attach toggle. A panel that wants to refuse a huge
+  body has to add that check itself from the list-level `doc.too_large` flag —
+  nothing upstream does it for you.
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/ContextTab/_components/PreviewPanel/PreviewPanel.tsx:1`
+
+- **2026-08-19** — A route with no `:repoId` in its URL (e.g. `/skills`) is not
+  actually repo-blind: `useActiveRepo()` (`src/lib/repo-context.tsx`) tracks one
+  global active repo for the whole app — path segment, then `localStorage`
+  (`dd-repo`), then the first repo from `useRepos()` — and it already backs the
+  shell's own repo switcher, reachable from every page. A repo-scoped feature
+  bolted onto a repo-agnostic screen (the skill editor's Context tab, reversing
+  spec 09's D2 for skills only) should read this instead of adding a second
+  local `useState`/`<select>` for "current repo": a second source would let the
+  shell and the feature disagree about which repo is active, the exact class of
+  bug D2 was written to avoid for attachment state.
+  `src/lib/repo-context.tsx:58`
+
+- **2026-08-19** — `PUT /repos/:id/context/attachments` replaces the WHOLE
+  attachment-target set for **one document**, not a delta — so any attach UI
+  that is not itself document-centric (a skill- or agent-centric "which docs am
+  I attached to" tab) is unsafe to write from until it has that specific
+  document's own attachment list. The list endpoint (`GET /repos/:id/context`)
+  only carries `agent_count`/`skill_count`, never the targets themselves, so
+  toggling from it would silently drop the document's other attachments (every
+  agent/skill that isn't the one being toggled). The fix: fetch each row's
+  detail via `useQueries`, keyed **identically** to `hooks/core.ts`'s
+  `useProjectContextDoc` (`["context-doc", repoId, path]`) so the cache is
+  shared rather than duplicated, and disable that row's toggle until its own
+  detail has loaded — a click before then is a silent no-op, not a wrong write.
+  `src/app/skills/_components/SkillsLabView/_components/SkillEditor/_components/ContextTab/ContextTab.tsx:38`
 
 - **2026-08-10** — Do not act on 2026-era "React Compiler made `useMemo`
   obsolete, delete it" advice here: **the compiler is not enabled**. React is
@@ -223,6 +339,26 @@ _None yet._
   mistake before review, and do not add a `pnpm lint` to a CI workflow or a
   pre-push step without first adding the config — the script does not exist and
   the step will fail, not no-op. `client/package.json:6`
+  **Stopped holding by 2026-08-17**: `client/package.json` now has
+  `"lint": "eslint src"` and `client/eslint.config.mjs` exists (the very next
+  entry above describes it). `pnpm lint` is a real gate with a measured
+  **0-error, 42-warning baseline** (mostly `react-hooks/set-state-in-effect`) —
+  green means no *new* errors and no more than 42 warnings, not a clean run.
+  Treat any plan or doc still citing "no ESLint here" as stale.
+
+- **2026-08-17** — Reflecting an incoming URL/prop into local reveal state with
+  a plain `useEffect` (`if (x) setState(...)`, deps `[x]`) trips
+  `react-hooks/set-state-in-effect` and pushes `pnpm lint` **past** the
+  42-warning baseline — one new occurrence is a regression the gate is built to
+  catch. On a component that unmounts and remounts on the triggering
+  navigation (here, `DiffTab` under `page.tsx`'s `{tab === "diff" && …}`), the
+  fix is not an effect at all: seed the state from a **lazy `useState`
+  initializer** (`useState(() => x ? … : null)`) instead. The initializer only
+  runs on mount, which is exactly when the prop needs picking up, and it costs
+  zero warnings. This also gets a "clicking the same target twice re-triggers
+  the reveal" requirement for free, without a `nonce` query param — a fresh
+  mount has no prior value to compare against.
+  `src/app/repos/[repoId]/pulls/[number]/_components/DiffTab/useFindingMarks.ts:60`
 
 - **2026-08-09** — In a `next-intl` message, a bare `{count}` placeholder is
   **string interpolation, not number formatting**: passing `8000` renders
@@ -235,6 +371,18 @@ _None yet._
   `messages/en/skills.json` (`editor.count`, `editor.overLimit`)
 
 ## Recurring Errors & Fixes
+
+- **2026-08-26** — A test for a **fallback branch** whose fixture value is a key
+  of the very map it claims to fall back from is unfalsifiable: it exercises the
+  happy path under the fallback's name, passes forever, and would keep passing if
+  the fallback were deleted. `PrBriefCard.test.tsx`'s "unknown kind renders a
+  fallback icon" used `kind: "concurrency"`, which **is** in `RISK_ICON`. This
+  shape hides wherever a `Partial<Record<string, T>>` lookup has a `?? FALLBACK`:
+  the assertion that survives ("does not throw") is true on both branches. When
+  writing one, pick a fixture value and grep the map for it, and assert on
+  something only the fallback branch produces — the raw key rendered verbatim,
+  not merely the absence of a crash.
+  `_components/PrBriefCard/helpers.ts:34` · `_components/PrBriefCard/PrBriefCard.test.tsx:199`
 
 - **2026-08-10** — React's "updating a style property during rerender when a
   conflicting property is set" warning counts `borderColor` and `borderWidth` as

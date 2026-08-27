@@ -247,6 +247,17 @@ export class ReviewRunExecutor {
       for (const note of skills.notes) runLog.info(note);
       skillsBlock = skills.blocks.length > 0 ? skills.blocks.join('\n\n') : null;
 
+      // Project context — the agent's attached documents plus its enabled
+      // linked skills' (specs/09-project-context.md R4, R6). Not pinned to a
+      // replay's agent version (D3): a replay reads today's documents.
+      const specs = await this.resolveProjectContext(agent, repo);
+      // Always state the count, not only the exclusions. `notes` carries what
+      // did NOT reach the prompt, so on a healthy run it is empty and the log
+      // would say nothing at all about project context — leaving a reader
+      // unable to tell "no documents attached" from "this build ignores them".
+      runLog.info(`Specs: ${specs.used.length} context doc(s) attached to prompt`);
+      for (const note of specs.notes) runLog.info(note);
+
       // ---- Engine: assemble → single-pass → grounding -----------------------
       // The pure review pipeline lives in @devdigest/reviewer-core (shared with
       // the CI runner). The service owns only I/O: repo-intel context resolution
@@ -274,6 +285,11 @@ export class ReviewRunExecutor {
         // Derived intent (specs/04-intent-layer.md) — omitted when derivation
         // was skipped/failed/degraded, so the prompt stays byte-identical.
         ...(intent ? { intent } : {}),
+        // Attached project-context documents (specs/09-project-context.md R4) —
+        // same omit-when-empty contract as `skills`/`callers`/`repoMap`, which
+        // is what makes A4's byte-identical guarantee structural: an agent
+        // with no attachments passes no `specs` key at all.
+        ...(specs.blocks.length > 0 ? { specs: specs.blocks } : {}),
         task,
         sessionId: `${repo.owner}/${repo.name}#${pull.number}:${agent.name}`,
         onEvent: (e) => runLog.event(e.kind, e.msg, e.data),
@@ -369,6 +385,12 @@ export class ReviewRunExecutor {
           // `prompt assembled` line reports (prompt-log.ts:describePromptSections) —
           // never a second estimator. Null, not 0, when the run had no skills slot.
           skills_tokens: sections.find((s) => s.section === 'skills')?.tokens ?? null,
+          // Same shape as `skills_used`/`skills_tokens` — metadata only, never
+          // a second copy of the document text (specs/09-project-context.md
+          // R5; root INSIGHTS.md:211-219). `specs.used` already carries path,
+          // sources and status; the trace persists it verbatim.
+          specs_used: specs.used.length > 0 ? specs.used : null,
+          specs_tokens: sections.find((s) => s.section === 'specs')?.tokens ?? null,
           correlation_id: correlationId,
         },
         tool_calls: outcome.chunks.map((c) => ({
@@ -379,7 +401,10 @@ export class ReviewRunExecutor {
         })),
         raw_output: outcome.raw,
         memory_pulled: [],
-        specs_read: [],
+        // The injected paths — never the dropped/skipped ones (specs/09-
+        // project-context.md R5). Full attribution (sources, status, tokens)
+        // lives in `prompt_assembly.specs_used`.
+        specs_read: specs.used.filter((u) => u.status === 'injected').map((u) => u.path),
         // Persisted log = the run's FULL event buffer (incl. shared pre-work:
         // diff load + intent), not just events recorded inside this method.
         log: runLog.logFor(runId),
@@ -462,6 +487,42 @@ export class ReviewRunExecutor {
         source: l.skill.source,
       })),
       pinnedSkills,
+    );
+  }
+
+  /**
+   * Resolve the agent's attached project-context documents into prompt blocks
+   * (specs/09-project-context.md R4, R6, R7, R8). The union of the agent's own
+   * attachments and its (still-)linked skills' attachments — reached through
+   * the container (`container.projectContext`), never by importing
+   * `modules/project-context` internals (`no-cross-module-internals`).
+   *
+   * Deliberately NOT pinned to a replay's `agent_versions` snapshot (D3):
+   * unlike `resolveSkills`, this never takes a `pinnedSkills`-shaped argument
+   * — a replay reads today's attached documents at today's content, and the
+   * trace says so (C15).
+   *
+   * `providerContextLength` is always `undefined` today: neither `listModels`
+   * implementation populates `ModelInfo.contextLength` (spec R7's own
+   * "Traps" note), so the window always resolves through the static table or
+   * the flat fallback in `adapters/llm/pricing.ts`.
+   */
+  private async resolveProjectContext(agent: AgentRow, repo: typeof schema.repos.$inferSelect) {
+    const links = await this.agents.linkedSkills(agent.id);
+    return this.container.projectContext.assemble(
+      { owner: repo.owner, name: repo.name },
+      repo.id,
+      [
+        { kind: 'agent' as const, id: agent.id },
+        ...links.map((l) => ({
+          kind: 'skill' as const,
+          id: l.skill.id,
+          name: l.skill.name,
+          enabled: l.skill.enabled,
+        })),
+      ],
+      agent.model,
+      undefined,
     );
   }
 

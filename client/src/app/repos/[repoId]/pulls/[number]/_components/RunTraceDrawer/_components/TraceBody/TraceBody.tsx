@@ -121,9 +121,40 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
         {trace.prompt_assembly.repo_map != null && (
           <PromptBlock label={t("trace.prompt.repoMap")} text={trace.prompt_assembly.repo_map} color={PROMPT_COLORS.repoMap} />
         )}
-        {trace.prompt_assembly.specs != null && (
-          <PromptBlock label={t("trace.prompt.specs")} text={trace.prompt_assembly.specs} color={PROMPT_COLORS.specs} />
-        )}
+        {/* Always rendered, for the same reason as Skills above: project-context
+            documents are something the reader chose, not infrastructure they
+            inherited, so an absent row reads as a broken trace rather than as
+            "this agent has none attached". Hiding it also made the two
+            configurable slots behave differently for no reason a reader could
+            infer. The prompt itself is still byte-identical when nothing is
+            attached — this is the trace's slot list, not the prompt. */}
+        <PromptBlock
+            label={t("trace.prompt.specs")}
+            text={trace.prompt_assembly.specs ?? ""}
+            color={PROMPT_COLORS.specs}
+            // specs_used == null means a trace written before this field
+            // existed, not "no documents" — the same null-handling as skills
+            // (skills_used/skills_tokens above). Paths, not text: the full
+            // injected text is already the block itself.
+            note={
+              trace.prompt_assembly.specs == null
+                ? t("trace.prompt.specsNone")
+                : trace.prompt_assembly.specs_used?.length
+                ? t(
+                    trace.prompt_assembly.specs_tokens != null
+                      ? "trace.prompt.specsUsedWithTokens"
+                      : "trace.prompt.specsUsed",
+                    {
+                      count: trace.prompt_assembly.specs_used.length,
+                      names: trace.prompt_assembly.specs_used.map((u) => u.path).join(", "),
+                      ...(trace.prompt_assembly.specs_tokens != null
+                        ? { tokens: formatSlotTokens(trace.prompt_assembly.specs_tokens) }
+                        : {}),
+                    },
+                  )
+                : undefined
+            }
+          />
         {trace.prompt_assembly.callers != null && (
           <PromptBlock label={t("trace.prompt.callers")} text={trace.prompt_assembly.callers} color={PROMPT_COLORS.callers} />
         )}

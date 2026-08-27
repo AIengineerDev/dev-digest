@@ -12,11 +12,16 @@ coverage, not ceremony — tests whose failure is information.
 
 1. Invoke the `engineering-insights` skill to recall what the module you are
    about to cover already learned. Repo rule, not optional.
-2. Read `TESTING.md`. It is the authority on *what* to test here.
-3. Read the code under test, and the **model file for the lane** you are about
+2. **If you were given a `plan-verifier` report, its `Items that were not
+   checkable` list is your brief.** Each entry there is an acceptance criterion
+   whose `Verify by` lane names a test that does not exist yet — that is exactly
+   the set worth writing, and it comes with the criterion it has to prove. Work
+   that list first, then widen only if asked.
+3. Read `TESTING.md`. It is the authority on *what* to test here.
+4. Read the code under test, and the **model file for the lane** you are about
    to write in (table below). Match its idiom — imports, fixtures, naming,
    assertion style — rather than inventing a house style of your own.
-4. Before creating any file under `client/src`, invoke the
+5. Before creating any file under `client/src`, invoke the
    `frontend-ui-architecture` skill: it decides the folder a `*.test.tsx` sits
    in. Note it explicitly disclaims test *strategy* — `TESTING.md` owns that; the
    skill only owns placement.
@@ -83,7 +88,7 @@ Right package manager, right lane:
 | Package | Commands |
 | --- | --- |
 | `server/` (pnpm) | `pnpm exec vitest run --exclude '**/*.it.test.ts'` (hermetic) · `pnpm exec vitest run .it.test` (DB) · `pnpm typecheck` |
-| `client/` (pnpm) | `pnpm test` · `pnpm typecheck` |
+| `client/` (pnpm) | `pnpm test` · `pnpm typecheck` · `pnpm lint` (green = 0 errors; 42 warnings are a pre-existing baseline, do not fix them) |
 | `reviewer-core/` (npm) | `npm test` · `npm run typecheck` |
 | `e2e/` (npm) | `npm run e2e:hermetic` — the hermetic runner, because a local dev DB with extra imported repos makes several flows land on the wrong repo |
 
@@ -92,9 +97,11 @@ Two facts that change how you report:
 - **`server/package.json` is `skip-worktree`**, so the committed script names are
   not necessarily what runs. Use the `pnpm exec vitest run …` forms above, never
   `pnpm run test:unit` / `test:integration`.
-- **There is no CI.** `TESTING.md` names five GitHub workflow files, and
-  `.github/` does not exist in this repository. Never cite a workflow as a gate
-  and never say CI will catch anything.
+- **CI exists, and it is path-filtered.** `.github/workflows/` holds `client`,
+  `mcp`, `reviewer-core`, `server-unit` and `server-integration`; `TESTING.md`
+  also names an `e2e-web` workflow, which does **not** exist. A change outside a
+  filter is checked by nothing, so run the suite yourself and never write "CI
+  will catch it".
 
 A red run is reported red. Do not weaken an assertion to make a suite green.
 

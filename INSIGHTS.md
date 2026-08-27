@@ -16,6 +16,32 @@ move it into `docs/` and delete it here.
 
 ## Decisions
 
+### 2026-08-18 — The build chain buys judgement only where it changes a verdict
+
+**What:** the agent set is now mixed-model on purpose, not uniformly `opus`.
+`spec-creator` and `implementation-planner` stay `opus` — they decide *what* gets
+built, and a wrong requirement is the one error every later stage inherits.
+`architecture-reviewer` moved to `sonnet`. `plan-verifier` keeps `opus` in its
+frontmatter but the `/impl` skill spawns **pass 1 with a `sonnet` override**,
+because pass 1 is mechanical (extract stated items, find `path:line` or command
+output) while pass 2 judges whether a criterion actually covers a requirement.
+`test-writer` was dropped from the chain entirely.
+**Why:** four `opus` agents per feature was the dominant cost, and the stages
+differ enormously in how much judgement they need. An agent whose own prompt
+already forbids an unevidenced verdict — `plan-verifier` downgrades one to
+`not checkable here` — is an agent a cheaper model can run, because the format
+does the constraining. `.claude/skills/impl/SKILL.md:104`
+**Rejected:** moving `plan-verifier` wholesale to `sonnet`. With `test-writer`
+gone and the architecture reviewer downgraded, pass 2 became the last strong
+check in the chain, and its failure mode — substituting plausible general
+observations for the item-by-item walk — is exactly what a weaker model does.
+**The cost that was accepted, not eliminated:** no agent writes tests any more.
+`plan-verifier` pass 1 still produces the list of acceptance criteria with no
+test behind them; `/impl` carries that list to the end of the run and reports it
+instead of acting on it. That gap is only acceptable while it stays visible —
+if a run's closing report stops naming it, the saving has turned into silent
+debt. `.claude/agents/architecture-reviewer.md:5`
+
 ### 2026-08-09 — Legacy rows are read tolerantly, never migrated
 
 **What:** `AgentVersionConfig.skills` accepts both the legacy bare id (`"s1"`)
@@ -75,6 +101,31 @@ serialization, and client-side types.
 input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Works
+
+- **2026-08-17** — In the spec→plan→build→verify chain, run `plan-verifier`
+  **twice, against two different documents**, and put the first run before the
+  reviewers rather than last. Pass 1 takes `plans/NN-*.plan.md` straight after
+  the implementer and answers "was every phase actually built" — the cheapest
+  place to discover a silently skipped phase, before anyone pays to review or
+  test half-built work. Pass 2 takes `specs/NN-*.md` at the end, and is the only
+  check that can catch **a requirement the planner dropped**: any check against
+  the plan is blind to it, because the plan is already missing it. This is what
+  the `R1…Rn` ids in a `spec-creator` spec are for. Two orderings fall out of it
+  and are not arbitrary: `test-writer` runs *after* the architecture loop,
+  because findings move files and a test written against the old placement is a
+  test rewritten; and pass 1's `Items that were not checkable` list — the
+  acceptance criteria whose `Verify by` lane has no test yet — **is**
+  `test-writer`'s brief, so nobody has to invent what to cover.
+  `.claude/agents/README.md` (Artifacts and the handoff) ·
+  `.claude/agents/plan-verifier.md:24`
+
+  **Correction 2026-08-18:** the two-pass ordering still holds and is now what
+  `/impl` runs, but the second half of the last sentence does not — `test-writer`
+  was removed from the chain on cost grounds the next day (see the Decisions
+  entry above). The `Items that were not checkable` list is still produced, and
+  is still the right brief; it is now carried to the end of the run and
+  **reported** rather than handed to anyone. If test-writer comes back, that list
+  is where it plugs in unchanged.
 
 - **2026-08-15** — A documented invariant with no test is not an invariant. An
   audit of `mcp/AGENTS.md`'s 14 documented practices found all 14 still held in
@@ -191,6 +242,29 @@ _None yet._
 
 ## Tool & Library Notes
 
+- **2026-08-17** — A subagent's write access **can** be fenced to a path
+  mechanically, and `.claude/agents/README.md` recorded the opposite as an open
+  question. `settings.json` permission *rules* cannot scope a grant per agent,
+  but a `PreToolUse` **hook** can: the payload carries `agent_type` (and
+  `agent_id`) whenever the call originates inside a subagent, so one script can
+  hard-deny by path for exactly one agent and `process.exit(0)` silently for
+  everyone else — `implementer` keeps full write access with the hook installed.
+  Return `{hookSpecificOutput:{hookEventName,permissionDecision:"deny",
+  permissionDecisionReason}}` on stdout; the reason is what the agent reads, so
+  write it as an instruction ("write a new numbered spec instead"), not as an
+  error. The fence is only worth what its matcher covers: a `Write|Edit`-only
+  matcher is **not** a fence, because `echo … > server/src/x.ts` is a `Bash`
+  call and walks straight past it — put `Bash` in the matcher and pattern-deny
+  redirection, `tee`/`rm`/`cp`, in-place `sed -i`, state-changing git and the
+  package managers, while letting `git log`/`show`/`blame`, `ls`, `rg` and `wc`
+  through. And a malformed payload must `exit 0` rather than deny, or a parse
+  bug bricks the session. Verified by driving the script with 28 synthetic
+  payloads across both tools, including the wrong-agent and no-`agent_type`
+  cases. What a hook still cannot do: the `Agent` grant is all-or-nothing, so
+  "may only spawn `researcher`" remains prose — a hook cannot see which agent
+  type a subagent call names.
+  `.claude/hooks/spec-creator-guard.mjs:52` · `.claude/settings.json:6`
+
 - **2026-08-17** — An entrypoint **cannot catch a throw from a module it imports
   statically**: static imports are evaluated before the entry module's own body
   runs, so a `try` there never sees it and the operator gets a stack trace
@@ -278,6 +352,45 @@ _None yet._
   before debugging either side. `server/src/vendor/shared/adapters.ts:48`
 
 ## Recurring Errors & Fixes
+
+- **2026-08-26** — A **spec amendment that changes a contract both sides encode
+  gets implemented on one side and silently not the other**, and the ordinary
+  test suite cannot catch it: each side's tests assert that side's half.
+  `specs/10-pr-brief.md` amendment A-2 ("a degraded cached row stays cached
+  until a human presses Retry") landed in `PrBriefCard.tsx` — which sends
+  `force: true` — and never in `modules/brief/service.ts`, which kept
+  `if (existing && !existing.degraded)` and so re-billed a model call on every
+  page view of a PR whose provider was down. It survived a full verify pass; a
+  second pass reading the amendment against **both** sides found it. When an
+  amendment lands, grep for every site that encodes the clause before writing
+  code, and put the assertion where both halves meet — here an it-test asserting
+  the provider is never called, not a client test asserting a flag is sent.
+  `server/src/modules/brief/service.ts:146` · `server/test/brief.it.test.ts:224`
+
+- **2026-08-25** — Turning an existing `@devdigest/shared` array-item field from
+  absent to required (`ProjectContextDocDetail.attachments[].order`,
+  `z.number().int()` with no `.nullish()`) breaks TS compilation in every
+  client test file that hand-builds that shape as a fixture — including ones
+  in an unrelated module that the task never touched
+  (`src/app/skills/.../SkillEditor/_components/ContextTab/ContextTab.test.tsx`
+  broke from a change scoped to the agent-side `ContextTab`). `pnpm typecheck`
+  catches it immediately and by name, so it's cheap to fix once found — the
+  actionable part is budgeting for it: grep the field name across `client/src`
+  before treating "made a field required" as a one-file contract edit.
+  `client/src/vendor/shared/contracts/platform.ts:299-307`
+
+- **2026-08-17** — An agent that runs `cd server && pnpm test` as a *per-phase*
+  gate pays for Postgres on every phase: the script is a bare `vitest run` with
+  no filter, `test/` holds 42 files of which **15 are `*.it.test.ts`** driving
+  testcontainers, and `vitest.config.ts` sets `testTimeout: 120_000` for exactly
+  that reason. With no reporter configured, the default one also prints the full
+  roster each time. Scope the iteration gate and quiet it —
+  `pnpm exec vitest run --reporter=dot --exclude '**/*.it.test.ts' test/<topic>
+  2>&1 | tail -n 30` (`--reporter=dot` exists on the `vitest ^2.1.8` all three
+  packages pin) — and run the unfiltered suite once, at the end. The same shape
+  applies to any agent prompt that says "run the gate after each step": name the
+  fast gate and the complete gate separately, or the prompt silently means the
+  expensive one. `server/package.json:9` · `server/vitest.config.ts:16`
 
 - **2026-08-16** — A feature can look complete in its own commit and be **inert**,
   because the handful of lines that integrate it sit in files every other feature

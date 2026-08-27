@@ -15,8 +15,9 @@ import type {
   Repo,
   PrMeta,
   PrDetail,
-  SpecFile,
-  IndexStatus,
+  ProjectContextList,
+  ProjectContextDocDetail,
+  ProjectContextAttachment,
   SmartDiff,
   BlastRadius,
 } from "../types";
@@ -151,19 +152,80 @@ export function useBlastRadius(prId: string | null | undefined) {
   });
 }
 
-// ---- Project Context (A3 contract; safe to call once API exposes it) ----
+// ---- Project Context (specs/09-project-context.md) ----
+
+/** GET /repos/:id/context — the document list, with server-computed token
+ *  counts and the commit the scan read the clone at. The client never sums
+ *  tokens itself: `total_tokens` and every per-document `tokens` come from
+ *  here. */
 export function useContextFiles(repoId: string | null | undefined) {
   return useQuery({
     queryKey: ["context", repoId],
-    queryFn: () => api.get<SpecFile[]>(`/repos/${repoId}/context`),
+    queryFn: () => api.get<ProjectContextList>(`/repos/${repoId}/context`),
     enabled: !!repoId,
   });
 }
 
-export function useReindexContext() {
+/** GET /repos/:id/context/doc?path=… — one document's rendered content, its
+ *  attachments, and its GitHub link. */
+export function useProjectContextDoc(repoId: string | null | undefined, path: string | null | undefined) {
+  return useQuery({
+    queryKey: ["context-doc", repoId, path],
+    queryFn: () => api.get<ProjectContextDocDetail>(`/repos/${repoId}/context/doc?path=${encodeURIComponent(path!)}`),
+    enabled: !!repoId && !!path,
+  });
+}
+
+/** PUT /repos/:id/context/attachments — replace one document's whole
+ *  attachment set in one write (C9: last write wins, no merge dialog). */
+export function useSetContextAttachments(repoId: string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (repoId: string) => api.post<IndexStatus>(`/repos/${repoId}/context/reindex`),
-    onSuccess: (_d, repoId) => qc.invalidateQueries({ queryKey: ["context", repoId] }),
+    mutationFn: (input: { path: string; targets: Array<{ target_kind: "agent" | "skill"; target_id: string }> }) =>
+      api.put<{ attachments: ProjectContextAttachment[] }>(`/repos/${repoId}/context/attachments`, input),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ["context", repoId] });
+      qc.invalidateQueries({ queryKey: ["context-doc", repoId, vars.path] });
+    },
+  });
+}
+
+/**
+ * PUT /repos/:id/context/order — set ONE target's (agent or skill) attachment
+ * order across many documents. The target-centric counterpart to
+ * `useSetContextAttachments` above: it never touches another target's rows
+ * (server/src/modules/project-context/service.ts:setOrder), so dragging a
+ * row in this agent's Context tab cannot reshuffle a sibling skill's or
+ * agent's assembled context — the cross-actor corruption
+ * `useSetContextAttachments`'s per-target append order would cause if reused
+ * for reordering (`client/INSIGHTS.md`, 2026-08-25).
+ */
+export function useSetContextOrder(repoId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { target_kind: "agent" | "skill"; target_id: string; paths: string[] }) =>
+      api.put<{ attachments: ProjectContextAttachment[] }>(`/repos/${repoId}/context/order`, input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["context", repoId] });
+      // Order lives on each document's OWN attachment rows
+      // (`ProjectContextDocDetail.attachments[].order`), not on the list
+      // response — every cached doc detail for this repo may now be stale.
+      qc.invalidateQueries({ queryKey: ["context-doc", repoId] });
+    },
+  });
+}
+
+/**
+ * Rescan (R9) — reuses the existing `POST /repos/:id/resync` (repo-intel's
+ * route, which fetches origin then reindexes). There is no separate
+ * `/context/reindex` route and there never will be (plan B2 placement
+ * decision): discovery is stateless and re-reads the clone on every list
+ * request, so a resync followed by a refetch of the list IS the rescan.
+ */
+export function useReindexContext(repoId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ status: string }>(`/repos/${repoId}/resync`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["context", repoId] }),
   });
 }

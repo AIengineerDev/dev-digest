@@ -121,11 +121,16 @@ export function SmartDiffViewer({
           group={group}
           files={files}
           annotations={shownAnnotations}
-          // Only when the reader asked for them by hand. On the default reveal
-          // this would expand every file carrying a stale mark — on a 90-file
-          // PR that is tens of thousands of rendered lines, and the page grinds
-          // before it helps. The file badges are visible either way.
-          openPaths={staleExpanded ? new Set(shownAnnotations.keys()) : undefined}
+          // Stale marks expand only when the reader asked for them by hand —
+          // on the default reveal this would expand every file carrying one,
+          // and on a 90-file PR that is tens of thousands of rendered lines
+          // before it helps; the file badges are visible either way. The
+          // current reveal target (a badge click, or a brief review-focus
+          // jump landing on a `boilerplate` file with no findings) always
+          // expands its own file — a collapsed section is not a destination.
+          openPaths={
+            new Set([...(staleExpanded ? shownAnnotations.keys() : []), ...(reveal ? [reveal.path] : [])])
+          }
           commenting={commenting}
           reveal={reveal}
           onRevealLine={revealLine}

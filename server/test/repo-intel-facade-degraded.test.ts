@@ -123,3 +123,57 @@ describe('RepoIntel facade — degraded contract (flag on, but no data)', () => 
     await expect(svc.getCallerSignatures('r1', [])).resolves.toEqual([]);
   });
 });
+
+/**
+ * T2 — onboarding tour reads: `getIndexedFiles`, `getFileEdges`, `getFileFacts`
+ * (specs/12-onboarding-generator.md T2). Same degraded-empty guard as their
+ * neighbours; real rows delegate straight through to the repository.
+ */
+describe('RepoIntel facade — onboarding tour reads (T2)', () => {
+  it('getIndexedFiles → [] when repoIntelEnabled=false', async () => {
+    const svc = buildDegradedService({ flag: false });
+    await expect(svc.getIndexedFiles('r1')).resolves.toEqual([]);
+  });
+
+  it('getFileEdges → [] when repoIntelEnabled=false', async () => {
+    const svc = buildDegradedService({ flag: false });
+    await expect(svc.getFileEdges('r1')).resolves.toEqual([]);
+  });
+
+  it('getFileFacts → [] when repoIntelEnabled=false', async () => {
+    const svc = buildDegradedService({ flag: false });
+    await expect(svc.getFileFacts('r1', ['a.ts'])).resolves.toEqual([]);
+  });
+
+  it('getFileFacts → [] for an empty file list, even when enabled', async () => {
+    const svc = buildDegradedService({ flag: true });
+    (svc as unknown as { repo: Record<string, unknown> }).repo = {
+      getFileFacts: async () => {
+        throw new Error('must not be called for an empty file list');
+      },
+    };
+    await expect(svc.getFileFacts('r1', [])).resolves.toEqual([]);
+  });
+
+  it('getIndexedFiles / getFileEdges / getFileFacts return real rows against a fixture repo', async () => {
+    const svc = buildDegradedService({ flag: true });
+    (svc as unknown as { repo: Record<string, unknown> }).repo = {
+      getRankedPaths: async (_repoId: string, limit: number) =>
+        [
+          { path: 'src/a.ts', rank: 0.9 },
+          { path: 'src/b.ts', rank: 0.5 },
+        ].slice(0, limit),
+      getEdges: async () => [{ fromFile: 'src/a.ts', toFile: 'src/b.ts' }],
+      getFileFacts: async () => [
+        { filePath: 'src/a.ts', endpoints: ['GET /repos'], crons: [] },
+      ],
+    };
+    await expect(svc.getIndexedFiles('r1')).resolves.toEqual(['src/a.ts', 'src/b.ts']);
+    await expect(svc.getFileEdges('r1')).resolves.toEqual([
+      { fromFile: 'src/a.ts', toFile: 'src/b.ts' },
+    ]);
+    await expect(svc.getFileFacts('r1', ['src/a.ts'])).resolves.toEqual([
+      { filePath: 'src/a.ts', endpoints: ['GET /repos'], crons: [] },
+    ]);
+  });
+});

@@ -8,42 +8,21 @@
 
 import type { SmartDiff, SmartDiffFile, SmartDiffGroup, SmartDiffRole } from '@devdigest/shared';
 import {
-  BOILERPLATE_PATTERNS,
   GROUP_ORDER,
-  ROLE_ORDER,
   SPLIT_GROUP_DEPTH,
   SPLIT_MAX_GROUPS,
   SPLIT_MAX_REVIEWABLE_FILES,
   SPLIT_MAX_REVIEWABLE_LINES,
   SPLIT_MIN_FILES_PER_GROUP,
-  WIRING_PATTERNS,
 } from './constants.js';
 
-const PATTERNS: Record<SmartDiffRole, readonly RegExp[]> = {
-  boilerplate: BOILERPLATE_PATTERNS,
-  wiring: WIRING_PATTERNS,
-  // core is the fallthrough: it has no patterns of its own, on purpose. A rule
-  // list for "business logic" would be a list of every language's file
-  // extensions, and it would be wrong for the next repo.
-  core: [],
-};
-
-/** Normalise a repo-relative path so the patterns only ever see POSIX form. */
-export function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\.\//, '');
-}
-
 /**
- * The single classification rule. First matching role in `ROLE_ORDER` wins, so
- * `package-lock.json` is boilerplate even though it is also configuration.
+ * `classifyPath`/`normalizePath` now live in `modules/_shared/file-roles.ts`
+ * (correction C-1, `plans/10-pr-brief.plan.md`) — re-exported here, unchanged,
+ * so every existing import from this file keeps working.
  */
-export function classifyPath(path: string): SmartDiffRole {
-  const p = normalizePath(path);
-  for (const role of ROLE_ORDER) {
-    if (PATTERNS[role].some((re) => re.test(p))) return role;
-  }
-  return 'core';
-}
+export { classifyPath, normalizePath } from '../_shared/file-roles.js';
+import { classifyPath, normalizePath } from '../_shared/file-roles.js';
 
 /** A changed file as the classifier needs it — structurally typed, so the
  *  service can pass a Drizzle row or a `PrFile` without a conversion step. */

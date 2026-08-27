@@ -15,6 +15,11 @@ import {
   Settings,
   Repo,
   PrDetail,
+  Brief,
+  BriefRecord,
+  OnboardingSectionKind,
+  OnboardingSection,
+  TourRecord,
 } from '@devdigest/shared';
 
 /**
@@ -128,7 +133,7 @@ describe('AI contracts parse fixtures', () => {
     ).not.toThrow();
     expect(() =>
       Onboarding.parse({
-        sections: [{ kind: 'architecture', title: 'T', body: 'b', links: [] }],
+        sections: [{ kind: 'architecture_overview', title: 'T', body: 'b', links: [] }],
       }),
     ).not.toThrow();
     expect(() =>
@@ -213,5 +218,232 @@ describe('platform DTOs', () => {
         commits: [],
       }),
     ).not.toThrow();
+  });
+
+  it('Brief / BriefRecord (specs/10-pr-brief.md) — full and degraded', () => {
+    const fullBrief = {
+      what: 'Adds a cached PR brief card.',
+      why: 'Reviewers open a PR with no read-first summary.',
+      risk_level: 'medium',
+      risks: [
+        {
+          kind: 'concurrency',
+          title: 'Two writers',
+          explanation: 'Two POSTs could race.',
+          severity: 'medium',
+          file_refs: ['src/modules/brief/service.ts'],
+        },
+      ],
+      review_focus: [{ kind: 'file', ref: 'src/modules/brief/service.ts', reason: 'New write path', line: 12 }],
+    };
+    expect(() => Brief.parse(fullBrief)).not.toThrow();
+
+    const fullRecord = {
+      ...fullBrief,
+      pr_id: 'pr1',
+      head_sha: 'abc123',
+      intent_fingerprint: 'fp1',
+      repo_indexed_sha: 'sha1',
+      provider: 'anthropic',
+      model: 'claude-haiku-4-5',
+      prompt_version: 1,
+      tokens_in: 4200,
+      tokens_out: 380,
+      cost_usd: 0.01,
+      budget_tokens: 8000,
+      dropped_inputs: [],
+      dropped_refs: 0,
+      degraded: false,
+      error: null,
+      generated_at: '2026-08-18T00:00:00.000Z',
+    };
+    expect(() => BriefRecord.parse(fullRecord)).not.toThrow();
+
+    const degradedRecord = {
+      ...fullRecord,
+      intent_fingerprint: null,
+      repo_indexed_sha: null,
+      cost_usd: null,
+      degraded: true,
+      error: 'llm_call_failed',
+      generated_at: null,
+    };
+    expect(() => BriefRecord.parse(degradedRecord)).not.toThrow();
+  });
+});
+
+describe('Onboarding tour contracts (specs/12-onboarding-generator.md)', () => {
+  it('all five OnboardingSectionKind values parse', () => {
+    for (const kind of [
+      'architecture_overview',
+      'critical_paths',
+      'how_to_run',
+      'guided_reading',
+      'first_tasks',
+    ] as const) {
+      expect(() => OnboardingSectionKind.parse(kind)).not.toThrow();
+    }
+  });
+
+  it('rejects a kind outside the five-section enum (A25)', () => {
+    expect(() => OnboardingSectionKind.parse('not-a-section')).toThrow();
+    expect(() =>
+      OnboardingSection.parse({
+        kind: 'not-a-section',
+        title: 'T',
+        body: null,
+        links: [],
+      }),
+    ).toThrow();
+  });
+
+  const baseTrace = {
+    budget_tokens: 10850,
+    tokens_in: 11020,
+    tokens_out: 900,
+    cost_usd: 0.0024,
+    provider: 'anthropic',
+    model: 'claude-haiku-4-5',
+    prompt_version: 'v1',
+  };
+
+  it('a fully-populated TourRecord parses', () => {
+    const record = {
+      sections: [
+        {
+          kind: 'architecture_overview',
+          title: 'Architecture',
+          body: 'This repo is organised around...',
+          diagram: 'flowchart LR\nA-->B',
+          links: [{ label: 'src', path: 'src/index.ts' }],
+          tree: [
+            {
+              path: 'src',
+              files: 12,
+              role_mix: { core: 8, test: 4 },
+              top_file: 'src/index.ts',
+              note: 'entrypoint',
+            },
+          ],
+        },
+        {
+          kind: 'critical_paths',
+          title: 'Critical paths',
+          body: 'The chains that most of the code depends on...',
+          links: [],
+          paths: [
+            {
+              chain_id: 'c1',
+              files: ['src/a.ts', 'src/b.ts'],
+              endpoints: ['GET /repos'],
+              why: 'entrypoint chain',
+              resolved: [true, true],
+            },
+          ],
+        },
+        {
+          kind: 'how_to_run',
+          title: 'How to run',
+          body: 'Install then run.',
+          links: [],
+          run_steps: [{ command: 'pnpm install', why: 'install dependencies' }],
+        },
+        {
+          kind: 'guided_reading',
+          title: 'Guided reading',
+          body: null,
+          links: [],
+          reading: [
+            {
+              path: 'src/index.ts',
+              why: 'start here',
+              rank_percentile: 95,
+              resolved: true,
+            },
+          ],
+        },
+        {
+          kind: 'first_tasks',
+          title: 'First tasks',
+          body: null,
+          links: [],
+          tasks: [
+            {
+              candidate_id: 'cand_1',
+              title: 'Add a test',
+              scope: 'src/index.ts',
+              why: 'missing coverage',
+              difficulty: 'low',
+              difficulty_basis: { callers: 1, rank_percentile: 31, signal: 'indexed' },
+              resolved: true,
+            },
+          ],
+        },
+      ],
+      repo_id: 'repo_1',
+      indexed_sha: 'abc1234',
+      indexer_version: 2,
+      prompt_version: 'v1',
+      provider: 'anthropic',
+      model: 'claude-haiku-4-5',
+      trace: baseTrace,
+      degraded: false,
+      error: null,
+      skeleton_sections: [],
+      dropped_inputs: [],
+      dropped_refs: 0,
+      dropped_steps: 0,
+      index_status: 'full',
+      files_skipped: 0,
+      current_indexed_sha: 'abc1234',
+      generated_at: '2026-08-26T00:00:00.000Z',
+    };
+    expect(() => TourRecord.parse(record)).not.toThrow();
+  });
+
+  it('a skeleton TourRecord parses — body null everywhere, tokens_in null, all five kinds skeletonised', () => {
+    const skeletonKinds = [
+      'architecture_overview',
+      'critical_paths',
+      'how_to_run',
+      'guided_reading',
+      'first_tasks',
+    ] as const;
+    const record = {
+      sections: skeletonKinds.map((kind) => ({
+        kind,
+        title: kind,
+        body: null,
+        links: [],
+        empty_reason: null,
+        skeleton: true,
+      })),
+      repo_id: 'repo_1',
+      indexed_sha: 'abc1234',
+      indexer_version: 2,
+      prompt_version: 'v1',
+      provider: 'anthropic',
+      model: 'claude-haiku-4-5',
+      trace: {
+        ...baseTrace,
+        tokens_in: null,
+        tokens_out: null,
+        cost_usd: null,
+      },
+      degraded: true,
+      error: 'input_over_budget',
+      skeleton_sections: [...skeletonKinds],
+      dropped_inputs: [],
+      dropped_refs: 0,
+      dropped_steps: 0,
+      index_status: 'full',
+      files_skipped: 0,
+      current_indexed_sha: 'abc1234',
+      generated_at: '2026-08-26T00:00:00.000Z',
+    };
+    const parsed = TourRecord.parse(record);
+    expect(parsed.trace.tokens_in).toBeNull();
+    expect(parsed.skeleton_sections).toHaveLength(5);
+    expect(parsed.sections.every((s) => s.body === null)).toBe(true);
   });
 });

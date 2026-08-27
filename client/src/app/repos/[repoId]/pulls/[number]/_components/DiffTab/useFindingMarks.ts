@@ -7,11 +7,11 @@ import { useSmartDiff } from "@/lib/hooks";
 import {
   buildAnnotations,
   buildStaleAnnotations,
-  findingsAtHead,
   firstStaleMark,
   staleFindings,
   staleHeadSha,
 } from "../SmartDiffViewer/helpers";
+import { findingsAtHead } from "../reviewsAtHead";
 
 /**
  * The finding marks for a PR's diff, owned above both viewers.
@@ -46,20 +46,34 @@ export interface FindingMarks {
   /** True only when the reader turned them on by hand — files expand then. */
   staleExpanded: boolean;
   toggleStale: () => void;
-  /** Highlight+scroll target, shared so a click in one group clears another. */
+  /** Highlight+scroll target, shared so a click in one group clears another.
+   *  `line: null` is a FILE-level reveal — a brief's review-focus entry. */
   reveal: DiffReveal | null;
-  revealLine: (path: string, line: number) => void;
+  revealLine: (path: string, line: number | null) => void;
 }
 
 export function useFindingMarks(
   prId: string | null,
   reviews: ReviewRecord[] | undefined,
   headSha: string | null,
+  /** A file to reveal on mount — the target of a brief's review-focus jump
+   *  (B3). `DiffTab` unmounts whenever the reader leaves the Diff tab, so a
+   *  fresh mount is exactly what makes clicking the same entry twice scroll
+   *  twice: there is no stale `nonce` to fight, because there is no prior
+   *  instance to compare against. */
+  focusFile?: string | null,
 ): FindingMarks {
   const { data, isLoading, isError, error, refetch } = useSmartDiff(prId);
 
-  const [reveal, setReveal] = React.useState<DiffReveal | null>(null);
-  const revealLine = React.useCallback((path: string, line: number) => {
+  // The lazy initializer, not an effect: `DiffTab` unmounts whenever the
+  // reader leaves the Diff tab (`page.tsx`'s `{tab === "diff" && …}`), so a
+  // fresh mount is exactly what makes clicking the same review-focus entry
+  // twice scroll twice — there is no stale target to fight, because there is
+  // no prior instance of this hook to compare against.
+  const [reveal, setReveal] = React.useState<DiffReveal | null>(() =>
+    focusFile ? { path: focusFile, line: null, nonce: 0 } : null,
+  );
+  const revealLine = React.useCallback((path: string, line: number | null) => {
     setReveal((prev) => ({ path, line, nonce: (prev?.nonce ?? 0) + 1 }));
   }, []);
 

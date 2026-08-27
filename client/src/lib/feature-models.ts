@@ -15,8 +15,10 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
     id: "onboarding",
     label: "Onboarding Tour",
     description: "Writes the per-repo onboarding tour.",
-    defaultProvider: "openrouter",
-    defaultModel: "deepseek/deepseek-v4-flash",
+    // Repointed 2026-08-26 (CTO) — see the shared registry for why. This mirror
+    // is hand-maintained and outside check-shared.sh, so it drifts silently.
+    defaultProvider: "anthropic",
+    defaultModel: "claude-haiku-4-5",
   },
   {
     id: "review_intent",
@@ -31,8 +33,10 @@ export const FEATURE_MODELS: FeatureModelDef[] = [
     id: "risk_brief",
     label: "Risk Brief",
     description: "Assesses merge risks for a pull request.",
-    defaultProvider: "openai",
-    defaultModel: "gpt-4.1",
+    // Cheap pre-pass by design (specs/10-pr-brief.md Q7) — the previous
+    // default predated the pricing work, same reasoning as `review_intent`.
+    defaultProvider: "anthropic",
+    defaultModel: "claude-haiku-4-5",
   },
   {
     id: "conformance",

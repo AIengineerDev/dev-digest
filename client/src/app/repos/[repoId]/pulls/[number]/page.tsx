@@ -64,18 +64,26 @@ export default function PRDetailPage() {
   // rather than in state so the jump is one `router.replace` — same-page, no
   // reload — and so the resulting view is linkable and survives a refresh.
   const focusFindingId = search.get("finding");
-  const setParams = (patch: Record<string, string | null>) => {
+  // The file a brief's review-focus entry was clicked through to (B3).
+  const focusFile = search.get("file");
+  const buildParams = (patch: Record<string, string | null>) => {
     const sp = new URLSearchParams(search.toString());
     for (const [key, val] of Object.entries(patch)) {
       if (val == null) sp.delete(key);
       else sp.set(key, val);
     }
-    router.replace(`/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`);
+    return `/repos/${repoId}/pulls/${number}${sp.toString() ? `?${sp.toString()}` : ""}`;
   };
+  const setParams = (patch: Record<string, string | null>) => router.replace(buildParams(patch));
   const setParam = (key: string, val: string | null) => setParams({ [key]: val });
-  // Leaving a tab by hand drops the focus target: the highlight belongs to the
+  // Leaving a tab by hand drops the focus targets: a highlight belongs to the
   // jump that set it, not to the tab.
-  const setTab = (t: string) => setParams({ tab: t, finding: null });
+  const setTab = (t: string) => setParams({ tab: t, finding: null, file: null });
+  // The one navigation that must leave a history entry: C11 requires Back to
+  // return to Overview after a brief's review-focus jump, and `replace` writes
+  // no entry — `push`, kept separate from `setParams` so the finding jump's
+  // `replace` behaviour (same-page, no history growth) does not change.
+  const setParamsPushed = (patch: Record<string, string | null>) => router.push(buildParams(patch));
 
   // Reviews come newest-first; each is its own run (grouped into accordions).
   const runs = reviews ?? [];
@@ -144,7 +152,17 @@ export default function PRDetailPage() {
       />
 
       <div style={{ padding: "24px 32px 44px", display: "flex", flexDirection: "column", gap: 24, maxWidth: 1080, margin: "0 auto" }}>
-        {tab === "overview" && <OverviewTab prId={prId} prBody={pr.body} intent={intent} intentLoading={intentLoading} />}
+        {tab === "overview" && (
+          <OverviewTab
+            prId={prId}
+            prBody={pr.body}
+            intent={intent}
+            intentLoading={intentLoading}
+            reviews={reviews}
+            headSha={pr.head_sha}
+            onFocusFile={(path) => setParamsPushed({ tab: "diff", file: path })}
+          />
+        )}
 
         {tab === "findings" && (
           <FindingsTab
@@ -184,6 +202,7 @@ export default function PRDetailPage() {
             reviews={reviews}
             headSha={pr.head_sha}
             canComment={pr.status === "open"}
+            focusFile={focusFile}
             onOpenFinding={(findingId) => setParams({ tab: "findings", finding: findingId })}
           />
         )}
