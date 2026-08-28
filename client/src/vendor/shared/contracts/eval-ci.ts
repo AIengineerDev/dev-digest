@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Verdict, Finding } from './findings.js';
-import { EvalRun, EvalOwnerKind, Conformance, Provider, CiFailOn } from './knowledge.js';
+import { EvalRun, EvalCase, EvalOwnerKind, Conformance, Provider, CiFailOn } from './knowledge.js';
 
 /**
  * A4 — Eval / CI / Compose / Conformance API contracts (L06).
@@ -15,6 +15,62 @@ import { EvalRun, EvalOwnerKind, Conformance, Provider, CiFailOn } from './knowl
 // ===========================================================================
 // Eval — case input + persisted run record + dashboard
 // ===========================================================================
+
+/**
+ * One expectation inside a case's `expected_output`.
+ *
+ * `must_find` came from an accepted finding — the agent should report at this
+ * location. `must_not_flag` came from a dismissal — it should not. The kind is
+ * derived from the decision, never chosen by the user (spec 13, R1).
+ */
+export const EvalExpectationKind = z.enum(['must_find', 'must_not_flag']);
+export type EvalExpectationKind = z.infer<typeof EvalExpectationKind>;
+
+export const EvalExpectation = z.object({
+  kind: EvalExpectationKind,
+  file: z.string(),
+  start_line: z.number().int(),
+  end_line: z.number().int(),
+  /** The source finding's title — for display only; never gates a match. */
+  title: z.string().nullish(),
+});
+export type EvalExpectation = z.infer<typeof EvalExpectation>;
+
+/**
+ * What the editor shows BEFORE the case exists: the derived name and
+ * expectation, and the input the case would pin. Served by
+ * `GET /findings/:id/eval-case-preview` so the diff on screen is the same
+ * bytes the case stores — not a second fetch that could disagree with it.
+ */
+export const EvalCasePreview = z.object({
+  finding_id: z.string(),
+  /** Present once the finding already produced a case; the editor then edits it. */
+  existing_case_id: z.string().nullable(),
+  name: z.string(),
+  expectation: EvalExpectation,
+  input_diff: z.string(),
+  input_files: z.array(z.string()),
+  pr: z.object({
+    number: z.number().int(),
+    title: z.string(),
+    body: z.string().nullable(),
+    head_sha: z.string().nullable(),
+  }),
+  agent: z.object({ id: z.string(), name: z.string().nullable() }).nullable(),
+});
+export type EvalCasePreview = z.infer<typeof EvalCasePreview>;
+
+/** Body of `POST /findings/:id/eval-case`. Everything else is derived. */
+export const EvalCaseFromFindingInput = z.object({
+  name: z.string().min(1).max(200).optional(),
+  notes: z.string().max(2000).nullish(),
+  /**
+   * The editor's expected-output JSON. Optional: omitting it keeps the
+   * expectation derived from the decision, which is the path R1 describes.
+   */
+  expected_output: z.array(EvalExpectation).min(1).optional(),
+});
+export type EvalCaseFromFindingInput = z.infer<typeof EvalCaseFromFindingInput>;
 
 /** Create/update payload for an eval case (id + owner resolved by the route). */
 export const EvalCaseInput = z.object({
@@ -44,6 +100,74 @@ export const EvalRunRecord = z.object({
   cost_usd: z.number().nullable(),
 });
 export type EvalRunRecord = z.infer<typeof EvalRunRecord>;
+
+/**
+ * One RUN of an agent's whole set: the rows that share a `ran_at`.
+ *
+ * There is no `run_group_id` column — the shared instant IS the group, written
+ * once by the service rather than defaulted per row, so grouping is exact
+ * instead of a range query over insert times (spec 13, R3).
+ *
+ * `system_prompt` is the snapshot the run actually used. Comparing two runs has
+ * to show WHY a metric moved, and the agent may have been edited again since.
+ */
+export const EvalRunGroup = z.object({
+  ran_at: z.string(),
+  agent_version: z.number().int().nullable(),
+  model: z.string().nullable(),
+  system_prompt: z.string().nullable(),
+  cases_total: z.number().int(),
+  /**
+   * False while a run is still going. Rows are written per case, so a group
+   * read mid-run looks FINISHED with fewer cases — and `2/2 passing` reads
+   * better than the truthful `2/3`. This says which you are looking at.
+   */
+  complete: z.boolean(),
+  passed: z.number().int(),
+  recall: z.number(),
+  precision: z.number(),
+  citation_accuracy: z.number(),
+  cost_usd: z.number().nullable(),
+  runs: z.array(EvalRunRecord),
+});
+export type EvalRunGroup = z.infer<typeof EvalRunGroup>;
+
+/**
+ * A case as the SKILL editor sees it: the case plus who owns it.
+ *
+ * A skill does not review anything on its own, so it has no cases of its own to
+ * speak of — what it can be judged by is the sets of the agents that link it.
+ * `owner_name` is what lets the tab say "via Security Reviewer" instead of
+ * showing a bare uuid, and it is why this is not just `EvalCase[]`.
+ */
+export const EvalCaseWithOwner = EvalCase.extend({
+  owner_name: z.string().nullable(),
+});
+export type EvalCaseWithOwner = z.infer<typeof EvalCaseWithOwner>;
+
+/** Body of `PUT /eval-cases/:id`. Every field optional — a rename is a rename. */
+export const EvalCasePatch = z.object({
+  name: z.string().min(1).max(200).optional(),
+  expected_output: z.unknown().optional(),
+  notes: z.string().nullish(),
+});
+export type EvalCasePatch = z.infer<typeof EvalCasePatch>;
+
+/** Body of `POST /agents/:id/eval-runs/preview` — a draft case, run but not stored. */
+export const EvalDryRunInput = z.object({
+  name: z.string().min(1).max(200).default('draft case'),
+  input_diff: z.string().default(''),
+  expected_output: z.unknown(),
+});
+export type EvalDryRunInput = z.infer<typeof EvalDryRunInput>;
+
+/** What the case editor shows in its `Actual output` panel after a dry run. */
+export const EvalDryRunResult = z.object({
+  result: EvalRun,
+  findings: z.array(z.unknown()),
+  error: z.string().nullable(),
+});
+export type EvalDryRunResult = z.infer<typeof EvalDryRunResult>;
 
 /** Result of running a single case: the metrics (EvalRun) + the persisted row id. */
 export const EvalRunResult = z.object({
@@ -87,6 +211,33 @@ export const EvalDashboard = z.object({
   alert: z.string().nullable(),
 });
 export type EvalDashboard = z.infer<typeof EvalDashboard>;
+
+/**
+ * The Eval Dashboard's list row: one agent, with the metrics of its latest run.
+ *
+ * Every metric is nullable and `last_run_at: null` means never evaluated — a
+ * zero and an absence are different claims, and R8 requires the screen to say
+ * which one it is showing.
+ */
+export const EvalAgentSummary = z.object({
+  agent_id: z.string(),
+  agent_name: z.string().nullable(),
+  cases_total: z.number().int(),
+  last_run_at: z.string().nullable(),
+  recall: z.number().nullable(),
+  precision: z.number().nullable(),
+  citation_accuracy: z.number().nullable(),
+  passed: z.number().int().nullable(),
+  total: z.number().int().nullable(),
+});
+export type EvalAgentSummary = z.infer<typeof EvalAgentSummary>;
+
+/** `GET /eval-dashboard` — every agent plus the workspace's recent runs. */
+export const EvalDashboardOverview = z.object({
+  agents: z.array(EvalAgentSummary),
+  recent_runs: z.array(EvalRunRecord),
+});
+export type EvalDashboardOverview = z.infer<typeof EvalDashboardOverview>;
 
 // ===========================================================================
 // Compose Review

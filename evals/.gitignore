@@ -1,0 +1,6 @@
+node_modules/
+# Run artifacts: ~1 MB of raw model prose per sweep, reproducible from the
+# fixtures, and uploaded by CI as a build artifact. The summarised tables that
+# matter live in each suite's README.md; `npm run delta` reads whatever is here
+# locally.
+results/

@@ -9,11 +9,12 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, ErrorState, Icon, Skeleton, Tabs } from "@devdigest/ui";
 import { useDeleteSkill, useSkill, useUpdateSkill } from "../../../../../../lib/hooks/skills";
 import { MAX_SKILL_BODY_CHARS } from "../../constants";
+import { EvalsTab } from "./_components/EvalsTab";
 import { ContextTab } from "./_components/ContextTab";
 import { currentBody, isDirty, isOverLimit } from "./helpers";
 import { s } from "./styles";
 
-type EditorTab = "body" | "context";
+type EditorTab = "body" | "context" | "evals";
 
 export function SkillEditor({ id }: { id: string }) {
   const t = useTranslations("skills");
@@ -101,6 +102,7 @@ export function SkillEditor({ id }: { id: string }) {
         tabs={[
           { key: "body", label: t("editor.tabs.body") },
           { key: "context", label: t("editor.tabs.context") },
+          { key: "evals", label: t("editor.tabs.evals") },
         ]}
         value={tab}
         onChange={(k) => setTab(k as EditorTab)}
@@ -130,8 +132,10 @@ export function SkillEditor({ id }: { id: string }) {
             </div>
           )}
         </>
-      ) : (
+      ) : tab === "context" ? (
         <ContextTab skillId={skill.id} />
+      ) : (
+        <EvalsTab skillId={skill.id} />
       )}
     </div>
   );

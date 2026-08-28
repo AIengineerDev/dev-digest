@@ -1,0 +1,40 @@
+diff --git a/packages/public-api/contracts/findings.ts b/packages/public-api/contracts/findings.ts
+index ce2e651..c80e19a 100644
+--- a/packages/public-api/contracts/findings.ts
++++ b/packages/public-api/contracts/findings.ts
+@@ -1,7 +1,7 @@
+ import { z } from 'zod';
+ 
+ /** How much a finding should worry the person reading it. */
+-export const Severity = z.enum(['critical', 'warning', 'suggestion']);
++export const Severity = z.enum(['critical', 'warning', 'nit']);
+ export type Severity = z.infer<typeof Severity>;
+ 
+ export const Finding = z.object({
+@@ -17,6 +17,7 @@ export const Finding = z.object({
+ export type Finding = z.infer<typeof Finding>;
+ 
+ export const FindingListQuery = z.object({
++  agentId: z.string(),
+   severity: Severity.optional(),
+   cursor: z.string().optional(),
+ });
+diff --git a/packages/public-api/routes/findings.ts b/packages/public-api/routes/findings.ts
+index 17793bc..639f656 100644
+--- a/packages/public-api/routes/findings.ts
++++ b/packages/public-api/routes/findings.ts
+@@ -3,12 +3,13 @@ import { FindingListQuery, FindingListResponse } from '../contracts/findings.js'
+ import type { FindingStore } from '../store.js';
+ 
+ export async function findingRoutes(app: FastifyInstance, store: FindingStore): Promise<void> {
+-  app.get('/repos/:repoId/pulls/:number/findings', {
++  app.get('/repos/:repoId/pulls/:number/review-findings', {
+     schema: { querystring: FindingListQuery, response: { 200: FindingListResponse } },
+     handler: async (req) => {
+       const { repoId, number } = req.params as { repoId: string; number: string };
+       const q = req.query as FindingListQuery;
+       const page = await store.listFindings(repoId, Number(number), {
++        agentId: q.agentId,
+         severity: q.severity,
+         cursor: q.cursor,
+       });

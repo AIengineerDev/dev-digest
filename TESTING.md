@@ -32,6 +32,7 @@ If a test wouldn't catch a class of regression we care about, we don't write it.
 | reviewer-core | `reviewer-core/` | unit (engine) | vitest | `reviewer-core.yml` | no |
 | e2e web | `e2e/` | browser e2e (deterministic) | agent-browser + `run.ts` | `e2e-web.yml` | yes (stack) |
 | mcp | `mcp/` | unit (in-process MCP client) + binary smoke | vitest | `mcp.yml` | no |
+| skill evals | `evals/` | LLM A/B over checked-in diffs | `run.ts` | **none yet** | no |
 
 ## What each suite covers
 
@@ -56,6 +57,15 @@ and a `run` with a stubbed model → grounded findings. No DB / GitHub / FS.
 **e2e web** — see `e2e/README.md`. Deterministic agent-browser flows over the
 main journeys (boot → PR list → PR detail; agents) against a real seeded stack.
 No `chat`, no model key.
+
+**skill evals** — the odd one out, and deliberately not a PR gate: it spends
+real money and is non-deterministic, so it has no workflow yet and must never be
+attached to `pull_request` without a label or a schedule in front of it. It runs
+a skill-carrying agent twice over the same checked-in diff — skills attached and
+not — and scores both arms against an answer key, exiting non-zero when a
+planted change is missed. Suites live inside the skill they test
+(`skills/*/evals/`), so a skill ships with the evidence that it works; the
+harness is `evals/`. Needs `ANTHROPIC_API_KEY`. See `evals/README.md`.
 
 **mcp** — the five tools driven through an in-process MCP client (schema
 validation, the `isError` envelope, the poll loop, cancellation, progress),

@@ -52,7 +52,8 @@
     "overLimit": "This body is {count} characters. The limit is {limit} per skill — trim it before saving.",
     "tabs": {
       "body": "Body",
-      "context": "Context"
+      "context": "Context",
+      "evals": "Evals"
     }
   },
   "context": {
@@ -119,5 +120,19 @@
       "submitting": "Importing…",
       "error": "Could not import from that URL."
     }
+  },
+  "evals": {
+    "loadFailed": "Could not load the cases this skill is judged by",
+    "intro": "A skill reviews nothing on its own. These are the case sets of the agents that link it — change this skill and these are the numbers that move.",
+    "none": "Nothing measures this skill yet",
+    "noneBody": "Either no agent links it, or the agents that do have no eval cases. Link it to an agent, then turn a decided finding into a case.",
+    "thisSkill": "This skill",
+    "caseCount": "{n} cases",
+    "openAgent": "Open agent evals",
+    "passing": "{passed} / {total} passing",
+    "neverRun": "never run",
+    "running": "Running…",
+    "runThrough": "Run through this agent",
+    "newCase": "New eval case"
   }
 }

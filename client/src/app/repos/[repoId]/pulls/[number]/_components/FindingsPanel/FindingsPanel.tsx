@@ -17,10 +17,13 @@ export function FindingsPanel({
   prId,
   repoFullName,
   headSha,
+  agentId,
   focusFindingId = null,
 }: {
   findings: FindingRecord[];
   prId: string;
+  /** The agent that produced this run — owner of any eval case built here. */
+  agentId?: string | null;
   repoFullName?: string | null;
   headSha?: string | null;
   /** The finding a Smart Diff badge was clicked through to: shown whatever the
@@ -103,6 +106,7 @@ export function FindingsPanel({
               pending={action.isPending}
               repoFullName={repoFullName}
               headSha={headSha}
+              agentId={agentId}
               onAction={(act) => action.mutate({ findingId: f.id, action: act, prId })}
             />
           ))

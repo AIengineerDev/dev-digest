@@ -58,3 +58,39 @@ describe("FindingCard (smoke, both themes)", () => {
     expect(onAction).toHaveBeenCalledWith("dismiss");
   });
 });
+
+/**
+ * The eval-case action's availability rule (spec 13, R1). An undecided finding
+ * carries no label, so there is nothing to turn into a case. The button is
+ * rendered anyway and DISABLED, with a title saying why: the action stays
+ * discoverable, which is what tells someone the accept/dismiss click has a
+ * second purpose.
+ */
+describe("FindingCard eval-case action", () => {
+  it("is disabled on an undecided finding", () => {
+    renderWithIntl(<FindingCard f={FINDING} defaultExpanded onAction={() => {}} />);
+    expect(screen.getByRole("button", { name: /turn into eval case/i })).toBeDisabled();
+  });
+
+  it("is offered once the finding is accepted", () => {
+    renderWithIntl(
+      <FindingCard
+        f={{ ...FINDING, accepted_at: "2026-08-05T10:00:00Z" }}
+        defaultExpanded
+        onAction={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /turn into eval case/i })).toBeEnabled();
+  });
+
+  it("is offered once the finding is dismissed", () => {
+    renderWithIntl(
+      <FindingCard
+        f={{ ...FINDING, dismissed_at: "2026-08-05T10:00:00Z" }}
+        defaultExpanded
+        onAction={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /turn into eval case/i })).toBeEnabled();
+  });
+});

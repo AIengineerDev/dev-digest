@@ -157,7 +157,61 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Doesn't Work
 
-_None yet._
+- **2026-08-28** — To make a reviewer agent measurably **noisier**, add a narrow
+  RULE, never a quota. Measured on the eval pipeline against the same 5-case set
+  on `claude-sonnet-5`: appending *"report EVERY observation… list at least five
+  findings… prefer CRITICAL when unsure"* did not raise the finding count — it
+  broke the transport. Three of five cases died with `Anthropic structured
+  output failed schema validation` after all retries, so the arm produced
+  nothing to judge and `precision` stayed at 1.00, looking unchanged. Replacing
+  it with one sentence — *"report every rename as a WARNING, citing the renamed
+  lines"* — kept the output short, the schema held, and `precision` fell from
+  1.00 to 0.80 with the `must_not_flag` case flipping to 0.00 exactly as
+  intended. The general shape: an instruction that demands **volume** hits the
+  structured-output ceiling before it changes behaviour, and a failed arm is
+  indistinguishable from a well-behaved one unless errored cases are scored as
+  failures rather than as 1/1/1. `server/src/modules/eval/service.ts` (`runCases`)
+  · `reviewer-core/src/llm/openrouter.ts:59`
+
+- **2026-08-27** — The skills-on/skills-off A/B that `skills/api-contract-reviewer/README.md`
+  describes **does not reproduce on Claude models**, so do not cite it as
+  evidence that skills change what a reviewer finds. Measured with
+  `fixtures/api-contract-demo` — nine planted contract breaks (silent rename,
+  undeprecated removal, patch bump over a breaking change, `z.number()` →
+  `.nullable()`, an enum value removed, 404 → 200, a route path move, a newly
+  required query param, a renamed severity) across three diffs, same prompt,
+  same diff, only the `skills` slot differing: `claude-opus-5` found 9/9 in
+  **both** arms and `claude-haiku-4-5` found 9/9 without skills. The seeded
+  `API_CONTRACT_REVIEWER_PROMPT` already states the rule the skills restate
+  ("a change is a contract change when a caller that was correct before the diff
+  would be wrong after it"), so on textbook diffs there is nothing left for them
+  to add. What the skills did change is real but different: the vocabulary of
+  the finding (deprecation window, `@deprecated` marker, changelog under a
+  Breaking heading) and its length — case 01 on Opus went 3678 → 1890 output
+  tokens with skills attached. The original claim was written against the cheap
+  default (`deepseek/deepseek-v4-flash`); an A/B meant to show detection lift
+  has to run on that tier, or plant subtler changes. Second result from the same
+  sweep: on `claude-haiku-4-5` the longer with-skills prompt failed
+  structured-output validation on all three attempts and the arm produced
+  nothing — added prompt bulk costs a small model schema compliance, and the
+  forced-tool path has no partial-result fallback.
+  `skills/api-contract-reviewer/evals/README.md` · `evals/run.ts` ·
+  `server/src/adapters/llm/anthropic.ts:207`
+
+  **Second measurement, 2026-08-27, and it is no longer about one skill set.**
+  The same thing happened to a *variant* comparison: `onion-architecture` v1 (the
+  live skill) against a candidate that adds exactly one rule — a module is inert
+  until it is registered in `src/modules/index.ts`. On `claude-opus-5` the v1 arm
+  flagged the missing registration anyway, CRITICAL, from general reasoning about
+  an unregistered Fastify plugin. So a rule can be **already enforced by the model
+  without being written down**, and adding it buys precision, not recall: v1 could
+  not name the file ("the app's route-registration file") and padded the finding
+  with a speculative typecheck failure the diff never showed, while v2 named
+  `modules/index.ts`, the mechanism, the three routes that 404, and which gates
+  stay green. Before writing a new rule into a skill, run the arm without it —
+  the `arms` field on an expectation exists to make "it was caught anyway" a
+  reported outcome (`beyond spec`) rather than an invisible pass.
+  `.claude/skills/onion-architecture/evals/README.md`
 
 ## Codebase Patterns
 
@@ -352,6 +406,23 @@ _None yet._
   before debugging either side. `server/src/vendor/shared/adapters.ts:48`
 
 ## Recurring Errors & Fixes
+
+- **2026-08-27** — An eval scorecard that matches each expectation against the
+  findings **independently** lies in both directions, and it lies quietly. Score
+  each plant with `findings.find(...)` and the first broad finding wins twice:
+  in the onion `v1-live` run, one CRITICAL that said "no schema tables and no
+  route registration" satisfied both the `reg` plant *and* the `routes-db` plant
+  (its rationale happened to contain `db/schema` and the word "route"), which
+  **credited a plant nobody had reported separately** and simultaneously **stole
+  the credit from the finding that actually reported `routes-db`** — which then
+  appeared in the report as unexplained noise, inflating "other findings" from 3
+  to 4. Assignment must be one-to-one and most-constrained-first: an expectation
+  with a single candidate claims it before an expectation with three gets to
+  choose. Re-scoring the saved report under the fixed matcher moves nothing in
+  the found/missed columns, which is exactly why this is worth writing down —
+  the totals were right while the evidence behind them was wrong, so nothing in
+  the output flags it. `evals/run.ts` (`assign`) ·
+  `.claude/skills/onion-architecture/evals/expected.json`
 
 - **2026-08-26** — A **spec amendment that changes a contract both sides encode
   gets implemented on one side and silently not the other**, and the ordinary

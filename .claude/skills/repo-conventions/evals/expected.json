@@ -1,0 +1,106 @@
+{
+  "$comment": "Answer key + arm declaration. `file` and `patterns` are case-insensitive regexes; a plant counts as FOUND when one grounded finding cites a matching file and its title+rationale+suggestion match every pattern. Patterns are anchored on the MECHANISM the reviewer must name, never on a word that appears in the diff anyway — a plant scored on vocabulary the diff already contains hands out credit nobody earned.",
+  "agent": {
+    "$comment": "The prompt is deliberately generic about WHICH conventions exist. Naming any of them here would hand the rules to every arm and destroy the comparison.",
+    "prompt": "file:./agent.md",
+    "repoMap": "file:./repo-map.md",
+    "arms": [
+      {
+        "$comment": "Zero baseline: same prompt, empty skills slot. baseline:true keeps it out of the exit gate — it is SUPPOSED to miss.",
+        "name": "without-skills",
+        "skills": [],
+        "baseline": true
+      },
+      {
+        "$comment": "The root AGENTS.md verbatim, frozen. Answers the question nobody has measured: is the file we already maintain usable as a reviewer rubric, or is it written for an implementer and wasted here?",
+        "name": "agents-md-raw",
+        "skills": ["file:./variants/AGENTS.snapshot.md"]
+      },
+      {
+        "$comment": "The distilled skill, written as things to look for in a diff. Moves whenever SKILL.md is edited — re-measure, never compare to an older run.",
+        "name": "repo-conventions",
+        "skills": ["file:../SKILL.md"]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "01-webhook-delivery-plumbing",
+      "title": "Wire up webhook delivery",
+      "expected": [
+        {
+          "id": "symlink-copy",
+          "what": "client/CLAUDE.md stops being a symlink to AGENTS.md and becomes a regular file — the diff shows mode 120000 deleted and 100644 added, content identical, so the fork is invisible until the two drift",
+          "file": "client/CLAUDE\\.md",
+          "patterns": ["symlink|120000|symbolic link", "agents\\.md|drift|diverg|two copies|fork"]
+        },
+        {
+          "id": "it-test-naming",
+          "what": "a testcontainers-backed test is named webhook-repository.test.ts, so it joins the hermetic lane that has no database",
+          "file": "webhook-repository\\.test\\.ts",
+          "patterns": ["\\.it\\.test|integration lane|hermetic", "testcontainer|postgres|docker|database"]
+        },
+        {
+          "id": "wrong-pm",
+          "what": "a package-lock.json appears in server/, which is a pnpm package with its own pnpm-lock.yaml",
+          "file": "server/package-lock\\.json",
+          "patterns": ["pnpm", "lockfile|package manager|npm install|frozen"]
+        },
+        {
+          "id": "vendor-mirror-only",
+          "what": "the contract is edited in client/src/vendor/shared only; the server copy is untouched, so the next sync reverts it",
+          "file": "client/src/vendor/shared",
+          "patterns": ["vendor", "server copy|both copies|sync|mirror|authoritative|out of step|only"]
+        },
+        {
+          "id": "handwritten-migration",
+          "what": "a shipped migration file is edited by hand instead of generating a new one",
+          "file": "migrations/0011",
+          "patterns": ["migration", "generat|hand.?(edit|writ)|already (been )?applied|new migration|shipped"]
+        },
+        {
+          "id": "arch-baseline-grown",
+          "what": "a new entry is added to the known-violations baseline, disarming the arch gate for this PR's own violation",
+          "file": "known-violations",
+          "patterns": ["baseline|known.?violation", "new violation|silenc|disarm|suppress|added|fix the import"]
+        },
+        {
+          "id": "clones-committed",
+          "what": "a file under server/clones/ — a cloned user repository — is committed",
+          "file": "server/clones/",
+          "patterns": ["clone", "commit|gitignore|working|not source|user repo"]
+        }
+      ]
+    },
+    {
+      "id": "02-reviewer-core-caching",
+      "title": "Cache reviews in the engine",
+      "expected": [
+        {
+          "id": "purity-fs",
+          "what": "the pure engine gains node:fs and writes a cache to the home directory, breaking the no-I/O contract that makes it testable without infrastructure",
+          "file": "reviewer-core/src/review/run\\.ts",
+          "patterns": ["node:fs|filesystem|file system|writefilesync", "pure|no i/?o|side effect|inject|host|belongs in"]
+        },
+        {
+          "id": "emit-build",
+          "what": "build becomes a real tsc emit and main points at dist/, although the package is consumed as TypeScript source through a path alias",
+          "file": "reviewer-core/package\\.json",
+          "patterns": ["dist|emit", "source|path alias|typecheck|stale|no js"]
+        },
+        {
+          "id": "unfenced-untrusted",
+          "what": "wrapUntrusted is removed and the raw diff is interpolated into the prompt, leaving a markdown heading as the only separation between data and instructions",
+          "file": "reviewer-core/src/prompt\\.ts",
+          "patterns": ["wrapuntrusted|untrusted|fenc|delimiter", "inject|instruction|heading|guard"]
+        },
+        {
+          "id": "grounding-bypass",
+          "what": "a skipGrounding flag makes the mandatory citation gate optional",
+          "file": "reviewer-core/src/review/run\\.ts",
+          "patterns": ["skipgrounding|grounding", "mandatory|bypass|opt.?out|hallucinat|never|gate"]
+        }
+      ]
+    }
+  ]
+}

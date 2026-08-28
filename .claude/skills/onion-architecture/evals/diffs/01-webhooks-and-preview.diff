@@ -1,0 +1,338 @@
+diff --git a/server/src/adapters/notify/webhook-http.ts b/server/src/adapters/notify/webhook-http.ts
+new file mode 100644
+index 0000000..32493a2
+--- /dev/null
++++ b/server/src/adapters/notify/webhook-http.ts
+@@ -0,0 +1,37 @@
++import type { HttpClient, HttpResponse, HttpPostOptions } from '@devdigest/shared';
++import { withRetry, withTimeout } from '../../platform/resilience.js';
++import { ExternalServiceError } from '../../platform/errors.js';
++import { MAX_ATTEMPTS } from '../../modules/webhooks/constants.js';
++
++/**
++ * Outbound HTTP for webhook delivery. Endpoints are user-supplied, so this is
++ * the one adapter whose remote host is not under our control: it must never
++ * follow redirects and never resolve to a private range.
++ */
++export const DEFAULT_TIMEOUT = 300_000;
++const MAX_BODY_BYTES = 64 * 1024;
++
++export class WebhookHttpClient implements HttpClient {
++  async post(url: string, body: unknown, opts: HttpPostOptions = {}): Promise<HttpResponse> {
++    const payload = JSON.stringify(body);
++    if (Buffer.byteLength(payload) > MAX_BODY_BYTES) {
++      throw new ExternalServiceError('webhook payload too large', { url });
++    }
++    return withRetry(
++      () =>
++        withTimeout(
++          (async () => {
++            const res = await fetch(url, {
++              method: 'POST',
++              redirect: 'error',
++              headers: { 'content-type': 'application/json', ...(opts.headers ?? {}) },
++              body: payload,
++            });
++            return { status: res.status, body: await res.text() };
++          })(),
++          opts.timeoutMs ?? DEFAULT_TIMEOUT,
++        ),
++      { attempts: MAX_ATTEMPTS },
++    );
++  }
++}
+diff --git a/server/src/modules/index.ts b/server/src/modules/index.ts
+index b752a0d..d01e809 100644
+--- a/server/src/modules/index.ts
++++ b/server/src/modules/index.ts
+@@ -4,6 +4,7 @@ import repos from './repos/routes.js';
+ import pulls from './pulls/routes.js';
+ import agents from './agents/routes.js';
+ import reviews from './reviews/routes.js';
++import preview from './preview/routes.js';
+ 
+ /**
+  * Module registry. Each feature module is a Fastify plugin in
+@@ -20,4 +21,5 @@ export const modules: Record<string, FastifyPluginAsync> = {
+   pulls,
+   agents,
+   reviews,
++  preview,
+ };
+diff --git a/server/src/modules/preview/helpers.ts b/server/src/modules/preview/helpers.ts
+new file mode 100644
+index 0000000..bc4b11e
+--- /dev/null
++++ b/server/src/modules/preview/helpers.ts
+@@ -0,0 +1,22 @@
++import * as t from '../../db/schema.js';
++import type { PreviewResponse } from '@devdigest/shared';
++
++type BlobRow = typeof t.codeBlobs.$inferSelect;
++type FindingRow = typeof t.findings.$inferSelect;
++
++const MAX_PREVIEW_LINES = 400;
++
++export function toPreview(blob: BlobRow, findings: FindingRow[]): PreviewResponse {
++  const lines = blob.content.split('\n').slice(0, MAX_PREVIEW_LINES);
++  return {
++    path: blob.path,
++    language: blob.language,
++    truncated: blob.content.split('\n').length > MAX_PREVIEW_LINES,
++    lines,
++    markers: findings.map((f) => ({
++      line: f.startLine,
++      severity: f.severity,
++      title: f.title,
++    })),
++  };
++}
+diff --git a/server/src/modules/preview/repository.ts b/server/src/modules/preview/repository.ts
+new file mode 100644
+index 0000000..a599d17
+--- /dev/null
++++ b/server/src/modules/preview/repository.ts
+@@ -0,0 +1,28 @@
++import { and, eq } from 'drizzle-orm';
++import type { Db } from '../../db/index.js';
++import * as t from '../../db/schema.js';
++
++export class PreviewRepository {
++  constructor(private readonly db: Db) {}
++
++  async getIndexedBlob(workspaceId: string, repoId: string, path: string) {
++    const [row] = await this.db
++      .select()
++      .from(t.codeBlobs)
++      .where(
++        and(
++          eq(t.codeBlobs.workspaceId, workspaceId),
++          eq(t.codeBlobs.repoId, repoId),
++          eq(t.codeBlobs.path, path),
++        ),
++      );
++    return row;
++  }
++
++  async findingsForPath(repoId: string, path: string) {
++    return this.db
++      .select()
++      .from(t.findings)
++      .where(and(eq(t.findings.repoId, repoId), eq(t.findings.file, path)));
++  }
++}
+diff --git a/server/src/modules/preview/routes.ts b/server/src/modules/preview/routes.ts
+new file mode 100644
+index 0000000..e1ea62b
+--- /dev/null
++++ b/server/src/modules/preview/routes.ts
+@@ -0,0 +1,37 @@
++import type { FastifyInstance } from 'fastify';
++import type { ZodTypeProvider } from 'fastify-type-provider-zod';
++import { PreviewResponse } from '@devdigest/shared';
++import { getContext } from '../_shared/context.js';
++import { PreviewRepository } from './repository.js';
++import { toPreview } from './helpers.js';
++
++/**
++ * File preview for the PR detail page.
++ *
++ * Opening a preview is free and instant: it re-projects blobs that repo-intel
++ * has already indexed and findings that are already stored. It never calls a
++ * model and never reaches for the network — that is what lets the UI open it on
++ * hover instead of behind a button.
++ *
++ *   GET /repos/:repoId/preview?path=…
++ */
++export default async function previewRoutes(appBase: FastifyInstance) {
++  const app = appBase.withTypeProvider<ZodTypeProvider>();
++  const { container } = app;
++  const repo = new PreviewRepository(container.db);
++
++  app.get('/repos/:repoId/preview', {
++    schema: { response: { 200: PreviewResponse } },
++    handler: async (req, reply) => {
++      const { workspaceId } = await getContext(container, req);
++      const { repoId } = req.params as { repoId: string };
++      const { path } = req.query as { path: string };
++
++      const blob = await repo.getIndexedBlob(workspaceId, repoId, path);
++      if (!blob) return reply.code(404).send({ error: 'not_indexed' });
++
++      const findings = await repo.findingsForPath(repoId, path);
++      return toPreview(blob, findings);
++    },
++  });
++}
+diff --git a/server/src/modules/webhooks/constants.ts b/server/src/modules/webhooks/constants.ts
+new file mode 100644
+index 0000000..4db39b0
+--- /dev/null
++++ b/server/src/modules/webhooks/constants.ts
+@@ -0,0 +1,2 @@
++export const DELIVERY_TIMEOUT_MS = 5_000;
++export const MAX_ATTEMPTS = 3;
+diff --git a/server/src/modules/webhooks/repository.ts b/server/src/modules/webhooks/repository.ts
+new file mode 100644
+index 0000000..e138263
+--- /dev/null
++++ b/server/src/modules/webhooks/repository.ts
+@@ -0,0 +1,46 @@
++import { eq } from 'drizzle-orm';
++import type { Db } from '../../db/index.js';
++import * as t from '../../db/schema.js';
++import type { WebhookRow } from '@devdigest/shared';
++
++export class WebhookRepository {
++  constructor(private readonly db: Db) {}
++
++  async create(
++    workspaceId: string,
++    url: string,
++    events: string[],
++    secret: string,
++  ): Promise<WebhookRow> {
++    return this.db.transaction(async (tx) => {
++      const [row] = await tx
++        .insert(t.webhooks)
++        .values({ workspaceId, url, secret, enabled: true })
++        .returning();
++      await tx.insert(t.webhookEvents).values(events.map((e) => ({ webhookId: row!.id, event: e })));
++      return row!;
++    });
++  }
++
++  async get(id: string): Promise<WebhookRow | undefined> {
++    const [row] = await this.db.select().from(t.webhooks).where(eq(t.webhooks.id, id));
++    return row;
++  }
++
++  async listDeliveries(webhookId: string) {
++    return this.db.select().from(t.webhookDeliveries).where(eq(t.webhookDeliveries.webhookId, webhookId));
++  }
++
++  async recordDelivery(
++    webhookId: string,
++    event: string,
++    status: number,
++    attempt: number,
++  ): Promise<void> {
++    await this.db.insert(t.webhookDeliveries).values({ webhookId, event, status, attempt });
++  }
++
++  async delete(id: string): Promise<void> {
++    await this.db.delete(t.webhooks).where(eq(t.webhooks.id, id));
++  }
++}
+diff --git a/server/src/modules/webhooks/routes.ts b/server/src/modules/webhooks/routes.ts
+new file mode 100644
+index 0000000..bc8584f
+--- /dev/null
++++ b/server/src/modules/webhooks/routes.ts
+@@ -0,0 +1,58 @@
++import type { FastifyInstance } from 'fastify';
++import type { ZodTypeProvider } from 'fastify-type-provider-zod';
++import { desc, eq } from 'drizzle-orm';
++import { WebhookCreate, WebhookList, WebhookDelivery } from '@devdigest/shared';
++import * as t from '../../db/schema.js';
++import { getContext } from '../_shared/context.js';
++import { WebhookService } from './service.js';
++import { WebhookRepository } from './repository.js';
++
++/**
++ * Outbound webhooks: register an endpoint, list what has been delivered to it.
++ *   POST   /webhooks
++ *   GET    /webhooks
++ *   GET    /webhooks/:id/deliveries
++ *   DELETE /webhooks/:id
++ */
++export default async function webhookRoutes(appBase: FastifyInstance) {
++  const app = appBase.withTypeProvider<ZodTypeProvider>();
++  const { container } = app;
++  const service = new WebhookService(new WebhookRepository(container.db), container.http);
++
++  app.post('/webhooks', {
++    schema: { body: WebhookCreate },
++    handler: async (req) => {
++      const { workspaceId } = await getContext(container, req);
++      return service.register(workspaceId, req.body as WebhookCreate);
++    },
++  });
++
++  app.get('/webhooks', {
++    schema: { response: { 200: WebhookList } },
++    handler: async (req) => {
++      const { workspaceId } = await getContext(container, req);
++      const rows = await container.db
++        .select()
++        .from(t.webhooks)
++        .where(eq(t.webhooks.workspaceId, workspaceId))
++        .orderBy(desc(t.webhooks.createdAt));
++      return { items: rows };
++    },
++  });
++
++  app.get('/webhooks/:id/deliveries', {
++    schema: { response: { 200: WebhookDelivery.array() } },
++    handler: async (req) => {
++      const { id } = req.params as { id: string };
++      return service.deliveries(id);
++    },
++  });
++
++  app.delete('/webhooks/:id', {
++    handler: async (req, reply) => {
++      const { id } = req.params as { id: string };
++      await service.remove(id);
++      return reply.code(204).send();
++    },
++  });
++}
+diff --git a/server/src/modules/webhooks/service.ts b/server/src/modules/webhooks/service.ts
+new file mode 100644
+index 0000000..307a606
+--- /dev/null
++++ b/server/src/modules/webhooks/service.ts
+@@ -0,0 +1,42 @@
++import type { HttpClient, WebhookCreate, WebhookRow } from '@devdigest/shared';
++import type { WebhookRepository } from './repository.js';
++import { summariseFindings } from '../reviews/helpers.js';
++import { DELIVERY_TIMEOUT_MS, MAX_ATTEMPTS } from './constants.js';
++
++export class WebhookService {
++  constructor(
++    private readonly repo: WebhookRepository,
++    private readonly http: HttpClient,
++  ) {}
++
++  async register(workspaceId: string, input: WebhookCreate): Promise<WebhookRow> {
++    const secret = crypto.randomUUID();
++    return this.repo.create(workspaceId, input.url, input.events, secret);
++  }
++
++  async deliveries(webhookId: string) {
++    return this.repo.listDeliveries(webhookId);
++  }
++
++  async remove(webhookId: string): Promise<void> {
++    await this.repo.delete(webhookId);
++  }
++
++  async deliver(webhookId: string, event: string, payload: unknown): Promise<void> {
++    const hook = await this.repo.get(webhookId);
++    if (!hook) return;
++    const body = { event, summary: summariseFindings(payload), payload };
++    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
++      const res = await this.http.post(hook.url, body, {
++        timeoutMs: DELIVERY_TIMEOUT_MS,
++        headers: { 'x-devdigest-event': event, 'x-devdigest-signature': sign(hook.secret, body) },
++      });
++      await this.repo.recordDelivery(webhookId, event, res.status, attempt);
++      if (res.status < 500) return;
++    }
++  }
++}
++
++function sign(secret: string, payload: unknown): string {
++  return `sha256=${Buffer.from(`${secret}:${JSON.stringify(payload)}`).toString('base64')}`;
++}

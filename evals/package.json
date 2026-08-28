@@ -1,0 +1,19 @@
+{
+  "name": "@devdigest/evals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A/B eval harness for skill-carrying review agents. The suites live in skills/<name>/evals/.",
+  "scripts": {
+    "eval": "tsx run.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "delta": "tsx delta.ts"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^0.33.1",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

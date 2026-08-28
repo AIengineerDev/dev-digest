@@ -1,0 +1,152 @@
+{
+  "$comment": "Variant A/B: the LIVE onion-architecture skill against a candidate revision. `file` and `patterns` are case-insensitive regexes; a plant counts as FOUND when one grounded finding's file matches `file` and its title+rationale+suggestion matches every pattern. An expectation with `arms` is only OWED by those arms — the other arm is still scored against it, and a hit there is reported as 'beyond spec'.",
+  "agent": {
+    "$comment": "Arms point at FROZEN snapshots in variants/, never at ../SKILL.md. An arm that reads the live file stops being comparable the moment the skill is edited — and the whole point of these numbers is that they still mean something next month. The `live` arm is the exception and is expected to move; re-measure it after every edit rather than comparing it to an older run.",
+    "prompt": "file:./agent.md",
+    "repoMap": "file:./repo-map.md",
+    "arms": [
+      {
+        "$comment": "The zero baseline: same agent prompt, empty skills slot. NOT a plain chat. baseline:true keeps it out of the exit gate — a baseline is SUPPOSED to miss plants, and gating on it makes every CI run red.",
+        "name": "without-skills",
+        "skills": [],
+        "baseline": true
+      },
+      {
+        "name": "v1.0-frozen",
+        "skills": [
+          "file:./variants/SKILL.v1.0.md"
+        ],
+        "$comment": "The skill exactly as measured on 2026-08-27, before the merge. Frozen for comparability."
+      },
+      {
+        "name": "v2-candidate",
+        "skills": [
+          "file:./variants/SKILL.v2.md"
+        ],
+        "$comment": "The four-rule candidate as measured on 2026-08-27. Frozen; two of its rules were merged into live, two were not."
+      },
+      {
+        "$comment": "The live skill as it stands right now. Moves whenever SKILL.md is edited — always re-measure, never compare to an older run.",
+        "name": "live",
+        "skills": [
+          "file:../SKILL.md"
+        ]
+      }
+    ]
+  },
+  "cases": [
+    {
+      "id": "01-webhooks-and-preview",
+      "title": "Add the webhooks module and the file preview",
+      "expected": [
+        {
+          "id": "reg",
+          "what": "the webhooks module is never added to src/modules/index.ts — the registry IS edited in this diff, for preview only, so webhooks 404s while typecheck, pnpm arch and the unit suite stay green",
+          "file": "webhooks/routes\\.ts|modules/index\\.ts",
+          "patterns": [
+            "modules/index|registr|regist|mount|inert|never (be )?(mounted|reached|registered)"
+          ],
+          "arms": [
+            "v2-candidate"
+          ]
+        },
+        {
+          "id": "routes-db",
+          "what": "GET /webhooks queries db/schema straight from the route, skipping the service and the repository",
+          "file": "webhooks/routes\\.ts",
+          "patterns": [
+            "db/schema|container\\.db|drizzle|repositor",
+            "route|handler|layer|bypass|skip|directly"
+          ]
+        },
+        {
+          "id": "repo-tx",
+          "what": "WebhookRepository.create opens its own transaction instead of accepting the handle from the service",
+          "file": "webhooks/repository\\.ts",
+          "patterns": [
+            "transaction|\\btx\\b",
+            "servic|owns|boundar|caller|pass"
+          ]
+        },
+        {
+          "id": "cross-module",
+          "what": "the service imports another module's internals (../reviews/helpers.js) instead of going through shared or the container",
+          "file": "webhooks/service\\.ts",
+          "patterns": [
+            "reviews/helpers|summarisefindings|cross-module|another module",
+            "shared|internal|coupl|extract|move|container"
+          ]
+        },
+        {
+          "id": "helpers-impure",
+          "what": "preview/helpers.ts imports db/schema — helpers may import @devdigest/shared and constants and nothing else",
+          "file": "preview/helpers\\.ts",
+          "patterns": [
+            "db/schema|schema\\.js|drizzle",
+            "pure|helper|import|shared"
+          ]
+        },
+        {
+          "id": "timeout",
+          "what": "the new blocking adapter sets DEFAULT_TIMEOUT = 300_000, equal to DEFAULT_JOB_TIMEOUT, so JobRunner kills the handler at the same instant and the adapter error is swallowed",
+          "file": "notify/webhook-http\\.ts",
+          "patterns": [
+            "jobrunner|job ?timeout|default_job_timeout",
+            "race|swallow|same instant|generic job|\\b240\\b"
+          ],
+          "arms": [
+            "v2-candidate",
+            "live"
+          ],
+          "$comment": "Anchored on the MECHANISM, not the number. The first version asked only for \"300_000\" + \"timeout\", and v1-live earned the credit with a security finding about holding a connection to an attacker-chosen host for five minutes — right file, right words, wrong reason. Naming JobRunner is what distinguishes knowing the rule from noticing a big number."
+        },
+        {
+          "id": "cost-guarantee",
+          "what": "preview states a cost guarantee (free, instant, never calls a model) and the PR adds no dependency-cruiser rule enforcing it",
+          "file": "preview/routes\\.ts",
+          "patterns": [
+            "dependency.?cruiser|arch rule|smart-diff-spends-nothing|enforce",
+            "guarantee|promise|never calls a model|free|cost"
+          ],
+          "arms": [
+            "v2-candidate",
+            "live"
+          ]
+        },
+        {
+          "id": "adapter-imports-module",
+          "$comment": "The point of this plant: v1 never states what an adapter may import — it names src/adapters/** once, in the ASCII diagram, as \"driven adapters\". And no dependency-cruiser rule covers adapters/** -> modules/**, so the build is green too. Reusing a constant instead of duplicating it reads like ordinary DRY.",
+          "what": "the new adapter imports MAX_ATTEMPTS from modules/webhooks/constants.js — an edge reaching inward into a feature, green on pnpm arch because no rule covers adapters -> modules",
+          "file": "notify/webhook-http\\.ts",
+          "patterns": [
+            "modules/webhooks|max_attempts|module.{0,20}constant",
+            "adapter|inward|direction|coupl|depend"
+          ],
+          "arms": [
+            "v2-candidate"
+          ]
+        },
+        {
+          "id": "ssrf",
+          "$comment": "Not planted on purpose — it was already in the fixture and EVERY arm found it in almost every run. Leaving it out of the scorecard inflated the \"unmatched\" column for all three arms and made the noise metric meaningless.",
+          "what": "the adapter POSTs a user-supplied URL with no scheme or private-range check, contradicting its own doc comment",
+          "file": "notify/webhook-http\\.ts",
+          "patterns": [
+            "ssrf|private.?range|169\\.254|localhost|host valid",
+            "url|endpoint|user.?supplied"
+          ]
+        },
+        {
+          "id": "unvalidated-input",
+          "$comment": "Same: found by every arm, previously counted as noise.",
+          "what": "preview/routes.ts reads params and query with casts instead of declaring a Zod schema, so nothing rejects bad input with 422",
+          "file": "preview/routes\\.ts",
+          "patterns": [
+            "cast|as \\{|schema|querystring",
+            "valid|zod|422|declar"
+          ]
+        }
+      ]
+    }
+  ]
+}

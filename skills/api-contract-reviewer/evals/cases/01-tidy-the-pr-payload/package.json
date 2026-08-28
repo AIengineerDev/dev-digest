@@ -1,0 +1,12 @@
+{
+  "name": "@devdigest/public-api",
+  "version": "2.3.5",
+  "description": "The published HTTP contract for the DevDigest review API.",
+  "type": "module",
+  "exports": {
+    "./contracts": "./contracts/index.js"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  }
+}
