@@ -380,6 +380,19 @@ reference in every route.
 
 ## Recurring Errors & Fixes
 
+- **2026-08-28** — `pr_files.patch` stores the **hunk body only** — it starts at
+  `@@`, with no `diff --git` and no `+++ b/<path>` line. `parseUnifiedDiff` takes
+  a file's path from that `+++` line and drops files whose path it cannot
+  resolve, so a headerless patch parses to **zero files**, the grounding gate
+  then finds nothing to match against, and every finding is dropped. The symptom
+  is silent and total: `citation_accuracy 0`, `recall 0`, on any agent, with no
+  error logged anywhere and a case that can never pass. Anything feeding a
+  stored patch back into the engine must wrap it first —
+  `toUnifiedDiff(path, patch)` does, and is idempotent. Seven `eval_cases` rows
+  had to be repaired in place after this shipped.
+  `src/modules/eval/helpers.ts` (`toUnifiedDiff`) ·
+  `src/adapters/git/diff-parser.ts:40`
+
 - **2026-08-26** — A `Write`/`Edit` tool call can silently insert a literal NUL
   byte (`\x00`) where a plain space was intended inside a template-literal
   expression (e.g. `` `${a} ${b}` `` landing on disk as `` `${a}\x00${b}` ``).

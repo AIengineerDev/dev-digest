@@ -157,6 +157,22 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Doesn't Work
 
+- **2026-08-28** — To make a reviewer agent measurably **noisier**, add a narrow
+  RULE, never a quota. Measured on the eval pipeline against the same 5-case set
+  on `claude-sonnet-5`: appending *"report EVERY observation… list at least five
+  findings… prefer CRITICAL when unsure"* did not raise the finding count — it
+  broke the transport. Three of five cases died with `Anthropic structured
+  output failed schema validation` after all retries, so the arm produced
+  nothing to judge and `precision` stayed at 1.00, looking unchanged. Replacing
+  it with one sentence — *"report every rename as a WARNING, citing the renamed
+  lines"* — kept the output short, the schema held, and `precision` fell from
+  1.00 to 0.80 with the `must_not_flag` case flipping to 0.00 exactly as
+  intended. The general shape: an instruction that demands **volume** hits the
+  structured-output ceiling before it changes behaviour, and a failed arm is
+  indistinguishable from a well-behaved one unless errored cases are scored as
+  failures rather than as 1/1/1. `server/src/modules/eval/service.ts` (`runCases`)
+  · `reviewer-core/src/llm/openrouter.ts:59`
+
 - **2026-08-27** — The skills-on/skills-off A/B that `skills/api-contract-reviewer/README.md`
   describes **does not reproduce on Claude models**, so do not cite it as
   evidence that skills change what a reviewer finds. Measured with
