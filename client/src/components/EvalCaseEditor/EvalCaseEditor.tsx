@@ -97,7 +97,17 @@ export function EvalCaseEditor({
     }
     if (source.kind === "manual") {
       seeded.current = true;
-      setExpected("[]");
+      // A skeleton, not `[]`. An empty array is valid JSON that asserts
+      // nothing, so the box looked broken and Save sat disabled with no
+      // explanation — the mock shows a populated expectation for the same
+      // reason (design-mocks/src/23-screen_cizruns.jsx:58).
+      setExpected(
+        JSON.stringify(
+          [{ kind: "must_find", file: "", start_line: 1, end_line: 1 }],
+          null,
+          2,
+        ),
+      );
       return;
     }
     if (!preview.data) return;
@@ -127,14 +137,19 @@ export function EvalCaseEditor({
     });
   };
 
+  /**
+   * Three states, not two. `[]` parses fine and asserts nothing — calling that
+   * "invalid JSON" sent people looking for a syntax error that was not there.
+   */
   const parsedExpected = React.useMemo(() => {
-    if (!expected.trim()) return { ok: false as const };
+    if (!expected.trim()) return { ok: false as const, reason: "empty" as const };
     try {
       const value = JSON.parse(expected);
-      if (!Array.isArray(value) || value.length === 0) return { ok: false as const };
+      if (!Array.isArray(value)) return { ok: false as const, reason: "shape" as const };
+      if (value.length === 0) return { ok: false as const, reason: "empty" as const };
       return { ok: true as const, value };
     } catch {
-      return { ok: false as const };
+      return { ok: false as const, reason: "syntax" as const };
     }
   }, [expected]);
 
@@ -341,7 +356,13 @@ export function EvalCaseEditor({
                 </Badge>
               ) : (
                 <Badge color="var(--crit)" bg="var(--crit-bg)" icon="AlertTriangle">
-                  {t("evalCase.invalidJson")}
+                  {t(
+                    parsedExpected.reason === "syntax"
+                      ? "evalCase.invalidJson"
+                      : parsedExpected.reason === "shape"
+                        ? "evalCase.notAList"
+                        : "evalCase.noExpectations",
+                  )}
                 </Badge>
               )}
               <div style={s.evalRightActions}>

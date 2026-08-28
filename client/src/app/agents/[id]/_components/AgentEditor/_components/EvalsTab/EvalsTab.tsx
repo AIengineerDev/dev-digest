@@ -72,7 +72,7 @@ export function EvalsTab({ agentId }: { agentId: string }) {
       {runLevelError(latest) ? (
         <ErrorState title={t("evals.providerFailed")} body={runLevelError(latest)!} />
       ) : (
-        <MetricTiles latest={latest} previous={runGroups[1] ?? null} />
+        <MetricTiles latest={latest} previous={runGroups[1] ?? null} history={runGroups} />
       )}
 
       {caseRows.length === 0 ? (

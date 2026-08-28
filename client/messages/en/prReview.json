@@ -234,6 +234,8 @@
     "lastRunFailed": "Last run failed",
     "resultLine": "· expected {expected} finding(s), got {got} · {seconds}s · ${cost}",
     "diffPlaceholder": "diff --git a/src/x.ts b/src/x.ts\\n--- a/src/x.ts\\n+++ b/src/x.ts\\n@@ …",
-    "save": "Save"
+    "save": "Save",
+    "notAList": "expected a list",
+    "noExpectations": "no expectations yet"
   }
 }

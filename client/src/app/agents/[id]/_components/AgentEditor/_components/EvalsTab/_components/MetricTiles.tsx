@@ -2,54 +2,80 @@
 
 import { useTranslations } from "next-intl";
 import type { EvalRunGroup } from "@devdigest/shared";
-import { pct, deltaPts } from "../helpers";
+import { MetricCard } from "@devdigest/ui";
 import { s } from "../styles";
 
-/** The three metrics of the latest run, each against the run before it. */
+/**
+ * The latest run's three metrics, each against the run before it.
+ *
+ * Uses the same `MetricCard` as the Eval Dashboard rather than a hand-rolled
+ * tile, so the colours mean the same thing in both places: recall is accent,
+ * precision is ok-green, citation is warn-amber
+ * (design-mocks/src/14-screen_skills.jsx:149). A metric that is blue on one
+ * screen and grey on another is a metric nobody learns to read at a glance.
+ */
 export function MetricTiles({
   latest,
   previous,
+  history,
 }: {
   latest: EvalRunGroup | null;
   previous: EvalRunGroup | null;
+  history: EvalRunGroup[];
 }) {
   const t = useTranslations("agents");
   if (!latest) return null;
 
+  // Oldest → newest, the direction a sparkline is read.
+  const trend = (pick: (g: EvalRunGroup) => number) => [...history].reverse().map(pick);
+
   const rows = [
-    { key: "recall", value: latest.recall, pick: (g: EvalRunGroup) => g.recall },
-    { key: "precision", value: latest.precision, pick: (g: EvalRunGroup) => g.precision },
+    {
+      key: "recall",
+      label: t("evals.metric.recall"),
+      value: latest.recall,
+      prev: previous?.recall,
+      color: "var(--accent)",
+      pick: (g: EvalRunGroup) => g.recall,
+    },
+    {
+      key: "precision",
+      label: t("evals.metric.precision"),
+      value: latest.precision,
+      prev: previous?.precision,
+      color: "var(--ok)",
+      pick: (g: EvalRunGroup) => g.precision,
+    },
     {
       key: "citation",
+      label: t("evals.metric.citation"),
       value: latest.citation_accuracy,
+      prev: previous?.citation_accuracy,
+      color: "var(--warn)",
       pick: (g: EvalRunGroup) => g.citation_accuracy,
     },
   ] as const;
 
   return (
     <div style={s.tiles}>
-      {rows.map((r) => {
-        const d = deltaPts(latest, previous, r.pick);
-        return (
-          <div key={r.key} style={s.tile}>
-            <span style={s.tileLabel}>{t(`evals.metric.${r.key}`)}</span>
-            <span style={s.tileValue}>{pct(r.value)}</span>
-            {/* No previous run is not "unchanged": show nothing rather than 0. */}
-            <span style={s.delta(d === null ? null : d >= 0)}>
-              {d === null ? t("evals.noBaseline") : `${d >= 0 ? "+" : ""}${d} pts`}
-            </span>
-          </div>
-        );
-      })}
-      <div style={s.tile}>
-        <span style={s.tileLabel}>{t("evals.metric.passed")}</span>
-        <span style={s.tileValue}>
-          {latest.passed}/{latest.cases_total}
-        </span>
-        <span style={s.delta(null)}>
-          {latest.cost_usd === null ? "—" : `$${latest.cost_usd.toFixed(4)}`}
-        </span>
-      </div>
+      {rows.map((r) => (
+        <MetricCard
+          key={r.key}
+          label={r.label}
+          value={Math.round(r.value * 100)}
+          suffix="%"
+          color={r.color}
+          trend={trend(r.pick)}
+          // No previous run is not "unchanged": omit the delta rather than
+          // rendering a 0 that claims nothing moved.
+          {...(r.prev === undefined ? {} : { delta: r.value - r.prev })}
+        />
+      ))}
+      <MetricCard
+        label={t("evals.metric.passed")}
+        value={`${latest.passed}/${latest.cases_total}`}
+        color="var(--text-secondary)"
+      />
     </div>
   );
 }

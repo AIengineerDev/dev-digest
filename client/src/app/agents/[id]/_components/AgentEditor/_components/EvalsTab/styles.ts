@@ -8,11 +8,7 @@ export const s = {
   h2: { fontSize: 18, fontWeight: 700 } satisfies CSSProperties,
   sub: { fontSize: 12.5, color: "var(--text-muted)" } satisfies CSSProperties,
 
-  tiles: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: 12,
-  } satisfies CSSProperties,
+  tiles: { display: "flex", gap: 14, flexWrap: "wrap" } satisfies CSSProperties,
   tile: {
     border: "1px solid var(--border)",
     borderRadius: 10,
