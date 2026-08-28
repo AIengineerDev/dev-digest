@@ -1,7 +1,12 @@
 /* FindingCard — ported from findings.jsx (createElement → TSX).
    Severity icon+label, category, file:line, confidence, markdown rationale +
    suggestion, accept/dismiss actions. Accept/dismiss reflect persisted
-   timestamps. */
+   timestamps.
+
+   A DECIDED finding also offers `Turn into eval case` (spec 13, R1): the
+   decision is already a label, and this is the one click that turns it into a
+   replayable regression case. Undecided findings do not offer it — there is
+   nothing to assert about a finding nobody has judged. */
 "use client";
 
 import React from "react";
@@ -21,6 +26,7 @@ import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { REVEAL_RETRY_DELAYS_MS, SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "./helpers";
 import { githubBlobUrl } from "../../../../../../../lib/github-urls";
+import { EvalCaseEditor } from "@/components/EvalCaseEditor";
 import { s } from "./styles";
 
 export function FindingCard({
@@ -32,6 +38,7 @@ export function FindingCard({
   pending,
   repoFullName,
   headSha,
+  agentId,
 }: {
   f: FindingRecord;
   focused?: boolean;
@@ -43,9 +50,13 @@ export function FindingCard({
   pending?: boolean;
   repoFullName?: string | null;
   headSha?: string | null;
+  /** Owner of the eval case built from this finding; only used to refresh that
+   *  agent's case list after one is created. */
+  agentId?: string | null;
 }) {
   const t = useTranslations("prReview");
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
+  const [evalOpen, setEvalOpen] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   // Scrolling is a DOM operation on a node the tab switch has only just
   // committed, which is what this effect is for. It runs on `revealed` alone:
@@ -145,8 +156,32 @@ export function FindingCard({
             >
               {t("finding.dismiss")}
             </Button>
+            {/* Always rendered, disabled until the finding is decided. The
+                title is not decoration: a disabled control that never says why
+                is a dead end, and the reason here is the whole rule — the
+                decision is what the case asserts (accepted -> must_find,
+                dismissed -> must_not_flag), so there is nothing to assert
+                before one exists. */}
+            <Button
+              kind="ghost"
+              size="sm"
+              icon="FlaskConical"
+              disabled={!muted}
+              title={muted ? undefined : t("finding.turnIntoEvalCaseHint")}
+              onClick={() => setEvalOpen(true)}
+            >
+              {t("finding.turnIntoEvalCase")}
+            </Button>
           </div>
         </div>
+      )}
+
+      {evalOpen && (
+        <EvalCaseEditor
+          source={{ kind: "finding", finding: f }}
+          agentId={agentId}
+          onClose={() => setEvalOpen(false)}
+        />
       )}
     </div>
   );

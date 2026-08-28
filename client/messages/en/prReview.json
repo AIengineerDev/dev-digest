@@ -9,7 +9,9 @@
     "replyToAuthor": "Reply to author",
     "replyPlaceholder": "Reply to the author about this finding…",
     "sendReply": "Send reply",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "turnIntoEvalCase": "Turn into eval case",
+    "turnIntoEvalCaseHint": "Accept or dismiss this finding first — the decision is what the case asserts"
   },
   "trifecta": {
     "lethal": "LETHAL TRIFECTA — ALL 3 PRESENT",
@@ -194,5 +196,44 @@
       "medium": "Medium confidence",
       "low": "Low confidence"
     }
+  },
+  "evalCase": {
+    "title": "New eval case",
+    "name": "Case name",
+    "namePlaceholder": "Name this case…",
+    "input": "Input",
+    "inputHint": "The diff for this file is pinned at the reviewed commit, so every run sees identical input.",
+    "create": "Create eval case",
+    "cancel": "Cancel",
+    "created": "Eval case created",
+    "existed": "This finding already has an eval case",
+    "seededAccepted": "Seeded from an accepted finding · assert the expected output",
+    "seededDismissed": "Seeded from a dismissed finding · assert what must not be flagged",
+    "positiveCase": "Positive case",
+    "negativeCase": "Negative case",
+    "mustFindLine": "MUST find",
+    "mustNotFlagLine": "MUST NOT flag",
+    "at": "at",
+    "prTitle": "PR title",
+    "prNumber": "Pull request",
+    "headSha": "Head commit",
+    "expectedOutput": "Expected output",
+    "validJson": "valid JSON",
+    "invalidJson": "invalid JSON",
+    "findingSkeleton": "Finding skeleton",
+    "actualOutput": "Actual output",
+    "neverRun": "Never run yet",
+    "previewFailed": "Could not load the case input",
+    "runCase": "Run case",
+    "running": "Running…",
+    "runOnSave": "Run on save",
+    "passed": "passed",
+    "failed": "failed",
+    "metrics": "recall {recall}% · precision {precision}% · citation {citation}%",
+    "lastRunPassed": "Last run passed",
+    "lastRunFailed": "Last run failed",
+    "resultLine": "· expected {expected} finding(s), got {got} · {seconds}s · ${cost}",
+    "diffPlaceholder": "diff --git a/src/x.ts b/src/x.ts\\n--- a/src/x.ts\\n+++ b/src/x.ts\\n@@ …",
+    "save": "Save"
   }
 }

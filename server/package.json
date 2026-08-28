@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
-    "shared:check": "../scripts/check-shared.sh"
+    "shared:check": "../scripts/check-shared.sh",
+    "verify:l06": "../scripts/verify-l06.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.33.1",

@@ -72,3 +72,19 @@ export { useRepoIntelStatus, useResyncRepoIntel } from "./repo-intel";
 export type { RepoIntelState } from "./repo-intel";
 
 export { useTour, useGenerateTour } from "./tour";
+
+export {
+  useCreateEvalCase,
+  useAgentEvalCases,
+  useAgentEvalRuns,
+  useDryRunEvalCase,
+  useRunEvalCase,
+  useUpdateEvalCase,
+  useDeleteEvalCase,
+  useCreateManualEvalCase,
+  useRunEvals,
+  useSkillEvalCases,
+  useEvalCasePreview,
+  useEvalDashboard,
+} from "./evals";
+export type { CreateEvalCaseInput, CreateEvalCaseResponse } from "./evals";

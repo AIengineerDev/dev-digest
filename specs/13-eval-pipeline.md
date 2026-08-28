@@ -2,7 +2,10 @@
 
 **Status:** draft
 **Packages touched:** server, client, `@devdigest/shared` (contracts already present)
-**Design source:** the five L06 mockups — PR detail with a `Turn into eval case`
+**Design source:** `design-mocks/src/23-screen_cizruns.jsx:55` (`EvalCaseEditor`,
+the one modal), `design-mocks/src/17-screen_agents.jsx:135` (the agent's Evals
+tab), `design-mocks/src/14-screen_skills.jsx:131` (`ScreenEval`, the per-owner
+dashboard), plus the five L06 mockups — PR detail with a `Turn into eval case`
 action on a finding; `Eval Dashboard` as a sidebar page listing agents with
 recall / precision / citation columns and a recent-runs table; the per-agent
 dashboard with three metric tiles, a trend chart and a run table with a
@@ -101,7 +104,13 @@ choice the user makes:
 | --- | --- |
 | `accepted_at` set | `must_find` at that finding's `file` / `start_line` / `end_line` |
 | `dismissed_at` set | `must_not_flag` at the same coordinates |
-| neither | the action is not offered |
+| neither | the action is **rendered but disabled**, with a title saying a decision is needed first |
+
+The undecided case was specified as "not offered" and changed to
+"disabled" after review: hiding the action entirely also hides the fact that
+accept/dismiss has a second purpose, and nobody discovers a control that is
+never on screen. A disabled control must say why, which is what the title is
+for — a dead button with no explanation would be worse than either.
 
 **Acceptance:** on a PR with one accepted and one dismissed finding, two clicks
 produce two rows in `eval_cases` whose `expected_output[0].kind` is `must_find`
@@ -221,12 +230,51 @@ versions exist.
 
 ---
 
-## What this spec deliberately does not cover
+### R13 — One editor, not three
 
-- **Skill-owned cases.** `owner_kind` already allows `'skill'`, and the route
-  here is agent-only. A skill set is the same tables and a second route.
-- **Manual case creation.** Stretch. Everything here starts from a decided
-  finding; a form is additive and changes no contract.
+`design-mocks/src/23-screen_cizruns.jsx:55` shows a single `EvalCaseEditor`: two
+columns, `Name` + `Input` tabs (`Diff` / `Files` / `PR meta`) on the left,
+`Expected output` with a `valid JSON` badge and a `Finding skeleton` button on
+the right, and a footer of `Run on save` · `Cancel` · `Run case` · `Save`.
+
+Every entry point uses it — the finding card, both editors' `New eval case`, and
+the per-case edit action. What differs is what it was opened with, never the
+layout:
+
+| Source | Seeded from | Input |
+| --- | --- | --- |
+| `finding` | the decided finding | pinned, read-only |
+| `manual` | nothing | typed in |
+| `edit` | the stored row | read-only |
+
+**The expectation is JSON, not a form of fields.** A fields UI cannot express a
+case that asserts more than one thing, and a case asserting several is exactly
+what this pipeline is for. `Finding skeleton` is what keeps that from being a
+blank box.
+
+**Acceptance:** there is one modal component; removing any of the three that
+existed before breaks nothing, because there are no longer three.
+
+### R14 — What a skill is judged by
+
+A skill reviews nothing on its own, so `GET /skills/:id/eval-cases` returns its
+own cases **plus** the sets of every agent that links it, each tagged with its
+owner. The skill's Evals tab groups by agent and offers the same per-case
+actions, because those routes are case-scoped rather than agent-scoped.
+
+There is deliberately **no** `POST /skills/:id/eval-runs`: running a skill's set
+means running it through an agent, and which agent that is, is a choice. One
+"run everything" button on a skill linked to three agents would spend three
+budgets on the user's behalf without asking.
+
+**Acceptance:** a skill linked to an agent with cases shows them, grouped by
+agent; a skill linked to none says which of the two reasons it is.
+
+## What this spec deliberately does not cover
+- **Skill-OWNED cases.** `owner_kind` allows `'skill'` and the create route
+  accepts it, but such a case cannot be run — `runCase` refuses. Storing one
+  stays allowed; making it runnable needs a "through which agent" answer that
+  nothing currently supplies.
 - **Thresholds and CI gating.** Trend first, gates later — a threshold chosen
   before we know the variance of these numbers is a threshold that will be
   ignored.

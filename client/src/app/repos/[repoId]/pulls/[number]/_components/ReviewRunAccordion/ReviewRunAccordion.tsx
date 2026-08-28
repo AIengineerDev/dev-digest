@@ -169,6 +169,7 @@ export function ReviewRunAccordion({
           <FindingsPanel
             findings={findings}
             prId={prId}
+            agentId={review.agent_id}
             focusFindingId={holdsFocus ? focusFindingId : null}
             repoFullName={repoFullName}
             headSha={headSha}

@@ -8,11 +8,16 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button, Dropdown, ErrorState, Skeleton, Icon, Badge } from "@devdigest/ui";
 import { AppShell } from "../../../components/app-shell";
 import { AgentCard } from "../_components/AgentCard";
+import { TABS } from "./_components/AgentEditor/constants";
 import { AgentEditor } from "./_components/AgentEditor";
 import { useAgents, useAgent, useUpdateAgent } from "../../../lib/hooks/agents";
 import { ApiError } from "../../../lib/api";
 
-const VALID_TABS = ["config", "skills", "context"];
+// Derived from the editor's own tab list, never a second copy: this was a
+// hand-written array, and adding a tab to TABS rendered a control whose
+// ?tab= value this allowlist then rejected — the tab was on screen and could
+// not be opened, with nothing logged.
+const VALID_TABS: readonly string[] = TABS.map((t) => t.key);
 
 export default function AgentEditorPage() {
   const params = useParams<{ id: string }>();

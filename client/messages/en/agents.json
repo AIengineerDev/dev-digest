@@ -149,5 +149,56 @@
   },
   "mount": {
     "body": "Mount point for {owner}. The Agent Editor shell + tab routing are wired by A2 — {owner} renders this tab."
+  },
+  "evals": {
+    "title": "Eval cases",
+    "loadFailed": "Could not load this agent’s eval set",
+    "runFailed": "The run failed",
+    "runAll": "Run all evals",
+    "running": "Running…",
+    "neverRun": "never run",
+    "noBaseline": "no previous run",
+    "lastRun": "Last run · {passed}/{total} passing",
+    "cases": "{n} cases",
+    "history": "Run history",
+    "noCases": "No eval cases yet",
+    "noCasesBody": "Accept or dismiss a finding on a pull request, then use “Turn into eval case”. The decision is what the case asserts.",
+    "kind": {
+      "must_find": "must find",
+      "must_not_flag": "must not flag",
+      "unknown": "unknown expectation"
+    },
+    "metric": {
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation": "Citation",
+      "passed": "Passed"
+    },
+    "passing": "{passed} / {total} passing",
+    "expectedGot": "expected {expected} findings, got {got}",
+    "providerFailed": "This run never reached the model — nothing was measured",
+    "partial": "still running",
+    "runOne": "Run this case",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete “{name}”? Its run history goes with it.",
+    "editTitle": "Edit eval case",
+    "editSubtitle": "The expectation is what the case asserts — changing it changes what passing means",
+    "name": "Name",
+    "expected": "Expected output",
+    "save": "Save",
+    "cancel": "Cancel",
+    "invalidJson": "not valid JSON",
+    "compare": "Compare",
+    "compareHint": "select two runs",
+    "newCase": "New eval case",
+    "newCaseSubtitle": "Paste the diff and state what the agent must or must not say about it",
+    "create": "Create eval case",
+    "namePlaceholder": "What this case is about",
+    "diff": "Input diff",
+    "diffPlaceholder": "diff --git a/src/x.ts b/src/x.ts\\n--- a/src/x.ts\\n+++ b/src/x.ts\\n@@ …",
+    "expectation": "Expectation",
+    "filePlaceholder": "src/x.ts",
+    "badRange": "End line must be at or after the start line"
   }
 }

@@ -28,7 +28,23 @@
       "cost": "Cost"
     },
     "pass": "pass",
-    "fail": "fail"
+    "fail": "fail",
+    "title": "Eval Dashboard",
+    "subtitle": "Every agent, scored against the cases built from your accept/dismiss decisions.",
+    "agentsTable": {
+      "agent": "Agent",
+      "cases": "Cases",
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation": "Citation",
+      "passed": "Passed",
+      "lastRun": "Last run"
+    },
+    "neverRun": "never run",
+    "noCases": "no cases",
+    "noAgents": "No agents yet.",
+    "loadFailed": "Could not load eval runs",
+    "runsPending": "Runs arrive with the eval run endpoint; until then every agent reads “never run”."
   },
   "caseEditor": {
     "newCase": "New eval case",
@@ -80,5 +96,44 @@
     "crumbEvals": "Evals",
     "crumbNewCase": "New case",
     "crumbEvalCase": "Eval case"
+  },
+  "agent": {
+    "title": "Eval Dashboard",
+    "subtitle": "Regression harness · {runs} runs on this agent’s case set",
+    "configure": "Configure eval cases →",
+    "runEval": "Run eval",
+    "running": "Running…",
+    "neverRun": "This agent has never been evaluated",
+    "neverRunBody": "Run the set once to get a baseline — a single run is a point, not a trend.",
+    "trend": "Metric trend",
+    "recentRuns": "Recent runs",
+    "alert": {
+      "headline": "{metric} dipped {pts}pts",
+      "body": "against the run before it. Compare the two runs to see which case moved."
+    },
+    "metric": {
+      "recall": "RECALL",
+      "precision": "PRECISION",
+      "citation": "CITATION ACCURACY"
+    },
+    "table": {
+      "ranAt": "Ran at",
+      "version": "Version",
+      "recall": "Recall",
+      "precision": "Precision",
+      "citation": "Citation",
+      "pass": "Pass",
+      "cost": "Cost"
+    }
+  },
+  "compare": {
+    "title": "Compare runs",
+    "subtitle": "Older run vs newer — metric deltas and the prompt each one actually used",
+    "promptDiff": "System prompt diff",
+    "cost": "COST",
+    "noPrompt": "One of these runs stored no prompt snapshot, so there is nothing to diff.",
+    "samePrompt": "The system prompt was identical in both runs — whatever moved, it was not the prompt.",
+    "select": "Select two runs to compare",
+    "action": "Compare"
   }
 }
