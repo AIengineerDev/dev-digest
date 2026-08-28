@@ -107,6 +107,20 @@ jobs:
         run: npm ci
         working-directory: reviewer-core
 
+      # evals/ also aliases `@devdigest/shared` to server/src/vendor/shared, and
+      # those files `import { z } from "zod"`. tsc resolves that from THEIR
+      # directory, so it walks up to server/node_modules — not to this package's.
+      # Without it the whole program loses zod's types and reports ~20 cascading
+      # errors that look like bugs in evals/ and reviewer-core/ but are all one
+      # missing install.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: install server deps (vendored shared sources)
+        run: pnpm install --frozen-lockfile
+        working-directory: server
+
       - run: npm run typecheck
         working-directory: evals
 
