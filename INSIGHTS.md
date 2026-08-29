@@ -39,6 +39,13 @@ marketplace actually ships it is unimplementable, and offering it would have
 produced a script that silently no-ops on the common case.
 `scripts/rollback.sh:1-32`
 
+**Moved 2026-08-29.** The decision still holds; the code no longer lives here.
+The marketplace was extracted to `AIengineerDev/dev-digest-ai-marketplace`, and
+`plugins/`, `.claude-plugin/` and the release scripts went with it. This
+repository is now a consumer: it installs the plugins rather than publishing
+them. Kept because the reasoning is what a future maintainer needs, and it is
+not obvious from either repository alone.
+
 ### 2026-08-18 — The build chain buys judgement only where it changes a verdict
 
 **What:** the agent set is now mixed-model on purpose, not uniformly `opus`.

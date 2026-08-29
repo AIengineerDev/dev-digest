@@ -1,1 +1,0 @@
-../../../.claude/agents/spec-creator.md
