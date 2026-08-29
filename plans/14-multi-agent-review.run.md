@@ -10,14 +10,30 @@
 | Stage | State | Artifact / note |
 | --- | --- | --- |
 | build | done | Phases 1–10 + final gate. server 487 tests, client 343, build green |
-| verify | running | plan-verifier pass 1, sonnet |
-| review | round 1 of ≤2 | architecture-reviewer + /security-review |
+| verify | done | 28 met · 1 partly met · 0 not met · 0 not checkable |
+| review | round 1 fixed, re-review running | 4 findings fixed, gates green. Re-review + security pending |
 | accept | pending | |
 | ship | pending | |
 
 ## Unverified acceptance criteria
 
 ## Open findings
+
+**Round 1 — four items, all confirmed, all four fixed. Re-review pending.**
+
+1. **`AgentTabs` imports `FindingCard` from a sibling route's private `_components/`**
+   (`.../multi-agent/[multiAgentRunId]/_components/AgentTabs/AgentTabs.tsx:10`). Medium.
+   Inconsistent with `RunTraceDrawer`, promoted in this same commit for the same reason.
+2. **`LatestMultiAgentRun` and `AgentEstimate` have no Zod contract**
+   (`client/src/lib/hooks/reviews.ts:65,78`). Medium. The plan's `## Contract changes`
+   lists five schemas and says "one phase, before anything else" — these two were never
+   in it, so the plan left no slot for them. A plan defect, not implementer drift.
+3. **`MultiAgentConfigPage` handles `isError` for one of four data hooks**
+   (`client/src/app/repos/[repoId]/multi-agent/page.tsx:28-31`). Low.
+4. **The per-agent retry button never renders** — `AgentColumn.tsx:45-51` implements it
+   and `AgentColumn.test.tsx:67-80` tests it in isolation, but `page.tsx:143-148` never
+   passes `onRetry`. Phase 8's done-when requires "a retry for that agent alone".
+   Found by plan-verifier, invisible to the architecture review and to the unit test.
 
 Carried from the implementer as product calls, not defects:
 
@@ -34,6 +50,13 @@ Carried from the implementer as product calls, not defects:
   Phase 8's file list did not authorise it. Flagged rather than done silently.
 
 ## Human decisions
+
+- **2026-08-29** — A retried single agent gets `multi_agent_run_id: null` by
+  construction (`server/src/modules/reviews/service.ts:139-140`), so it is not a
+  member of the group and `listRunsForMultiAgentRun` will never return it. The
+  retry therefore opens the trace drawer on the new run rather than refreshing the
+  column. **Whether a retry should rejoin the group is a spec question**, recorded
+  rather than answered.
 
 - **2026-08-29** — Plan's import-depth arithmetic for the `RunTraceDrawer` move was
   wrong (`×8→×5`, `×10→×7`); the computed depths are `×3` and `×5`. Implementer used

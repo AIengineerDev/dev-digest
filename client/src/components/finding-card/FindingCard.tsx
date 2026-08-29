@@ -25,7 +25,7 @@ import {
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { REVEAL_RETRY_DELAYS_MS, SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { lineLabel } from "./helpers";
-import { githubBlobUrl } from "../../../../../../../lib/github-urls";
+import { githubBlobUrl } from "@/lib/github-urls";
 import { EvalCaseEditor } from "@/components/EvalCaseEditor";
 import { s } from "./styles";
 

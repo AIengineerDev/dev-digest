@@ -10,9 +10,10 @@ import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/app-shell";
 import RunTraceDrawer from "@/components/run-trace-drawer";
 import { usePulls, usePullDetail } from "@/lib/hooks";
-import { useMultiAgentRun, useRunEvents } from "@/lib/hooks/reviews";
+import { useMultiAgentRun, useRunEvents, useRunReview } from "@/lib/hooks/reviews";
 import { useActiveRepo } from "@/lib/repo-context";
 import { ApiError } from "@/lib/api";
+import type { RunSummary } from "@devdigest/shared";
 import { AgentColumn } from "./_components/AgentColumn";
 import { AgentTabs } from "./_components/AgentTabs";
 import { ConflictsSection } from "./_components/ConflictsSection";
@@ -38,6 +39,10 @@ export default function MultiAgentResultsPage() {
     error,
     refetch,
   } = useMultiAgentRun(prId, multiAgentRunId);
+  const retry = useRunReview();
+  const [retried, setRetried] = React.useState<{ run_id: string; agent_name: string | null } | null>(
+    null,
+  );
 
   const runs = view?.runs ?? [];
   const groups = view?.groups ?? [];
@@ -103,6 +108,17 @@ export default function MultiAgentResultsPage() {
   const totalTimeS = totalDurationMs(runs) / 1000;
   const totalCost = totalCostUsd(runs);
 
+  async function onRetry(run: RunSummary) {
+    if (!prId || !run.agent_id || retry.isPending) return; // one at a time; a deleted agent cannot be retried
+    const res = await retry.mutateAsync({ prId, agentIds: [run.agent_id] });
+    const newRunId = res.runs[0]?.run_id;
+    if (!newRunId) return;
+    // Single target ⇒ res.multi_agent_run_id is null and the run is NOT in this
+    // group (service.ts:139-140). Nothing to navigate to; show it in place.
+    setRetried({ run_id: newRunId, agent_name: run.agent_name ?? null });
+    setParam("trace", newRunId);
+  }
+
   return (
     <AppShell crumb={crumb}>
       <div style={s.header}>
@@ -146,6 +162,7 @@ export default function MultiAgentResultsPage() {
                 findings={e.findings}
                 color={e.color}
                 onViewTrace={() => setParam("trace", e.run.run_id)}
+                onRetry={e.run.agent_id ? () => void onRetry(e.run) : undefined}
               />
             ))}
           </div>
@@ -171,8 +188,14 @@ export default function MultiAgentResultsPage() {
           runId={traceRunId}
           prNumber={pr?.number}
           findings={entries.find((e) => e.run.run_id === traceRunId)?.findings ?? []}
-          agentName={runs.find((r) => r.run_id === traceRunId)?.agent_name ?? null}
-          running={runs.find((r) => r.run_id === traceRunId)?.status === "running"}
+          agentName={
+            runs.find((r) => r.run_id === traceRunId)?.agent_name ??
+            (retried?.run_id === traceRunId ? retried.agent_name : null)
+          }
+          running={
+            runs.find((r) => r.run_id === traceRunId)?.status === "running" ||
+            retried?.run_id === traceRunId
+          }
           onClose={() => setParam("trace", null)}
         />
       )}

@@ -1,4 +1,4 @@
-import type { AgentEstimate } from "@/lib/hooks/reviews";
+import type { AgentEstimate } from "@devdigest/shared";
 
 /**
  * R9 — the run bar's estimate over the selected agents. Total time is the MAX

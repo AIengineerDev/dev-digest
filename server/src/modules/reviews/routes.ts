@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { RunRequest, PrIntentRecord } from '@devdigest/shared';
+import { RunRequest, PrIntentRecord, LatestMultiAgentRun, AgentEstimate } from '@devdigest/shared';
 import type { RunEvent } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
@@ -126,13 +126,17 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
   );
 
   // ---- The repo's most recent multi-agent run (R8's landing screen) -------
-  app.get('/repos/:id/multi-agent-runs/latest', { schema: { params: IdParams } }, async (req) => {
-    const { workspaceId } = await getContext(container, req);
-    return service.latestMultiAgentRunForRepo(workspaceId, req.params.id);
-  });
+  app.get(
+    '/repos/:id/multi-agent-runs/latest',
+    { schema: { params: IdParams, response: { 200: LatestMultiAgentRun.nullable() } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.latestMultiAgentRunForRepo(workspaceId, req.params.id);
+    },
+  );
 
   // ---- Per-agent median duration/cost, for the picker's estimate (R9) -----
-  app.get('/agents/estimates', async (req) => {
+  app.get('/agents/estimates', { schema: { response: { 200: z.array(AgentEstimate) } } }, async (req) => {
     const { workspaceId } = await getContext(container, req);
     return service.agentEstimates(workspaceId);
   });

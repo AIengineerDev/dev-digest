@@ -100,6 +100,33 @@ export const MultiAgentRunView = z.object({
 });
 export type MultiAgentRunView = z.infer<typeof MultiAgentRunView>;
 
+/**
+ * Served by `GET /repos/:id/multi-agent-runs/latest` — the repo's most recent
+ * group, or `null` when it has none (a state, not an error). camelCase because
+ * that is what the query already returns
+ * (`repository/run.repo.ts:115-132`); do not "normalise" it to snake_case
+ * without changing the reader in the same commit.
+ */
+export const LatestMultiAgentRun = z.object({
+  id: z.string(),
+  prId: z.string(),
+  prNumber: z.number().int(),
+});
+export type LatestMultiAgentRun = z.infer<typeof LatestMultiAgentRun>;
+
+/**
+ * Served by `GET /agents/estimates` — one row per agent that has at least one
+ * `done` run. `null` (never `0`) where a metric has no history: an absence and
+ * a zero are different claims (R9). Not `.int()` on the duration: the median of
+ * an even-sized sample is a mean of two values (`run.repo.ts:161-166`).
+ */
+export const AgentEstimate = z.object({
+  agent_id: z.string(),
+  median_duration_ms: z.number().nullable(),
+  median_cost_usd: z.number().nullable(),
+});
+export type AgentEstimate = z.infer<typeof AgentEstimate>;
+
 /** Derived intent persisted for a PR (the DerivedIntent plus the pr_id it scopes). */
 export const PrIntentRecord = DerivedIntent.extend({ pr_id: z.string() });
 export type PrIntentRecord = z.infer<typeof PrIntentRecord>;

@@ -152,6 +152,8 @@
       "cta": "Configure run"
     },
     "crumb": "Multi-Agent Review",
+    "errorTitle": "Couldn't load this screen",
+    "errorBody": "The pull requests and agents for this repo could not be loaded.",
     "config": {
       "heading": "Run a Multi-Agent Review",
       "lead": "Pick a pull request and choose which agents to fan out — they run in parallel and you compare their findings side by side.",

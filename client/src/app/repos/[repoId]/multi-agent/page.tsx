@@ -8,11 +8,12 @@
 import React from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Skeleton } from "@devdigest/ui";
+import { Skeleton, ErrorState } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { usePulls } from "@/lib/hooks";
 import { useAgents } from "@/lib/hooks/agents";
 import { useAgentEstimates, useLatestMultiAgentRun, useRunReview } from "@/lib/hooks/reviews";
+import { ApiError } from "@/lib/api";
 import { RunConfig } from "./_components/RunConfig";
 
 export default function MultiAgentConfigPage() {
@@ -26,9 +27,27 @@ export default function MultiAgentConfigPage() {
   const prParam = search.get("pr");
 
   const { data: latest, isLoading: latestLoading } = useLatestMultiAgentRun(repoId);
-  const { data: pulls } = usePulls(repoId);
-  const { data: agents } = useAgents();
-  const { data: estimates } = useAgentEstimates();
+  const {
+    data: pulls,
+    isLoading: pullsLoading,
+    isError: pullsIsError,
+    error: pullsError,
+    refetch: refetchPulls,
+  } = usePulls(repoId);
+  const {
+    data: agents,
+    isLoading: agentsLoading,
+    isError: agentsIsError,
+    error: agentsError,
+    refetch: refetchAgents,
+  } = useAgents();
+  const {
+    data: estimates,
+    isLoading: estimatesLoading,
+    isError: estimatesIsError,
+    error: estimatesError,
+    refetch: refetchEstimates,
+  } = useAgentEstimates();
   const run = useRunReview();
 
   const enabledAgents = React.useMemo(() => (agents ?? []).filter((a) => a.enabled), [agents]);
@@ -70,13 +89,32 @@ export default function MultiAgentConfigPage() {
 
   const crumb = [{ label: t("page.crumb") }, ...(phase === "config" ? [{ label: t("page.configureRun") }] : [])];
 
-  if (latestLoading || !showConfig) {
+  if (latestLoading || pullsLoading || agentsLoading || estimatesLoading || !showConfig) {
     return (
       <AppShell crumb={crumb}>
         <div style={{ padding: "24px 28px", maxWidth: 720, margin: "0 auto" }}>
           <Skeleton height={28} width={320} />
           <Skeleton height={160} style={{ marginTop: 16 }} />
         </div>
+      </AppShell>
+    );
+  }
+
+  const anyError = pullsIsError || agentsIsError || estimatesIsError;
+  const firstError = pullsError ?? agentsError ?? estimatesError;
+  if (anyError) {
+    return (
+      <AppShell crumb={crumb}>
+        <ErrorState
+          fullScreen
+          title={t("page.errorTitle")}
+          body={firstError instanceof ApiError ? firstError.message : t("page.errorBody")}
+          onRetry={() => {
+            if (pullsIsError) void refetchPulls();
+            if (agentsIsError) void refetchAgents();
+            if (estimatesIsError) void refetchEstimates();
+          }}
+        />
       </AppShell>
     );
   }

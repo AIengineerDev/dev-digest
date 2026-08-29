@@ -1,5 +1,12 @@
 import type { Container } from '../../platform/container.js';
-import type { FindingActionKind, MultiAgentRunView, RunEventKind, RunTrace } from '@devdigest/shared';
+import type {
+  AgentEstimate,
+  FindingActionKind,
+  LatestMultiAgentRun,
+  MultiAgentRunView,
+  RunEventKind,
+  RunTrace,
+} from '@devdigest/shared';
 import { AppError, NotFoundError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
 import { ReviewRepository } from './repository.js';
@@ -250,16 +257,14 @@ export class ReviewService {
   async latestMultiAgentRunForRepo(
     workspaceId: string,
     repoId: string,
-  ): Promise<{ id: string; prId: string; prNumber: number } | null> {
+  ): Promise<LatestMultiAgentRun | null> {
     const row = await this.repo.latestMultiAgentRunForRepo(workspaceId, repoId);
     return row ?? null;
   }
 
   /** Per-agent median duration/cost over recent runs; null (never 0) with no
    *  history (R9). */
-  async agentEstimates(
-    workspaceId: string,
-  ): Promise<{ agent_id: string; median_duration_ms: number | null; median_cost_usd: number | null }[]> {
+  async agentEstimates(workspaceId: string): Promise<AgentEstimate[]> {
     return this.repo.agentEstimates(workspaceId);
   }
 }

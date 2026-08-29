@@ -6,9 +6,8 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, Icon, type DropdownItemDef } from "@devdigest/ui";
-import type { Agent, PrMeta } from "@devdigest/shared";
+import type { Agent, AgentEstimate, PrMeta } from "@devdigest/shared";
 import { colorForIndex } from "@/lib/agent-colors";
-import type { AgentEstimate } from "@/lib/hooks/reviews";
 import { estimateFor } from "../../helpers";
 import { PersonaPickCard } from "../PersonaPickCard";
 import { s } from "./styles";

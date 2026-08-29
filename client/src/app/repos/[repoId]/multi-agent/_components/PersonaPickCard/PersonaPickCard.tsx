@@ -5,8 +5,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
-import type { Agent } from "@devdigest/shared";
-import type { AgentEstimate } from "@/lib/hooks/reviews";
+import type { Agent, AgentEstimate } from "@devdigest/shared";
 import { s } from "./styles";
 
 export function PersonaPickCard({

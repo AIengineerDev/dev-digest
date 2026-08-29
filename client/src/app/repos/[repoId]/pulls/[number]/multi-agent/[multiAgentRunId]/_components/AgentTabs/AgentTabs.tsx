@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { useQueryClient } from "@tanstack/react-query";
 import { CircularScore, Icon, MonoLink } from "@devdigest/ui";
 import type { FindingActionKind, FindingRecord, RunSummary } from "@devdigest/shared";
-import { FindingCard } from "@/app/repos/[repoId]/pulls/[number]/_components/FindingCard";
+import { FindingCard } from "@/components/finding-card";
 import { useFindingAction } from "@/lib/hooks/reviews";
 import { s } from "./styles";
 

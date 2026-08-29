@@ -7,8 +7,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, API_BASE } from "../api";
 import { notify } from "../toast";
 import type {
+  AgentEstimate,
   BriefRecord,
   FindingActionKind,
+  LatestMultiAgentRun,
   MultiAgentRunView,
   PrIntentRecord,
   PrReviewComment,
@@ -63,12 +65,6 @@ export function useMultiAgentRun(prId: string | null | undefined, id: string | n
   });
 }
 
-export interface LatestMultiAgentRun {
-  id: string;
-  prId: string;
-  prNumber: number;
-}
-
 /** The repo's most recent multi-agent run, or null — R8's landing screen
    resolves this to know what to open on before rendering a form. */
 export function useLatestMultiAgentRun(repoId: string | null | undefined) {
@@ -77,12 +73,6 @@ export function useLatestMultiAgentRun(repoId: string | null | undefined) {
     queryFn: () => api.get<LatestMultiAgentRun | null>(`/repos/${repoId}/multi-agent-runs/latest`),
     enabled: !!repoId,
   });
-}
-
-export interface AgentEstimate {
-  agent_id: string;
-  median_duration_ms: number | null;
-  median_cost_usd: number | null;
 }
 
 /** Per-agent median duration/cost over recent runs (R9). An agent absent from
