@@ -131,6 +131,7 @@
     "openAgent": "Open agent evals",
     "passing": "{passed} / {total} passing",
     "neverRun": "never run",
+    "partial": "last run covered {covered} of {total} cases",
     "running": "Running…",
     "runThrough": "Run through this agent",
     "newCase": "New eval case"

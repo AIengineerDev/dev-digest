@@ -100,6 +100,8 @@ export function useRunEvals() {
     onSuccess: (_d, agentId) => {
       qc.invalidateQueries({ queryKey: ["eval-runs", agentId] });
       qc.invalidateQueries({ queryKey: ["eval-dashboard"] });
+      // The Skills page renders this agent's cases from its own key.
+      qc.invalidateQueries({ queryKey: ["skill-eval-cases"] });
     },
   });
 }
@@ -160,6 +162,7 @@ export function useRunEvalCase() {
     onSuccess: (_d, { agentId }) => {
       qc.invalidateQueries({ queryKey: ["eval-runs", agentId] });
       qc.invalidateQueries({ queryKey: ["eval-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["skill-eval-cases"] });
     },
   });
 }
