@@ -1,0 +1,24 @@
+{
+  "$comment": "Colloquial phrasings mapped to artefact names — the one dataset this site legitimately owns (specs/16 R6). Data, not a model: it is reviewed in a diff like any other file. Ukrainian entries are here because a Cyrillic query must resolve to the same artefact an English one does; the interface stays English, the input does not have to be.",
+  "aliases": [
+    { "phrase": "layering",              "artefact": "onion-architecture",       "note": "the backend word for it" },
+    { "phrase": "шари",                  "artefact": "onion-architecture",       "note": "uk — layering" },
+    { "phrase": "архітектура сервера",   "artefact": "onion-architecture",       "note": "uk — server architecture" },
+    { "phrase": "скіл для архітектури",  "artefact": "onion-architecture",       "note": "uk — a skill for architecture" },
+    { "phrase": "where should this go",  "artefact": "frontend-ui-architecture", "note": "the question users actually type" },
+    { "phrase": "де покласти компонент", "artefact": "frontend-ui-architecture", "note": "uk — where to put a component" },
+    { "phrase": "bundle size",           "artefact": "dependency-checker",       "note": "weight question" },
+    { "phrase": "залежності",            "artefact": "dependency-checker",       "note": "uk — dependencies" },
+    { "phrase": "lockfile",              "artefact": "repo-conventions",         "note": "process, not architecture" },
+    { "phrase": "написати спеку",        "artefact": "spec-creator",             "note": "uk — write a spec" },
+    { "phrase": "what do we know about", "artefact": "engineering-insights",     "note": "recall mode" }
+  ],
+  "examples": [
+    "layering",
+    "де покласти компонент",
+    "скіл для архітектури",
+    "lockfile",
+    "blast radius",
+    "architecure"
+  ]
+}

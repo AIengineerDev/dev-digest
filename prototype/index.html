@@ -413,24 +413,27 @@ q.dim { color:var(--ink-faint); font-style:italic; }
 </head>
 <body>
 <header class="top">
-  <div class="brand"><b>Artefact Catalog</b><span>dev-digest</span></div>
+  <!-- Chrome text is filled by applyChrome() from strings.json. Empty here on
+       purpose: a literal left in the markup is a string that silently survives a
+       translation and never gets found again. -->
+  <div class="brand"><b></b><span></span></div>
   <nav class="nav" id="nav">
-    <button data-view="catalog" aria-current="page">Catalog</button>
-    <button data-view="graph">Graph</button>
-    <button data-view="boundaries">Boundaries</button>
-    <button data-view="bundle">Bundle</button>
+    <button data-view="catalog" aria-current="page"></button>
+    <button data-view="graph"></button>
+    <button data-view="boundaries"></button>
+    <button data-view="bundle"></button>
   </nav>
   <div class="spacer"></div>
-  <button class="iconbtn" id="theme">Light</button>
+  <button class="iconbtn" id="theme"></button>
 </header>
 
 <main class="wrap" id="root"></main>
 
 <div class="tray" id="tray"><div class="trayin">
-  <span class="cnt"><b id="trayn">0</b> selected</span>
+  <span class="cnt"><b id="trayn">0</b> </span>
   <div class="names" id="traynames"></div>
-  <button class="btn ghost" id="trayclear">Clear</button>
-  <button class="btn" id="traygo">Build settings.json</button>
+  <button class="btn ghost" id="trayclear"></button>
+  <button class="btn" id="traygo"></button>
 </div></div>
 
 <div class="toast" id="toast"></div>
@@ -451,25 +454,26 @@ const TYPES = {
   "product-skill": { label: "Product data", color: "#B58A6A" },
 };
 
-/* The one dataset this site legitimately owns (specs/16 R6): colloquial
-   phrasings mapped to artefact names. Data, reviewed in a diff, no model.
-   Ukrainian entries are here because R27 requires a Cyrillic query to resolve. */
-const ALIASES = [
-  { phrase:"layering",              artefact:"onion-architecture",       note:"the backend word for it" },
-  { phrase:"шари",                  artefact:"onion-architecture",       note:"uk — layering" },
-  { phrase:"архітектура сервера",   artefact:"onion-architecture",       note:"uk — server architecture" },
-  { phrase:"скіл для архітектури",  artefact:"onion-architecture",       note:"uk — a skill for architecture" },
-  { phrase:"where should this go",  artefact:"frontend-ui-architecture", note:"the question users actually type" },
-  { phrase:"де покласти компонент", artefact:"frontend-ui-architecture", note:"uk — where to put a component" },
-  { phrase:"bundle size",           artefact:"dependency-checker",       note:"weight question" },
-  { phrase:"залежності",            artefact:"dependency-checker",       note:"uk — dependencies" },
-  { phrase:"lockfile",              artefact:"repo-conventions",         note:"process, not architecture" },
-  { phrase:"написати спеку",        artefact:"spec-creator",             note:"uk — write a spec" },
-  { phrase:"what do we know about", artefact:"engineering-insights",     note:"recall mode" },
-];
-
+/* Nothing user-facing is written in this file. Copy lives in strings.json and
+   the alias table in aliases.json — both fetched at boot beside the catalog, so
+   a string can be reviewed, reused and translated without touching logic. */
 let CAT = null;   /* the fetched catalog */
 let A = [];       /* CAT.artefacts, with search fields prepared */
+let T = null;     /* strings.json */
+let ALIASES = []; /* aliases.json */
+let EXAMPLES = [];
+
+/* t("detail.back") · t("search.resultMany", { n: 4 }). A missing key returns the
+   key itself rather than "undefined", so a gap is visible in the UI instead of
+   looking like a rendering bug. */
+function t(key, vars) {
+  let v = key.split(".").reduce((o, k) => (o == null ? o : o[k]), T);
+  if (typeof v !== "string") return key;
+  if (vars) for (const [k, val] of Object.entries(vars)) v = v.replaceAll("{" + k + "}", val);
+  return v;
+}
+/* Pick singular or plural, then fill {n}. */
+function tn(n, one, many) { return t(n === 1 ? one : many, { n }); }
 
 /* ── search ─────────────────────────────────────────────────────────────── */
 const norm = s => String(s).toLowerCase().normalize("NFKD");
@@ -563,27 +567,47 @@ const marketName = () => CAT?.marketplace?.name || null;
 
 /* ── boot ───────────────────────────────────────────────────────────────── */
 (async function boot() {
-  root.innerHTML = `<div class="state"><h3>Reading the catalog…</h3>
-    <p>Generated from the repository at build time by
-    <code>scripts/build-catalog.mjs</code>.</p></div>`;
+  /* The only two strings this file owns, and the only two it can: both are shown
+     before strings.json has arrived, or because fetching it is what failed.
+     Everything else comes from the file. */
+  const BOOTING = "Reading the catalog…";
+  const FALLBACK = "The catalog could not be loaded";
+
+  root.innerHTML = `<div class="state"><h3>${BOOTING}</h3></div>`;
   try {
-    const res = await fetch("./catalog.json", { cache: "no-store" });
-    if (!res.ok) throw new Error(`catalog.json responded ${res.status}`);
-    CAT = await res.json();
+    const [cat, str, ali] = await Promise.all(
+      ["./catalog.json", "./strings.json", "./aliases.json"].map(async (u) => {
+        const res = await fetch(u, { cache: "no-store" });
+        if (!res.ok) throw new Error(`${u.replace("./", "")} responded ${res.status}`);
+        return res.json();
+      })
+    );
+    CAT = cat; T = str; ALIASES = ali.aliases || []; EXAMPLES = ali.examples || [];
     A = prepare(CAT);
   } catch (e) {
     root.innerHTML = `<div class="state">
-      <h3>The catalog could not be loaded</h3>
-      <p>${escape_(e.message)}. This page holds no data of its own, so there is
-         nothing to show without it. Rebuild with
-         <code>node scripts/build-catalog.mjs --out prototype/catalog.json</code>,
-         or serve through <code>node prototype/dev.mjs</code>, which generates it
-         on every request.</p></div>`;
+      <h3>${escape_(T ? t("boot.failedTitle") : FALLBACK)}</h3>
+      <p>${T ? t("boot.failedBody", { error: escape_(e.message) })
+             : escape_(e.message) + ". Serve through <code>node prototype/dev.mjs</code>."}</p>
+      </div>`;
     return;
   }
+  applyChrome();
   readHash();
   render();
 })();
+
+/* The header and tray are static markup; fill them once the strings arrive. */
+function applyChrome() {
+  document.querySelector(".brand b").textContent = t("app.name");
+  document.querySelector(".brand span").textContent = t("app.scope");
+  document.title = t("app.name");
+  for (const b of document.querySelectorAll("#nav button")) b.textContent = t("nav." + b.dataset.view);
+  document.getElementById("trayclear").textContent = t("tray.clear");
+  document.getElementById("traygo").textContent = t("tray.build");
+  document.querySelector(".cnt").lastChild.textContent = " " + t("tray.selected");
+  labelTheme();
+}
 
 /* ── render ─────────────────────────────────────────────────────────────── */
 function results() {
@@ -610,11 +634,9 @@ function render() {
 
 function renderMissing() {
   root.innerHTML = `<div class="state">
-    <h3>No artefact named “${escape_(S.open)}”</h3>
-    <p>It is not in the generated catalog. Either the link predates a rename, or
-       the artefact was removed from the repository — the catalog only ever holds
-       what exists right now.</p>
-    <button class="btn" data-back>Back to the catalog</button></div>`;
+    <h3>${escape_(t("missing.title", { id: S.open }))}</h3>
+    <p>${escape_(t("missing.body"))}</p>
+    <button class="btn" data-back>${escape_(t("missing.action"))}</button></div>`;
   wire();
 }
 
@@ -630,11 +652,10 @@ function renderCatalog() {
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
           <circle cx="7" cy="7" r="4.6"></circle><path d="M10.5 10.5L14 14"></path></svg>
         <input id="q" type="search" autocomplete="off" spellcheck="false"
-          placeholder="Describe what you need — “I need a skill for layering”" value="${escape_(S.q)}">
+          placeholder="${escape_(t('search.placeholder'))}" value="${escape_(S.q)}">
       </div></div>
-      <p class="hintline"><b>Try:</b>
-        ${["layering","де покласти компонент","скіл для архітектури","lockfile","blast radius","architecure"]
-          .map(s => `<button class="chip" data-try="${escape_(s)}">${escape_(s)}</button>`).join("")}
+      <p class="hintline"><b>${escape_(t('search.tryLabel'))}</b>
+        ${EXAMPLES.map(s => `<button class="chip" data-try="${escape_(s)}">${escape_(s)}</button>`).join("")}
       </p>
       ${body()}
     </section>
@@ -660,34 +681,31 @@ function railHTML(scored) {
   const withEvals = A.filter(a => a.evals.length).length;
 
   return `
-  <div class="facet"><h3>Type</h3><ul>
+  <div class="facet"><h3>${escape_(t('facets.type'))}</h3><ul>
     ${Object.entries(TYPES).map(([k, v]) => `
       <li><button class="f ${S.types.has(k) ? "on" : ""}" data-f="type" data-v="${k}">
         <i class="dot" style="background:${v.color}"></i>${v.label}<span class="n">${inType(k)}</span>
       </button></li>`).join("")}
   </ul></div>
-  <div class="facet"><h3>Plugin</h3>
+  <div class="facet"><h3>${escape_(t('facets.plugin'))}</h3>
     ${plugins.length ? `<ul>${plugins.map(p => `
       <li><button class="f ${S.plugins.has(p) ? "on" : ""}" data-f="plugin" data-v="${escape_(p)}">
         ${escape_(p)}<span class="n">${A.filter(a => a.plugin === p).length}</span></button></li>`).join("")}</ul>`
-      : `<p class="railnote">No marketplace manifest in the repository yet, so no
-         artefact belongs to a plugin. This facet fills in on its own once
-         <code>.claude-plugin/marketplace.json</code> lands.</p>`}
+      : `<p class="railnote">${t('facets.noPlugins')}</p>`}
   </div>
-  <div class="facet"><h3>Coverage</h3><ul>
+  <div class="facet"><h3>${escape_(t('facets.coverage'))}</h3><ul>
     <li><button class="f ${S.evalsOnly ? "on" : ""}" data-f="evals" data-v="1">
-      <i class="dot" style="background:var(--ok)"></i>Has evals
+      <i class="dot" style="background:var(--ok)"></i>${escape_(t('facets.hasEvals'))}
       <span class="n">${withEvals}</span></button></li>
   </ul></div>
   ${(S.types.size || S.plugins.size || S.evalsOnly)
-    ? `<button class="clearfilters" id="clearf">Clear filters</button>` : ""}`;
+    ? `<button class="clearfilters" id="clearf">${escape_(t('facets.clear'))}</button>` : ""}`;
 }
 
 function diagnosticsHTML() {
   const d = CAT.diagnostics || [];
   if (!d.length) return "";
-  return `<details class="diag"><summary>${d.length} generator diagnostic${d.length === 1 ? "" : "s"}
-      — what the repository could not answer</summary>
+  return `<details class="diag"><summary>${escape_(tn(d.length, "browse.diagnosticsOne", "browse.diagnosticsMany"))}</summary>
     ${d.map(x => `<div class="drow"><span class="dsev ${x.severity}">${x.severity}</span>
       <div><code>${escape_(x.path)}</code><p>${escape_(x.message)}</p></div></div>`).join("")}
   </details>`;
@@ -695,13 +713,8 @@ function diagnosticsHTML() {
 
 function browseAll(list) {
   const withEvals = A.filter(a => a.evals.length).length;
-  let h = `<p class="note"><b>${A.length} artefacts, ${withEvals} with eval coverage.</b>
-    Every field below was read from a file in this repository by
-    <code>scripts/build-catalog.mjs</code> — nothing on this page is written by hand.
-    Each card shows the path its data came from.
-    ${marketName() ? "" : `<br><br><b>No marketplace exists yet.</b> Nothing here belongs to a
-      plugin and no install command can be produced, so the catalog says so instead
-      of naming a plugin that does not exist.`}</p>
+  let h = `<p class="note">${t("browse.summary", { total: A.length, withEvals })}
+    ${marketName() ? "" : "<br><br>" + t("browse.noMarketplace")}</p>
     ${diagnosticsHTML()}`;
   for (const [k, v] of Object.entries(TYPES)) {
     const g = list.filter(r => r.a.type === k);
@@ -712,16 +725,17 @@ function browseAll(list) {
 }
 function listHTML(list, mode) {
   if (mode === "grouped") return browseAll(list);
-  return `<div class="groupbar">${list.length} result${list.length === 1 ? "" : "s"}</div>
+  return `<div class="groupbar">${escape_(tn(list.length, "search.resultOne", "search.resultMany"))}</div>
           <div class="cards">${list.map(cardHTML).join("")}</div>`;
 }
 
 function evalBadge(a) {
   if (!a.evals.length)
-    return `<span class="badge ev-none" title="No eval suite covers this yet — a warning, not a failure">no evals</span>`;
+    return `<span class="badge ev-none" title="${escape_(t("card.evalsNoneWhy"))}">${escape_(t("card.evalsNone"))}</span>`;
   const cases = a.evals.reduce((n, s) => n + (s.cases || 0), 0);
-  return `<span class="badge ev-ok" title="${escape_(a.evals.map(s => s.path).join(" · "))}">evals · ${
-    cases ? cases + " case" + (cases === 1 ? "" : "s") : a.evals.length + " suite" + (a.evals.length === 1 ? "" : "s")}</span>`;
+  const label = cases ? tn(cases, "card.evalsCase", "card.evalsCases")
+                      : tn(a.evals.length, "card.evalsSuite", "card.evalsSuites");
+  return `<span class="badge ev-ok" title="${escape_(a.evals.map(s => s.path).join(" · "))}">${escape_(label)}</span>`;
 }
 
 function cardHTML({ a, hits }) {
@@ -731,7 +745,7 @@ function cardHTML({ a, hits }) {
   <article class="card ${S.sel.has(a.id) ? "sel" : ""}"
      style="--tc:${t.color};--tcbg:color-mix(in srgb, ${t.color} 15%, transparent)">
     <input class="pick" type="checkbox" data-pick="${escape_(a.id)}" ${S.sel.has(a.id) ? "checked" : ""}
-           ${canInstall ? "" : "disabled"} aria-label="Add ${escape_(a.id)} to bundle">
+           ${canInstall ? "" : "disabled"} aria-label="${escape_(t("card.addToBundle", { name: a.id }))}">
     <h4><button data-open="${escape_(a.id)}">${highlight(a.id, hits)}</button></h4>
     <div class="path">${escape_(a.path)}</div>
     <p class="desc clamp">${highlight(a.description || "", hits, 240)}</p>
@@ -742,10 +756,10 @@ function cardHTML({ a, hits }) {
       ${a.version ? `<span class="badge ver">v${escape_(a.version)}</span>` : ""}
       ${evalBadge(a)}
       ${a.plugin ? `<span class="plugin">${escape_(a.plugin)}</span>`
-                 : `<span class="plugin none">no plugin yet</span>`}
+                 : `<span class="plugin none">${escape_(t("card.noPlugin"))}</span>`}
       ${canInstall
-        ? `<button class="copy" data-copy="install:${escape_(a.plugin)}">Copy install</button>`
-        : `<button class="copy" disabled title="No marketplace manifest exists in the repository yet, so there is no command to copy">Not installable yet</button>`}
+        ? `<button class="copy" data-copy="install:${escape_(a.plugin)}">${escape_(t("card.copyInstall"))}</button>`
+        : `<button class="copy" disabled title="${escape_(t("card.notInstallableWhy"))}">${escape_(t("card.notInstallable"))}</button>`}
     </div>
   </article>`;
 }
@@ -755,27 +769,24 @@ function stateZero() {
   const nearest = ALIASES.map(al => ({ al, d: overlap(nq, norm(al.phrase)) }))
     .filter(x => x.d > 0).sort((a, b) => b.d - a.d).slice(0, 3);
   const issue = `https://github.com/${CAT.repo}/issues/new?title=${
-    encodeURIComponent("No catalog result for: " + S.q)}&body=${
-    encodeURIComponent("Query: " + S.q + "\n\nExpected artefact:\n\nSuggested alias entry for the catalog's alias table:\n")}`;
+    encodeURIComponent(t("zero.issueTitle", { query: S.q }))}&body=${
+    encodeURIComponent(t("zero.issueBody", { query: S.q }))}`;
   return `<div class="state">
-    <h3>Nothing matches “${escape_(S.q)}”</h3>
-    <p>The catalog searches names, descriptions and a committed alias table. A miss
-       usually means the alias table is missing a phrase — a one-line pull request,
-       not a bug.</p>
+    <h3>${escape_(t("zero.title", { query: S.q }))}</h3>
+    <p>${escape_(t("zero.body"))}</p>
     ${nearest.length ? `<div class="near">${nearest.map(({ al }) => `
       <button data-try="${escape_(al.phrase)}"><span class="k">${escape_(al.phrase)}</span>
         <span>→ ${escape_(al.artefact)} · ${escape_(al.note)}</span></button>`).join("")}</div>` : ""}
-    <a class="btn" href="${issue}" target="_blank" rel="noopener">Report the gap</a>
+    <a class="btn" href="${issue}" target="_blank" rel="noopener">${escape_(t("zero.report"))}</a>
   </div>`;
 }
 const overlap = (a, b) => { const set = new Set(tok(a)); return tok(b).filter(x => set.has(x)).length; };
 
 function stateFiltersExclude(n) {
   return `<div class="state">
-    <h3>Filters exclude all ${n} match${n === 1 ? "" : "es"}</h3>
-    <p>The query found results — the active filters removed them. That is a different
-       problem from a query that matches nothing, and it has a different fix.</p>
-    <button class="btn" id="clearf2">Clear filters, keep the query</button></div>`;
+    <h3>${escape_(n === 1 ? t("excluded.titleOne") : t("excluded.titleMany", { n }))}</h3>
+    <p>${escape_(t("excluded.body"))}</p>
+    <button class="btn" id="clearf2">${escape_(t("excluded.action"))}</button></div>`;
 }
 
 /* ── detail ─────────────────────────────────────────────────────────────── */
@@ -788,75 +799,66 @@ function renderDetail(a) {
 
   root.innerHTML = `
   <div class="detail">
-    <div class="crumb"><button data-back>← Catalog</button><span>/</span><span>${t.label}</span></div>
+    <div class="crumb"><button data-back>${escape_(t("detail.back"))}</button><span>/</span><span>${t.label}</span></div>
     <h1>${escape_(a.id)}</h1>
-    <div class="sub">Source: <a href="https://github.com/${CAT.repo}/blob/main/${escape_(a.path)}"
+    <div class="sub">${escape_(t("detail.source"))} <a href="https://github.com/${CAT.repo}/blob/main/${escape_(a.path)}"
       target="_blank" rel="noopener">${escape_(a.path)}</a></div>
     <div class="detailbar">
       <span class="badge type" style="--tc:${t.color};--tcbg:color-mix(in srgb, ${t.color} 15%, transparent)">${t.label}</span>
       ${a.version ? `<span class="badge ver">v${escape_(a.version)}</span>` : ""}
       ${evalBadge(a)}
-      ${canInstall ? `<button class="copy" data-copy="install:${escape_(a.plugin)}">Copy install command</button>`
-        : `<button class="copy" disabled>Not installable yet</button>`}
+      ${canInstall ? `<button class="copy" data-copy="install:${escape_(a.plugin)}">${escape_(t("detail.copyInstall"))}</button>`
+        : `<button class="copy" disabled>${escape_(t("card.notInstallable"))}</button>`}
     </div>
 
     ${!a.plugin ? `<p class="note">${marketName()
-      ? `This artefact belongs to <b>no plugin</b> in <code>${escape_(marketName())}</code>. It is
-         findable here but cannot be installed until a plugin claims it.`
-      : `The repository has <b>no marketplace manifest yet</b>, so nothing is attributable to a
-         plugin and no install command exists. This page reports that rather than showing a
-         plugin name that would not resolve.`}</p>` : ""}
+      ? t("detail.noPluginInMarket", { marketplace: escape_(marketName()) })
+      : t("detail.noPluginYet")}</p>` : ""}
 
-    ${!a.evals.length ? `<p class="note">No eval suite covers this artefact. That is a
-      <b>warning, not a failure</b> — the free quality gate reports it the same way, because
-      artefacts predating the harness would otherwise hold the gate red forever.</p>` : ""}
+    ${!a.evals.length ? `<p class="note">${t("detail.noEvals")}</p>` : ""}
 
-    ${a.descriptionSource === "comment-block" ? `<p class="note">This description was
-      <b>derived from the file's leading comment block</b>, not declared. Hooks carry no
-      frontmatter, and the catalog will not author text of its own — so it extracts, and
-      says that it extracted. A sibling <code>hook.json</code> would make it authoritative.</p>` : ""}
+    ${a.descriptionSource === "comment-block" ? `<p class="note">${t("detail.derivedDescription")}</p>` : ""}
 
-    <div class="sec">Read from source</div>
+    <div class="sec">${escape_(t("detail.sectionRead"))}</div>
     <table class="fm"><tbody>
-      <tr><th>name</th><td>${escape_(a.id)}</td></tr>
-      <tr><th>type</th><td>${escape_(a.type)}</td></tr>
-      ${a.version ? `<tr><th>version</th><td>${escape_(a.version)}</td></tr>` : ""}
-      ${a.model ? `<tr><th>model</th><td>${escape_(a.model)}</td></tr>` : ""}
-      ${a.tools ? `<tr><th>tools</th><td>${escape_(a.tools.join(", "))}</td></tr>` : ""}
-      ${a.title ? `<tr><th>title</th><td>${escape_(a.title)}</td></tr>` : ""}
-      ${a.wiring?.length ? `<tr><th>wired on</th><td>${a.wiring.map(w =>
+      <tr><th>${escape_(t("detail.fieldName"))}</th><td>${escape_(a.id)}</td></tr>
+      <tr><th>${escape_(t("detail.fieldType"))}</th><td>${escape_(a.type)}</td></tr>
+      ${a.version ? `<tr><th>${escape_(t("detail.fieldVersion"))}</th><td>${escape_(a.version)}</td></tr>` : ""}
+      ${a.model ? `<tr><th>${escape_(t("detail.fieldModel"))}</th><td>${escape_(a.model)}</td></tr>` : ""}
+      ${a.tools ? `<tr><th>${escape_(t("detail.fieldTools"))}</th><td>${escape_(a.tools.join(", "))}</td></tr>` : ""}
+      ${a.title ? `<tr><th>${escape_(t("detail.fieldTitle"))}</th><td>${escape_(a.title)}</td></tr>` : ""}
+      ${a.wiring?.length ? `<tr><th>${escape_(t("detail.fieldWiring"))}</th><td>${a.wiring.map(w =>
         escape_(w.event + (w.matcher ? ` — ${w.matcher}` : ""))).join("<br>")}</td></tr>` : ""}
-      <tr><th>plugin</th><td>${a.plugin ? escape_(a.plugin) : "— none yet —"}</td></tr>
-      <tr><th>description from</th><td>${escape_(a.descriptionSource || "—")}</td></tr>
-      <tr><th>source path</th><td>${escape_(a.path)}</td></tr>
-      ${a.evals.length ? `<tr><th>eval suites</th><td>${a.evals.map(s =>
-        escape_(s.path + (s.cases ? ` — ${s.cases} case${s.cases === 1 ? "" : "s"}` : ""))).join("<br>")}</td></tr>` : ""}
+      <tr><th>${escape_(t("detail.fieldPlugin"))}</th><td>${a.plugin ? escape_(a.plugin) : escape_(t("detail.valueNonePlugin"))}</td></tr>
+      <tr><th>${escape_(t("detail.fieldDescriptionFrom"))}</th><td>${escape_(a.descriptionSource || "—")}</td></tr>
+      <tr><th>${escape_(t("detail.fieldPath"))}</th><td>${escape_(a.path)}</td></tr>
+      ${a.evals.length ? `<tr><th>${escape_(t("detail.fieldEvalSuites"))}</th><td>${a.evals.map(s =>
+        escape_(s.path + (s.cases ? " — " + tn(s.cases, "detail.caseOne", "detail.caseMany") : ""))).join("<br>")}</td></tr>` : ""}
     </tbody></table>
 
-    <div class="sec">Description · verbatim from source</div>
-    <div class="body"><p>${escape_(a.description || "— none —")}</p></div>
+    <div class="sec">${escape_(t("detail.sectionDescription"))}</div>
+    <div class="body"><p>${escape_(a.description || escape_(t("detail.valueNone")))}</p></div>
 
-    <div class="sec">Trigger phrases · heuristic extraction</div>
+    <div class="sec">${escape_(t("detail.sectionTriggers"))}</div>
     <div class="body">
       ${a.trig.length ? `<div class="triggers" style="margin:0">${a.trig.map(x =>
         `<span class="trig">${escape_(x)}</span>`).join("")}</div>`
-        : `<p>Nothing extracted — the description carries no quoted phrase and no “Use for/when” clause.</p>`}
-      <p style="margin-top:14px;font-size:12.5px;color:var(--ink-faint)">Extracted by pattern, not by a
-        model. The full description above is the authority — read it to see what the extractor missed.</p>
+        : `<p>${escape_(t("detail.triggersNone"))}</p>`}
+      <p style="margin-top:14px;font-size:12.5px;color:var(--ink-faint)">${escape_(t("detail.triggersCaveat"))}</p>
     </div>
 
-    ${a.summary ? `<div class="sec">Opening paragraph</div>
+    ${a.summary ? `<div class="sec">${escape_(t("detail.sectionSummary"))}</div>
       <div class="body"><p>${escape_(a.summary)}</p></div>` : ""}
 
-    ${outgoing.length ? `<div class="sec">This artefact names</div><div class="pairs">${outgoing.map(m => `
+    ${outgoing.length ? `<div class="sec">${escape_(t("detail.sectionNames"))}</div><div class="pairs">${outgoing.map(m => `
       <div class="pair"><div><h5>${escape_(a.id)}</h5><q>${escape_(m.sentence)}</q>
         <span class="src">${escape_(a.path)}</span></div>
       <div><h5><button class="linkish" data-open="${escape_(m.id)}">${escape_(m.id)}</button></h5>
         <q>${escape_((A.find(x => x.id === m.id) || {}).description?.slice(0, 180) || "")}…</q>
         <span class="src">${escape_((A.find(x => x.id === m.id) || {}).path || "")}</span></div></div>`).join("")}</div>` : ""}
 
-    ${incoming.length ? `<div class="sec">Named by</div><div class="log">${incoming.map(({ from, m }) => `
-      <div><time>mentions</time><span><button class="linkish" data-open="${escape_(from.id)}">${escape_(from.id)}</button>
+    ${incoming.length ? `<div class="sec">${escape_(t("detail.sectionNamedBy"))}</div><div class="log">${incoming.map(({ from, m }) => `
+      <div><time>${escape_(t("detail.mentions"))}</time><span><button class="linkish" data-open="${escape_(from.id)}">${escape_(from.id)}</button>
         — “${escape_(m.sentence.slice(0, 110))}${m.sentence.length > 110 ? "…" : ""}”</span>
         <code style="margin-left:auto">${escape_(from.path)}</code></div>`).join("")}</div>` : ""}
   </div>`;
@@ -879,20 +881,16 @@ function renderBoundaries() {
   pairs.sort((x, y) => (y.mutual - x.mutual) || x.a.id.localeCompare(y.a.id));
 
   root.innerHTML = `<div class="detail">
-    <h1>Boundaries</h1>
-    <p class="note">Every pair here was found by one artefact <b>naming another inside its own
-      description</b>. Each side quotes the sentence it actually wrote, with the file that
-      sentence lives in. Nothing is authored by this page, so a boundary that drifts in the
-      source drifts here too — visibly. <b>${pairs.filter(p => p.mutual).length}</b> of
-      ${pairs.length} pairs are mutual: both sides point at each other.</p>
+    <h1>${escape_(t("boundaries.title"))}</h1>
+    <p class="note">${t("boundaries.intro", { mutual: pairs.filter(p => p.mutual).length, total: pairs.length })}</p>
     <div class="pairs">${pairs.map(p => `
       <div class="pair">
         <div><h5><button class="linkish" data-open="${escape_(p.a.id)}">${escape_(p.a.id)}</button>
-          ${p.mutual ? `<span class="badge ev-ok" style="margin-left:8px">mutual</span>` : ""}</h5>
+          ${p.mutual ? `<span class="badge ev-ok" style="margin-left:8px">${escape_(t("boundaries.mutual"))}</span>` : ""}</h5>
           <q>${escape_(p.qa)}</q><span class="src">${escape_(p.a.path)}</span></div>
         <div><h5><button class="linkish" data-open="${escape_(p.other.id)}">${escape_(p.other.id)}</button></h5>
           ${p.qb ? `<q>${escape_(p.qb)}</q>`
-                 : `<q class="dim">Does not name ${escape_(p.a.id)} back — this boundary is stated from one side only.</q>`}
+                 : `<q class="dim">${escape_(t("boundaries.oneSided", { other: p.a.id }))}</q>`}
           <span class="src">${escape_(p.other.path)}</span></div>
       </div>`).join("")}</div>
   </div>`;
@@ -918,10 +916,8 @@ function renderGraph() {
   const H = Math.max(...Object.values(pos).map(p => p.y), 120) + 60;
 
   root.innerHTML = `<div class="detail" style="max-width:none">
-    <h1>Relationships</h1>
-    <p class="note">${edges.length} edges, every one of them a real mention inside a real
-      description. No edge is inferred, so this graph is sparser than the true dependency web —
-      and everything it does show can be checked against the file named beside it.</p>
+    <h1>${escape_(t("graph.title"))}</h1>
+    <p class="note">${t("graph.intro", { n: edges.length })}</p>
     <div class="graphwrap"><svg viewBox="0 0 900 ${H}" width="100%" height="${H}">
       ${edges.map(e => {
         const f = pos[e.from], t = pos[e.to];
@@ -936,7 +932,7 @@ function renderGraph() {
     </svg></div>
     <div class="legend">${Object.entries(TYPES).map(([k, v]) =>
       `<span><i style="background:${v.color}"></i>${v.label}</span>`).join("")}</div>
-    <div class="sec" style="margin-top:26px">Every edge, and the sentence it came from</div>
+    <div class="sec" style="margin-top:26px">${escape_(t("graph.edgeList"))}</div>
     <div class="log">${edges.map(e => `<div><time>${escape_(e.from)}</time>
       <span>→ ${escape_(e.to)} — “${escape_(e.sentence.slice(0, 96))}${e.sentence.length > 96 ? "…" : ""}”</span>
       <code style="margin-left:auto">${escape_(e.src)}</code></div>`).join("")}</div>
@@ -957,37 +953,30 @@ function bundleJSON() {
 
 function renderBundle() {
   if (!marketName()) {
-    root.innerHTML = `<div class="detail"><h1>Bundle</h1>
-      <div class="state"><h3>There is no marketplace to install from yet</h3>
-      <p>A settings block needs two things this repository does not have:
-         <code>.claude-plugin/marketplace.json</code>, and at least one plugin under
-         <code>plugins/</code>. Until both exist, any block shown here would name a
-         marketplace that cannot be added and plugins that cannot be installed.</p>
-      <p>The catalog is still useful without them — search, boundaries and the graph all
-         read from artefacts that do exist.</p>
-      <button class="btn" data-back>Back to the catalog</button></div></div>`;
+    root.innerHTML = `<div class="detail"><h1>${escape_(t("bundle.title"))}</h1>
+      <div class="state"><h3>${escape_(t("bundle.noMarketplaceTitle"))}</h3>
+      <p>${t("bundle.noMarketplaceBody")}</p>
+      <p>${t("bundle.noMarketplaceBody2")}</p>
+      <button class="btn" data-back>${escape_(t("bundle.backToCatalog"))}</button></div></div>`;
     wire(); return;
   }
   const chosen = [...S.sel].map(id => A.find(a => a.id === id)).filter(Boolean);
   const plugins = [...new Set(chosen.map(a => a.plugin).filter(Boolean))];
-  root.innerHTML = `<div class="detail"><h1>Bundle</h1>
-    ${!chosen.length ? `<div class="state"><h3>Nothing selected yet</h3>
-        <p>Tick artefacts in the catalog and this page assembles the settings block that
-           installs them. Plugins are the unit Claude Code enables, so several artefacts
-           from one plugin produce one entry, not several.</p>
-        <button class="btn" data-back>Go to the catalog</button></div>`
-      : `<p class="note">${chosen.length} artefact${chosen.length === 1 ? "" : "s"} resolve to
-          <b>${plugins.length} plugin${plugins.length === 1 ? "" : "s"}</b>. Paste this into
-          <code>.claude/settings.json</code> and the marketplace is added and the plugins
-          enabled on the next session — nobody runs an install command by hand.</p>
-        <div class="sec">Selected</div>
+  root.innerHTML = `<div class="detail"><h1>${escape_(t("bundle.title"))}</h1>
+    ${!chosen.length ? `<div class="state"><h3>${escape_(t("bundle.emptyTitle"))}</h3>
+        <p>${escape_(t("bundle.emptyBody"))}</p>
+        <button class="btn" data-back>${escape_(t("bundle.emptyAction"))}</button></div>`
+      : `<p class="note">${t("bundle.summary", {
+            artefacts: tn(chosen.length, "bundle.artefactOne", "bundle.artefactMany"),
+            plugins: tn(plugins.length, "bundle.pluginOne", "bundle.pluginMany") })}</p>
+        <div class="sec">${escape_(t("bundle.sectionSelected"))}</div>
         <div class="cards" style="margin-bottom:24px">${chosen.map(a => cardHTML({ a, hits: [] })).join("")}</div>
-        <div class="sec">.claude/settings.json</div>
+        <div class="sec">${escape_(t("bundle.sectionBlock"))}</div>
         <pre class="out">${escape_(bundleJSON())}</pre>
         <div class="detailbar" style="margin-top:14px">
-          <button class="btn" data-copy="bundle">Copy block</button>
-          <button class="btn ghost" id="dl">Download settings.json</button>
-          <button class="btn ghost" data-copy="link">Copy shareable link</button>
+          <button class="btn" data-copy="bundle">${escape_(t("bundle.copyBlock"))}</button>
+          <button class="btn ghost" id="dl">${escape_(t("bundle.download"))}</button>
+          <button class="btn ghost" data-copy="link">${escape_(t("bundle.copyLink"))}</button>
         </div>`}
   </div>`;
   wire();
@@ -1019,7 +1008,7 @@ function wire() {
     const a = document.createElement("a");
     a.href = url; a.download = "settings.json"; a.click();
     URL.revokeObjectURL(url);
-    toast("settings.json downloaded");
+    toast(t("toast.downloaded"));
   };
   syncTray();
 }
@@ -1031,9 +1020,9 @@ function copy(b) {
   if (kind === "bundle") text = bundleJSON();
   if (kind === "link") text = location.href;
   navigator.clipboard?.writeText(text);
-  b.classList.add("done"); const t = b.textContent; b.textContent = "Copied";
-  setTimeout(() => { b.classList.remove("done"); b.textContent = t; }, 1300);
-  toast(kind === "install" ? "Both commands copied" : "Copied to clipboard");
+  b.classList.add("done"); const prev = b.textContent; b.textContent = t("toast.copiedShort");
+  setTimeout(() => { b.classList.remove("done"); b.textContent = prev; }, 1300);
+  toast(kind === "install" ? t("toast.copiedCommands") : t("toast.copied"));
 }
 
 let tt;
@@ -1064,7 +1053,7 @@ const isLight = () => {
   const stamped = document.documentElement.getAttribute("data-theme");
   return stamped === "light" || (!stamped && window.matchMedia("(prefers-color-scheme: light)").matches);
 };
-function labelTheme() { themeBtn.textContent = isLight() ? "Dark" : "Light"; }
+function labelTheme() { themeBtn.textContent = T ? (isLight() ? t("theme.toDark") : t("theme.toLight")) : ""; }
 themeBtn.onclick = () => {
   const next = isLight() ? "dark" : "light";
   document.documentElement.setAttribute("data-theme", next);

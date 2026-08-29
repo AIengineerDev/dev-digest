@@ -66,10 +66,20 @@ export async function assemble() {
      gate: there is no committed copy to drift. */
   const catalog = JSON.stringify(await buildCatalog(), null, 2) + "\n";
 
+  /* Copy and the alias table are committed files, served as-is. They are data,
+     reviewed in a diff — not generated, and not written inside the page. */
+  const strings = await readFile(join(ROOT, "prototype", "strings.json"), "utf8");
+  const aliases = await readFile(join(ROOT, "prototype", "aliases.json"), "utf8");
+  for (const [name, body] of [["strings.json", strings], ["aliases.json", aliases]]) {
+    try { JSON.parse(body) } catch (e) { throw new Error(`prototype/${name}: ${e.message}`) }
+  }
+
   return new Map([
     ["/index.html", { body: rootPage, type: "text/html; charset=utf-8" }],
     ["/prototype/index.html", { body: prototype, type: "text/html; charset=utf-8" }],
     ["/prototype/catalog.json", { body: catalog, type: "application/json; charset=utf-8" }],
+    ["/prototype/strings.json", { body: strings, type: "application/json; charset=utf-8" }],
+    ["/prototype/aliases.json", { body: aliases, type: "application/json; charset=utf-8" }],
     ["/.nojekyll", { body: "", type: "text/plain" }],
   ]);
 }
