@@ -11,7 +11,12 @@
       "description": "The paved path: where backend and frontend code belongs, which repository conventions no linter catches, how to audit dependencies, and how a team keeps a durable record of what it already tried.",
       "version": "1.0.0",
       "category": "development",
-      "tags": ["architecture", "conventions", "dependencies", "insights"]
+      "tags": [
+        "architecture",
+        "conventions",
+        "dependencies",
+        "insights"
+      ]
     },
     {
       "name": "architecture-review",
@@ -19,7 +24,11 @@
       "description": "A read-only reviewer that judges a change against the layering and placement rules the paved path defines, and reports findings with file-and-line evidence. It never fixes anything.",
       "version": "1.0.0",
       "category": "development",
-      "tags": ["review", "architecture", "layering"]
+      "tags": [
+        "review",
+        "architecture",
+        "layering"
+      ]
     },
     {
       "name": "research-tools",
@@ -27,15 +36,23 @@
       "description": "An agent that answers a research question with evidence — from inside the repository or from the web — and reports back without editing anything.",
       "version": "1.0.0",
       "category": "productivity",
-      "tags": ["research", "investigation"]
+      "tags": [
+        "research",
+        "investigation"
+      ]
     },
     {
       "name": "sdd-engineering",
       "source": "./plugins/sdd-engineering",
       "description": "Spec-driven development as a chain of specialised agents: write the specification, plan against the real repository, build it phase by phase, verify every stated requirement, then document what shipped. Human-gated at every stage.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "development",
-      "tags": ["spec-driven-development", "planning", "implementation", "verification"]
+      "tags": [
+        "spec-driven-development",
+        "planning",
+        "implementation",
+        "verification"
+      ]
     }
   ],
   "renames": {}

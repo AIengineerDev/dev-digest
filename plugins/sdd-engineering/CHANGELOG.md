@@ -8,6 +8,16 @@ session.
 
 Releases are tagged `sdd-engineering--v{version}`.
 
+## 1.0.1 — 2026-08-29
+
+**Hook description is now declared, not derived.** `spec-creator-guard` ships a
+sibling `spec-creator-guard.json` carrying its `description`, the event it binds
+to and its matcher. The catalog previously derived the text from the file's
+leading comment block and labelled it as derived; it is now authoritative
+(specs/17 Q3).
+
+No behaviour change: the guard script itself is untouched.
+
 ## 1.0.0 — 2026-08-29
 
 First release.
