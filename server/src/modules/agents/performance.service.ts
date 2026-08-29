@@ -28,17 +28,30 @@ export class AgentPerformanceService {
     this.repo = new AgentPerformanceRepository(deps.db);
   }
 
-  async overview(w: PerfWindow): Promise<AgentPerformance> {
-    const [runs, decisions, byModel] = await Promise.all([
+  async overview(w: PerfWindow, opts: { withComparison?: boolean } = {}): Promise<AgentPerformance> {
+    const [runs, decisions, byModel, series] = await Promise.all([
       this.repo.runsByAgent(w),
       this.repo.decisionsByAgent(w),
       this.repo.costByModel(w),
+      this.repo.series(w),
     ]);
 
+    /* The preceding window of equal length. Fetched without its own comparison,
+       or this recurses backwards through history one period at a time. */
+    const span = w.to.getTime() - w.from.getTime();
+    const previous =
+      opts.withComparison === false
+        ? null
+        : await this.overview(
+            { workspaceId: w.workspaceId, from: new Date(w.from.getTime() - span), to: w.from },
+            { withComparison: false },
+          );
+
     const decisionsById = new Map(decisions.map((d) => [d.agentId, d]));
+    const previousRate = new Map((previous?.rows ?? []).map((r) => [r.agent_id, r.accept_rate]));
     const rows = runs
       .filter((r) => r.agentId !== null)
-      .map((r) => toRow(r, decisionsById.get(r.agentId as string)))
+      .map((r) => toRow(r, decisionsById.get(r.agentId as string), previousRate.get(r.agentId as string) ?? null))
       .sort((a, b) => b.runs - a.runs || a.agent_name.localeCompare(b.agent_name));
 
     /* The breakdowns must sum to the total exactly. They do because all three
@@ -88,6 +101,23 @@ export class AgentPerformanceService {
         failed: runs.reduce((s, r) => s + r.failed, 0),
       },
       min_decisions_for_rate: MIN_DECISIONS_FOR_RATE,
+      series: series.map((b) => ({ at: b.at.toISOString(), runs: b.runs, cost_usd: round(b.costUsd) })),
+      // Null rather than a zero delta: no earlier activity is not "no change",
+      // and an arrow drawn from it would invent a trend.
+      delta:
+        previous && (previous.total_runs > 0 || previous.total_cost_usd > 0)
+          ? {
+              previous_runs: previous.total_runs,
+              previous_cost_usd: previous.total_cost_usd,
+              previous_accept_rate: previous.avg_accept_rate,
+              runs_change: rows.reduce((s2, r) => s2 + r.runs, 0) - previous.total_runs,
+              cost_change_usd: round(totalCost - previous.total_cost_usd),
+              accept_rate_change:
+                avgAcceptRate !== null && previous.avg_accept_rate !== null
+                  ? round(avgAcceptRate - previous.avg_accept_rate, 4)
+                  : null,
+            }
+          : null,
     };
   }
 
@@ -98,7 +128,11 @@ export class AgentPerformanceService {
   }
 }
 
-function toRow(run: AgentRunAggregate, dec: AgentDecisionAggregate | undefined): AgentPerformanceRow {
+function toRow(
+  run: AgentRunAggregate,
+  dec: AgentDecisionAggregate | undefined,
+  previousRate: number | null,
+): AgentPerformanceRow {
   const decided = dec?.decided ?? 0;
   const accepted = dec?.accepted ?? 0;
 
@@ -126,6 +160,9 @@ function toRow(run: AgentRunAggregate, dec: AgentDecisionAggregate | undefined):
     accept_rate_reliable: decided >= MIN_DECISIONS_FOR_RATE,
     last_run_at: run.lastRunAt ? run.lastRunAt.toISOString() : null,
     cost_basis: run.totalCostUsd === null ? 'estimated' : 'estimated',
+    // An arrow needs two real numbers. Either side missing means no arrow.
+    accept_rate_change:
+      decided > 0 && previousRate !== null ? round(accepted / decided - previousRate, 4) : null,
   };
 }
 

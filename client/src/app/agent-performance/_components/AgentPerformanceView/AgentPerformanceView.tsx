@@ -18,7 +18,8 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { EmptyState, ErrorState, Skeleton, Icon, Badge } from "@devdigest/ui";
+import { EmptyState, ErrorState, Skeleton, Icon, Badge, MetricCard, Donut } from "@devdigest/ui";
+import type { DonutSegment } from "@devdigest/ui";
 import type { AgentPerformanceRow, CostSlice } from "@devdigest/shared";
 import { AppShell } from "../../../../components/app-shell";
 import {
@@ -172,37 +173,41 @@ export function AgentPerformanceView() {
         {header}
 
         <div style={s.cards}>
-          <div style={s.statCard}>
-            <p style={s.statLabel}>{t("summary.totalRuns")}</p>
-            <p style={s.statValue}>{data.total_runs}</p>
-            <p style={s.statSub}>{t("summary.runsIn", { n: data.counted_runs })}</p>
-          </div>
+          <MetricCard
+            label={t("summary.totalRuns")}
+            value={data.total_runs}
+            trend={data.series.map((b) => b.runs)}
+            delta={data.delta?.runs_change}
+          />
 
-          <div style={s.statCard}>
-            <p style={s.statLabel}>{t("summary.totalCost")}</p>
-            <p style={s.statValue}>{usd(data.total_cost_usd)}</p>
-            <p style={s.statSub} title={basisHint}>
-              <Badge>{t(`costBasis.${data.cost_basis}`)}</Badge>
-            </p>
-          </div>
+          <MetricCard
+            label={t("summary.totalCost")}
+            value={usd(data.total_cost_usd)}
+            trend={data.series.map((b) => b.cost_usd)}
+            delta={data.delta?.cost_change_usd}
+          />
 
-          <div style={s.statCard}>
-            <p style={s.statLabel}>{t("summary.avgAcceptRate")}</p>
-            {data.avg_accept_rate === null ? (
-              <>
-                <p style={s.statUnknown}>—</p>
-                <p style={s.statSub}>{t("summary.noDecisions")}</p>
-              </>
-            ) : (
-              <>
-                <p style={s.statValue}>
-                  {Math.round(data.avg_accept_rate * 100)}
-                  <span style={s.statUnit}>%</span>
-                </p>
-                <p style={s.statSub}>{t("summary.decisions", { n: data.total_decided })}</p>
-              </>
-            )}
-          </div>
+          {/* An unknown rate gets no number and no arrow. MetricCard would render
+              a delta of 0 as "flat", which is a claim we cannot make. */}
+          {data.avg_accept_rate === null ? (
+            <div style={s.statCard}>
+              <p style={s.statLabel}>{t("summary.avgAcceptRate")}</p>
+              <p style={s.statUnknown}>—</p>
+              <p style={s.statSub}>{t("summary.noDecisions")}</p>
+            </div>
+          ) : (
+            <MetricCard
+              label={t("summary.avgAcceptRate")}
+              value={Math.round(data.avg_accept_rate * 100)}
+              suffix="%"
+              delta={
+                data.delta && data.delta.accept_rate_change !== null
+                  ? Math.round(data.delta.accept_rate_change * 100)
+                  : undefined
+              }
+              color="var(--ok)"
+            />
+          )}
 
           <div style={s.statCard}>
             <p style={s.statLabel}>{t("summary.mostActive")}</p>
@@ -249,8 +254,7 @@ export function AgentPerformanceView() {
         </div>
 
         <p style={s.footnote}>
-          {t("excluded", { failed: data.excluded.failed, noCost: data.excluded.no_cost })}
-          {" "}
+          {t("excluded", { failed: data.excluded.failed, noCost: data.excluded.no_cost })}{" "}
           {basisHint}
           {isFetching ? " · refreshing" : ""}
         </p>
@@ -313,6 +317,13 @@ function Row({
         ) : (
           <>
             <span style={s.acceptPct(row.accept_rate >= 0.6)}>{pct(row.accept_rate)}</span>
+            {/* An arrow needs two measured periods. Absent, no arrow — better
+                than one that implies a direction nobody measured. */}
+            {row.accept_rate_change !== null && row.accept_rate_change !== 0 && (
+              <span style={s.trend(row.accept_rate_change > 0)}>
+                {row.accept_rate_change > 0 ? "↑" : "↓"}
+              </span>
+            )}
             <span style={s.denom}>{t("row.acceptOf", { accepted: row.accepted, decided: row.decided })}</span>
             {!row.accept_rate_reliable && (
               <span title={t("row.smallSampleHint", { n: min })}>
@@ -338,26 +349,30 @@ function Row({
 }
 
 function Breakdown({ title, slices, empty }: { title: string; slices: CostSlice[]; empty: string }) {
-  const total = slices.reduce((sum, x) => sum + x.cost_usd, 0);
+  const segments: DonutSegment[] = slices.map((x, i) => ({
+    label: x.label,
+    value: x.cost_usd,
+    color: SLICE_COLORS[i % SLICE_COLORS.length] ?? "var(--text-tertiary)",
+  }));
+
   return (
     <div style={{ ...s.card, padding: "14px 16px" }}>
-      <p style={{ ...s.statLabel, marginBottom: 6 }}>{title}</p>
-      {slices.length === 0 ? (
+      <p style={{ ...s.statLabel, marginBottom: 10 }}>{title}</p>
+      {segments.length === 0 ? (
         <p style={{ ...s.statSub, margin: "10px 0 0" }}>{empty}</p>
       ) : (
-        slices.map((x, i) => (
-          <div key={x.label} style={s.slice}>
-            <span style={{ minWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {x.label}
-            </span>
-            <span style={s.sliceTrack}>
-              <span
-                style={s.sliceBar(total > 0 ? (x.cost_usd / total) * 100 : 0, SLICE_COLORS[i % SLICE_COLORS.length] ?? "var(--text-tertiary)")}
-              />
-            </span>
-            <span style={s.sliceCost}>{usd(x.cost_usd)}</span>
+        <div style={s.donutRow}>
+          <Donut segments={segments} size={132} stroke={26} valuePrefix="$" />
+          <div style={s.legend}>
+            {segments.map((seg) => (
+              <div key={seg.label} style={s.legendRow}>
+                <span style={s.legendDot(seg.color)} />
+                <span style={s.legendLabel}>{seg.label}</span>
+                <span style={s.sliceCost}>{usd(seg.value)}</span>
+              </div>
+            ))}
           </div>
-        ))
+        </div>
       )}
     </div>
   );

@@ -107,6 +107,10 @@ export const s = {
     fontVariantNumeric: "tabular-nums",
     color: good ? "var(--success)" : "var(--warning)",
   }),
+  trend: (up: boolean): CSSProperties => ({
+    fontSize: 12,
+    color: up ? "var(--ok)" : "var(--crit)",
+  }),
   denom: { fontSize: 11.5, color: "var(--text-tertiary)", fontVariantNumeric: "tabular-nums" } satisfies CSSProperties,
   viewBtn: {
     background: "none",
@@ -140,5 +144,22 @@ export const s = {
   }),
   sliceTrack: { flex: 1, height: 8, borderRadius: 4, background: "var(--bg-subtle)", overflow: "hidden" } satisfies CSSProperties,
   sliceCost: { fontVariantNumeric: "tabular-nums", fontWeight: 600, minWidth: 66, textAlign: "right" } satisfies CSSProperties,
+  donutRow: { display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" } satisfies CSSProperties,
+  legend: { flex: 1, minWidth: 170, display: "flex", flexDirection: "column", gap: 5 } satisfies CSSProperties,
+  legendRow: { display: "flex", alignItems: "center", gap: 9, fontSize: 13 } satisfies CSSProperties,
+  legendDot: (color: string): CSSProperties => ({
+    width: 9,
+    height: 9,
+    borderRadius: 2,
+    background: color,
+    flex: "0 0 auto",
+  }),
+  legendLabel: {
+    flex: 1,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
   footnote: { fontSize: 11.5, color: "var(--text-tertiary)", margin: "14px 0 0", lineHeight: 1.5 } satisfies CSSProperties,
 };

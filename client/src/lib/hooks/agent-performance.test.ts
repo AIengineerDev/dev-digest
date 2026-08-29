@@ -19,6 +19,7 @@ const row = (p: Partial<AgentPerformanceRow>): AgentPerformanceRow => ({
   accept_rate_reliable: false,
   last_run_at: null,
   cost_basis: "estimated",
+  accept_rate_change: null,
   ...p,
 });
 

@@ -186,6 +186,9 @@ export const AgentPerformanceRow = z.object({
   accept_rate_reliable: z.boolean(),
   last_run_at: z.string().nullable(),
   cost_basis: CostBasis,
+  /** Change in accept rate against the preceding window of equal length. Null
+   *  when either side has no decisions — an arrow needs two real numbers. */
+  accept_rate_change: z.number().nullable(),
 });
 export type AgentPerformanceRow = z.infer<typeof AgentPerformanceRow>;
 
@@ -195,6 +198,28 @@ export const CostSlice = z.object({
   runs: z.number().int(),
 });
 export type CostSlice = z.infer<typeof CostSlice>;
+
+/** One bucket of the trailing series behind the Total-runs sparkline. */
+export const PerfBucket = z.object({
+  /** ISO date, the bucket's start. */
+  at: z.string(),
+  runs: z.number().int(),
+  cost_usd: z.number(),
+});
+export type PerfBucket = z.infer<typeof PerfBucket>;
+
+/** The same window, shifted back by its own length. Null when that earlier
+ *  window holds nothing — a delta against no data is not a delta, and an arrow
+ *  drawn from it would invent a trend. */
+export const PerfDelta = z.object({
+  previous_runs: z.number().int(),
+  previous_cost_usd: z.number(),
+  previous_accept_rate: z.number().nullable(),
+  runs_change: z.number().int(),
+  cost_change_usd: z.number(),
+  accept_rate_change: z.number().nullable(),
+});
+export type PerfDelta = z.infer<typeof PerfDelta>;
 
 export const AgentPerformance = z.object({
   period: PerfPeriod,
@@ -223,5 +248,11 @@ export const AgentPerformance = z.object({
   }),
   /** The minimum decisions a row needs before `accept_rate_reliable` is true. */
   min_decisions_for_rate: z.number().int(),
+  /** Trailing series for the sparkline, oldest first. Empty when the window is
+   *  too short to bucket usefully. */
+  series: z.array(PerfBucket),
+  /** Comparison with the preceding window of equal length. Null when there is
+   *  nothing to compare against. */
+  delta: PerfDelta.nullable(),
 });
 export type AgentPerformance = z.infer<typeof AgentPerformance>;
