@@ -380,6 +380,35 @@ pre.out .s { color: var(--ok); }
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .h { display: none; }
+
+/* ─── data-driven states ────────────────────────────────────────────────── */
+.railnote { margin:0; font-size:12px; line-height:1.5; color:var(--ink-faint); }
+.railnote code { font-size:11px; word-break:break-all; }
+.plugin.none { color:var(--ink-faint); opacity:.75; font-style:italic; }
+.copy[disabled] { opacity:.5; cursor:not-allowed; }
+.copy[disabled]:hover { border-color:var(--line); color:var(--ink-dim); }
+.pick[disabled] { opacity:.35; cursor:not-allowed; }
+.linkish { background:none; border:0; padding:0; font:inherit; color:var(--accent); }
+.linkish:hover { text-decoration:underline; text-underline-offset:3px; }
+q.dim { color:var(--ink-faint); font-style:italic; }
+.diag { border:1px solid var(--line-soft); border-radius:9px; background:var(--surface);
+        margin:0 0 22px; padding:0 16px; }
+.diag summary { cursor:pointer; padding:12px 0; font-size:13px; color:var(--ink-dim);
+        font-weight:500; }
+.diag summary:hover { color:var(--ink); }
+.diag[open] summary { border-bottom:1px solid var(--line-soft); margin-bottom:4px; }
+.drow { display:flex; gap:11px; padding:11px 0; border-bottom:1px solid var(--line-soft); }
+.drow:last-child { border-bottom:0; }
+.drow code { font-size:11.5px; color:var(--ink); }
+.drow p { margin:5px 0 0; font-size:12.5px; color:var(--ink-dim); line-height:1.5; max-width:74ch; }
+.dsev { font-family:"IBM Plex Mono",monospace; font-size:10px; text-transform:uppercase;
+        letter-spacing:.05em; padding:2px 7px; border-radius:4px; height:fit-content;
+        flex:0 0 auto; }
+.dsev.info { background:var(--surface-3); color:var(--ink-dim); }
+.dsev.warning { background:color-mix(in srgb, var(--accent) 18%, transparent); color:var(--accent); }
+.dsev.error { background:color-mix(in srgb, var(--crit) 18%, transparent); color:var(--crit); }
+.state code, .note code { font-family:"IBM Plex Mono",monospace; font-size:.9em;
+        background:var(--surface-3); padding:1px 5px; border-radius:4px; }
 </style>
 </head>
 <body>
@@ -408,220 +437,56 @@ pre.out .s { color: var(--ok); }
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════════
-   DATA — every name, description, version, model, tool list and source path
-   below is read from the real repository. In production this whole object is
-   the build-time generator's output (spec 16, R1) and is never hand-authored
-   inside site/ (R3). Eval coverage is real: 4 of 22 artefacts have cases.
+   The catalog is FETCHED, never authored here. scripts/build-catalog.mjs reads
+   this repository and emits catalog.json; this file only renders it. Nothing
+   below invents a name, a description, a version or a plugin — where the repo
+   has no answer yet, the UI says so.
    ══════════════════════════════════════════════════════════════════════════ */
-const REPO = "AIengineerDev/dev-digest";
-const MARKET = "devdigest-tools";
 
 const TYPES = {
-  skill:     { label: "Skill",       color: "#D6A241", plugin: "devdigest-skills" },
-  agent:     { label: "Agent",       color: "#6FA8DC", plugin: "devdigest-agents" },
-  hook:      { label: "Hook",        color: "#C98BC0", plugin: "devdigest-agents" },
-  "mcp-tool":{ label: "MCP tool",    color: "#58AE93", plugin: "devdigest-mcp"    },
-  product:   { label: "Product data",color: "#B58A6A", plugin: "devdigest-skills" },
+  skill:           { label: "Skill",        color: "#D6A241" },
+  agent:           { label: "Agent",        color: "#6FA8DC" },
+  hook:            { label: "Hook",         color: "#C98BC0" },
+  "mcp-tool":      { label: "MCP tool",     color: "#58AE93" },
+  "product-skill": { label: "Product data", color: "#B58A6A" },
 };
 
-const A = [
-{ id:"onion-architecture", type:"skill", version:"1.2.0", path:".claude/skills/onion-architecture/SKILL.md",
-  desc:"Enforce the onion/ports-and-adapters layering in server/ — which file a piece of backend code belongs in, which direction imports may point, when a module earns a service layer, who owns transactions and error translation, and how a new external dependency becomes a port. Use BEFORE adding a route, service, repository, or adapter under server/src, before wiring anything into the DI container, and when `pnpm arch` fails. Backend only; the client's layering lives in frontend-ui-architecture.",
-  evals:{ cases:1, at:"2026-08-29", where:".claude/skills/onion-architecture/evals" },
-  body:"The backend already has this shape — ports in the core, adapters at the edge, a single composition root. This skill writes it down and keeps it. It is not a migration plan and does not ask you to restructure working modules.",
-  log:[["2026-08-29","raise version to 1.2.0 after the eval baseline"],["2026-08-19","narrow the description away from client/ files"],["2026-08-11","add the DI container rule"],["2026-08-09","initial skill"]] },
-
-{ id:"frontend-ui-architecture", type:"skill", version:"1.1.0", path:".claude/skills/frontend-ui-architecture/SKILL.md",
-  desc:"Decide where frontend code goes in client/ — which folder a component belongs in, when to split it, where constants, styles, helpers, and business logic live, where the server/client boundary sits, and how routes are structured (layouts, overlays, navigation, middleware, i18n). Use BEFORE creating any file under client/src or any folder under app/, when a component grows past one responsibility, when something looks reusable enough to move up, or on \"where should this go\", \"how do I split this\", \"where do constants go\", \"should this be a route\", \"do we need a layout here\", \"should this open as a modal\". Records architecture only — not styling taste, not performance, not test strategy.",
-  evals:null,
-  body:"Placement rules for client/. Every rule here answers one question: given this piece of code, which folder owns it. It does not judge how the component looks or how fast it renders.",
-  log:[["2026-08-21","add the overlay/modal routing rule"],["2026-08-08","initial skill"]] },
-
-{ id:"repo-conventions", type:"skill", version:"1.0.0", path:".claude/skills/repo-conventions/SKILL.md",
-  desc:"Enforce the repository-wide conventions that no gate catches and no code review would flag on its own — which file is authoritative, what is generated and must never be hand-edited, what must never be committed, which package manager belongs where, and which changes have to land in a particular order or place. Use when reviewing a diff that adds or deletes files, touches a lockfile, a migration, a vendored copy, a symlink, a CI workflow, or an architecture baseline; and BEFORE committing a change that spans more than one package. Repository process only — backend layering lives in onion-architecture, client placement in frontend-ui-architecture, external packages in dependency-checker.",
-  evals:{ cases:1, at:"2026-08-29", where:".claude/skills/repo-conventions/evals" },
-  body:"The conventions in this repository that no type checker sees: AGENTS.md is the real file and CLAUDE.md is a symlink to it, each package carries its own lockfile, migrations are generated and never hand-edited.",
-  log:[["2026-08-14","initial skill"]] },
-
-{ id:"dependency-checker", type:"skill", version:"1.0.0", path:".claude/skills/dependency-checker/SKILL.md",
-  desc:"Audit this repository's external dependencies across all six packages — what each package installs, what it weighs, where two packages disagree on a version, and what to do about it. Use for \"audit our dependencies\", \"what is making the install so big\", \"which packages do we share\", \"is this dependency worth it\", \"can we drop X\", \"why is the client bundle heavy\", before adding a new runtime dependency, and before a dependency-bump PR. Produces a written report with a diagram and a ranked action list. External packages only — the direction of imports INSIDE server/src belongs to onion-architecture, where a client file goes belongs to frontend-ui-architecture, and which package manager a package uses belongs to repo-conventions.",
-  evals:null,
-  body:"Measures what the six packages install and what it costs. The report is ranked by what you would actually act on, not by size alone.",
-  log:[["2026-08-27","initial skill"]] },
-
-{ id:"engineering-insights", type:"skill", version:"1.0.0", path:".claude/skills/engineering-insights/SKILL.md",
-  desc:"Read and record durable engineering insights in the right module's INSIGHTS.md. Use at the START of a non-trivial task in dev-digest — before touching code — to recall what was already tried in the module being changed, and at the END of one to append what was learned. Also triggers on \"record insights\", \"run engineering insights\", \"what do we already know about X\", or a finished change under server/, client/, reviewer-core/, or e2e/.",
-  evals:null,
-  body:"INSIGHTS.md is the repo's memory of things that are true but not visible in the code. Code says what; these files say why, and what not to do again.",
-  log:[["2026-08-16","add the routing table for module-local vs root"],["2026-08-05","initial skill"]] },
-
-{ id:"impl", type:"skill", version:"2.0.0", path:".claude/skills/impl/SKILL.md",
-  desc:"Execute an approved Development Plan through this repo's build → verify → review → fix → accept → ship chain, spawning the right agent per stage and tracking progress in a run file so a fresh chat can resume. Use when a plan exists in plans/ and the work is to build it. Starts from a plan — writing the spec and the plan are separate, manual steps run before this. Human-gated; it never runs the whole chain unattended.",
-  evals:null,
-  body:"Drives a plan through the build chain one stage at a time, writing progress to plans/*.run.md so a fresh session can pick it up where it stopped.",
-  log:[["2026-08-18","spawn plan-verifier pass 1 with a sonnet override"],["2026-08-02","initial skill"]] },
-
-{ id:"workflow-retro", type:"skill", version:"2.0.0", path:".claude/skills/workflow-retro/SKILL.md",
-  desc:"Human-invoked retrospective on a multi-agent run: measures what the session cost and proposes prompt changes, with durable findings recorded in docs/retro/ledger.md. No agent or skill may launch it — offer it, never run it. Use `/workflow-retro deep` to widen the scope to every session, for trends.",
-  evals:null,
-  body:"Measures a finished multi-agent session — cost, turns, where the chain lost time — and proposes prompt changes. Findings that survive land in docs/retro/ledger.md.",
-  log:[["2026-08-22","add deep mode across sessions"],["2026-08-10","initial skill"]] },
-
-{ id:"spec-creator", type:"agent", model:"opus", tools:"Read, Grep, Glob, Bash, Write, Agent", path:".claude/agents/spec-creator.md",
-  desc:"Writes the specification file for work not yet built — the what and the why, with numbered requirements and acceptance criteria a reviewer can check from outside. Reads the repo and any design mockups, then names the states the design does not cover, the corner cases nobody wrote down, the seams between packages, and the UX it would improve. Invoke explicitly for \"write a spec for\", \"spec this out\", \"turn this design into a spec\". It writes a file, so it is not for answering a question about what to build — that is researcher. Writes new spec files only: never code, never docs, never an existing spec.",
-  evals:null,
-  body:"You write specifications and nothing else. A revision is a new numbered file, never an edit to an existing one. A PreToolUse hook enforces this independently of your prompt.",
-  log:[["2026-08-24","fence to specs/ with a PreToolUse hook"],["2026-08-04","initial agent"]] },
-
-{ id:"implementation-planner", type:"agent", model:"opus", tools:"Read, Grep, Glob, Bash", path:".claude/agents/implementation-planner.md",
-  desc:"Turns an agreed specification into a Development Plan grounded in this repository — audits the requirements first, reads specs/, docs/ and INSIGHTS.md before the code, then writes work with real gate commands and names the project skill that governs each phase. Asks whether to plan for a single implementer or parallel agent tracks. Use for \"plan\", \"how should we build\", \"break this down\", \"turn this spec into work\". Read-only: it produces a plan, never code and never a specification.",
-  evals:null,
-  body:"Produces a plan whose every phase names a real gate command from this repository. A phase with no command that proves it is not a phase.",
-  log:[["2026-08-18","keep opus — a wrong requirement is inherited by every later stage"],["2026-08-04","initial agent"]] },
-
-{ id:"implementer", type:"agent", model:"sonnet", tools:"Read, Grep, Glob, Edit, Write, Bash, Skill, TodoWrite", path:".claude/agents/implementer.md",
-  desc:"Executes an approved Development Plan across client/ and server/ — writes the code phase by phase, applies the project skill that governs each phase, runs the package's real gates and reports their actual output. Use after a plan exists and the request is to implement, execute, build or land it. Writes the tests its own plan phases call for; a task that is only about tests goes to test-writer. Does not review architecture or security; separate agents own that.",
-  evals:null,
-  body:"Executes one phase at a time and reports the gate's real output, never a summary of it.",
-  log:[["2026-08-12","report gate output verbatim"],["2026-08-04","initial agent"]] },
-
-{ id:"plan-verifier", type:"agent", model:"opus", tools:"Read, Grep, Glob, Bash", path:".claude/agents/plan-verifier.md",
-  desc:"Checks finished code against every stated item of a plan or spec — one verdict per item, each backed by a file location or real command output. Use for \"verify the plan\", \"did we do everything in <spec>\", \"check this against the requirements\", \"acceptance check\", after an implementer reports done. Read-only. Not a code review, not an architecture review (that is architecture-reviewer), and not a place to propose improvements.",
-  evals:null,
-  body:"One verdict per stated item. A verdict with no file location and no command output is downgraded to `not checkable here` rather than guessed.",
-  log:[["2026-08-18","pass 1 runs under a sonnet override from the impl skill"],["2026-08-06","initial agent"]] },
-
-{ id:"architecture-reviewer", type:"agent", model:"sonnet", tools:"Read, Grep, Glob, Bash", path:".claude/agents/architecture-reviewer.md",
-  desc:"Reviews code against this repo's architectural boundaries — the server's onion layering and the client's placement rules — and returns findings with evidence. Use for \"review the architecture\", \"check the layering\", \"did this break the boundaries\", \"architecture review of <paths>\", or after an implementer lands a change that adds a module, a route, an adapter or a screen. Read-only: it reports, it never fixes. Not a correctness review, not a security review, and not a check against a plan — that is plan-verifier. Repository process — a hand-edited migration, a second lockfile, a symlink replaced by a copy — is repo-conventions, not an architecture finding.",
-  evals:{ cases:1, at:"2026-08-29", where:"evals/agents/architecture-reviewer.cases.ts" },
-  body:"Reports boundary violations with evidence and never fixes them. A finding without a path and a line is not a finding.",
-  log:[["2026-08-18","move to sonnet — the format does the constraining"],["2026-08-06","initial agent"]] },
-
-{ id:"researcher", type:"agent", model:"sonnet", tools:"Read, Grep, Glob, Bash, WebFetch, WebSearch", path:".claude/agents/researcher.md",
-  desc:"Answers a research question and reports back with evidence — either from inside this repository (how does X work, where is Y decided, when did Z change, what already exists before I build it) or from outside it (library/API behaviour, version differences, a spec, an error message with no local cause). Use for \"research\", \"investigate\", \"find out how\", \"what are our options for\", \"does <library> support\", \"why does <error> happen\". Read-only: it never edits files. Not for making a change, and not for a single-fact lookup you can grep yourself.",
-  evals:null,
-  body:"You research a question and report what the evidence supports. You do not write code, edit files, or make changes — your output is the report and nothing else.",
-  log:[["2026-08-07","initial agent"]] },
-
-{ id:"doc-writer", type:"agent", model:"sonnet", tools:"Read, Grep, Glob, Edit, Write, Bash", path:".claude/agents/doc-writer.md",
-  desc:"Documents features that are already implemented — turns a plan, a spec or a shipped change into documentation in the right surface, with a diagram in the house mermaid style, and registers it where readers will find it. Use for \"document this\", \"write the docs for\", \"turn this plan into documentation\", \"add a diagram for\", \"the spec shipped — update the docs\". Never writes INSIGHTS.md, never writes a spec for unbuilt work, never documents code that is not merged.",
-  evals:null,
-  body:"Documents what is merged. Unbuilt work is a spec, not documentation, and INSIGHTS.md belongs to the engineering-insights skill.",
-  log:[["2026-08-13","initial agent"]] },
-
-{ id:"test-writer", type:"agent", model:"sonnet", tools:"Read, Grep, Glob, Edit, Write, Bash, Skill, TodoWrite", path:".claude/agents/test-writer.md",
-  desc:"Writes tests for this repo's UI and backend — picks the right lane, imitates the existing model file for that lane, and runs the suite it touched. Use for \"write tests for\", \"add test coverage\", \"backfill tests\", \"harden this suite\", \"test this module\". Writes test files only: it never changes production code, never reviews architecture, and is not for tests that are part of a plan phase implementer is already executing.",
-  evals:null,
-  body:"Picks the lane first — server tests split by filename, and everything that is not *.it.test.ts must stay hermetic.",
-  log:[["2026-08-18","dropped from the default build chain"],["2026-08-06","initial agent"]] },
-
-{ id:"spec-creator-guard", type:"hook", path:".claude/hooks/spec-creator-guard.mjs",
-  desc:"PreToolUse guard for the spec-creator subagent. Spec-creator writes specifications and nothing else; this hook is the enforcement — it makes the rule true even when the prompt is ignored, drifts, or is overridden by a task instruction. Covers Bash as well as the file tools, because a fence that ignores the shell is not a fence.",
-  evals:null, needsDesc:true,
-  body:"Wired from .claude/settings.json on PreToolUse for Write, Edit, MultiEdit, NotebookEdit and Bash. A no-op for every other agent and for the main session.",
-  log:[["2026-08-24","initial hook"]] },
-
-{ id:"get_blast_radius", type:"mcp-tool", path:"mcp/src/tools/get-blast-radius.ts",
-  desc:"Given a set of changed files, returns what else in the repository depends on them — the blast radius of a diff. Used by a reviewing agent to decide how far to look beyond the lines that changed.",
-  evals:null,
-  body:"Reads the indexer's graph and answers the reachability question without pulling whole files into the agent's context.",
-  log:[["2026-08-20","initial tool"]] },
-
-{ id:"get_conventions", type:"mcp-tool", path:"mcp/src/tools/get-conventions.ts",
-  desc:"Returns the conventions that apply to a given path — which package owns it, which package manager it uses, what must never be hand-edited there. Keeps a reviewing agent from proposing a change the repository forbids.",
-  evals:null,
-  body:"One call replaces reading four AGENTS.md files, and stays inside the MCP token budget.",
-  log:[["2026-08-20","initial tool"]] },
-
-{ id:"get_findings", type:"mcp-tool", path:"mcp/src/tools/get-findings.ts",
-  desc:"Returns the findings a previous review run recorded for a pull request, so a follow-up session can continue from them instead of re-reviewing the same diff.",
-  evals:null,
-  body:"Findings are keyed by the head commit they were produced against, so a stale set is visible as stale rather than silently reused.",
-  log:[["2026-08-20","initial tool"]] },
-
-{ id:"list_agents", type:"mcp-tool", path:"mcp/src/tools/list-agents.ts",
-  desc:"Lists the review agents available to run on a pull request, with what each one covers. The discovery call a host makes before run_agent_on_pr.",
-  evals:null,
-  body:"Returns names and coverage only — the prompts stay server-side and out of the host's context window.",
-  log:[["2026-08-20","initial tool"]] },
-
-{ id:"run_agent_on_pr", type:"mcp-tool", path:"mcp/src/tools/run-agent.ts",
-  desc:"Runs one named review agent against a pull request and returns its findings. The single write-shaped tool in the MCP surface — everything else only reads.",
-  evals:null,
-  body:"Long-running by nature: it starts a run and reports the run id, rather than blocking the host session until the reviewer finishes.",
-  log:[["2026-08-20","initial tool"]] },
-
-{ id:"api-contract-reviewer", type:"product", path:"skills/api-contract-reviewer/README.md",
-  desc:"Product data, not a routable skill: the fixtures, baseline repository and expected findings that the api-contract-reviewer eval suite runs against. It deliberately has no SKILL.md — evals/src/quality.ts checks it with a separate rule.",
-  evals:{ cases:1, at:"2026-08-27", where:"skills/api-contract-reviewer/evals" },
-  body:"A baseline repo plus generated diffs plus expected.json. Indexed so it is findable, badged so nobody installs it expecting a skill.",
-  log:[["2026-08-27","initial suite"]] },
-];
-
-/* Alias table — committed data (spec 16, R6). Deliberately includes Ukrainian
-   phrasings: R27 requires a Cyrillic query to resolve through this table.     */
+/* The one dataset this site legitimately owns (specs/16 R6): colloquial
+   phrasings mapped to artefact names. Data, reviewed in a diff, no model.
+   Ukrainian entries are here because R27 requires a Cyrillic query to resolve. */
 const ALIASES = [
-  { phrase:"layering",             artefact:"onion-architecture",       note:"the backend word for it" },
-  { phrase:"шари",                 artefact:"onion-architecture",       note:"uk — layering" },
-  { phrase:"архітектура сервера",  artefact:"onion-architecture",       note:"uk — server architecture" },
-  { phrase:"where should this go", artefact:"frontend-ui-architecture", note:"the question users actually type" },
-  { phrase:"де покласти компонент",artefact:"frontend-ui-architecture", note:"uk — where to put a component" },
-  { phrase:"bundle size",          artefact:"dependency-checker",       note:"weight question" },
-  { phrase:"залежності",           artefact:"dependency-checker",       note:"uk — dependencies" },
-  { phrase:"lockfile",             artefact:"repo-conventions",         note:"process, not architecture" },
-  { phrase:"скіл для архітектури", artefact:"onion-architecture",       note:"uk — a skill for architecture" },
-  { phrase:"написати спеку",       artefact:"spec-creator",             note:"uk — write a spec" },
-  { phrase:"what do we know about",artefact:"engineering-insights",     note:"recall mode" },
+  { phrase:"layering",              artefact:"onion-architecture",       note:"the backend word for it" },
+  { phrase:"шари",                  artefact:"onion-architecture",       note:"uk — layering" },
+  { phrase:"архітектура сервера",   artefact:"onion-architecture",       note:"uk — server architecture" },
+  { phrase:"скіл для архітектури",  artefact:"onion-architecture",       note:"uk — a skill for architecture" },
+  { phrase:"where should this go",  artefact:"frontend-ui-architecture", note:"the question users actually type" },
+  { phrase:"де покласти компонент", artefact:"frontend-ui-architecture", note:"uk — where to put a component" },
+  { phrase:"bundle size",           artefact:"dependency-checker",       note:"weight question" },
+  { phrase:"залежності",            artefact:"dependency-checker",       note:"uk — dependencies" },
+  { phrase:"lockfile",              artefact:"repo-conventions",         note:"process, not architecture" },
+  { phrase:"написати спеку",        artefact:"spec-creator",             note:"uk — write a spec" },
+  { phrase:"what do we know about", artefact:"engineering-insights",     note:"recall mode" },
 ];
 
-/* Boundary pairs — each side quotes its own description (R23). */
-const PAIRS = [
-  { a:"onion-architecture", b:"frontend-ui-architecture",
-    qa:"Use BEFORE adding a route, service, repository, or adapter under server/src. Backend only.",
-    qb:"Use BEFORE creating any file under client/src or any folder under app/." },
-  { a:"repo-conventions", b:"dependency-checker",
-    qa:"Repository process only — which package manager belongs where, what must never be hand-edited.",
-    qb:"External packages only — what each package installs and what it weighs." },
-  { a:"plan-verifier", b:"architecture-reviewer",
-    qa:"Checks finished code against every stated item of a plan or spec. Not a code review, not an architecture review.",
-    qb:"Reviews code against this repo's architectural boundaries. Not a check against a plan — that is plan-verifier." },
-  { a:"researcher", b:"spec-creator",
-    qa:"Read-only: it never edits files. Not for making a change.",
-    qb:"It writes a file, so it is not for answering a question about what to build — that is researcher." },
-];
+let CAT = null;   /* the fetched catalog */
+let A = [];       /* CAT.artefacts, with search fields prepared */
 
-/* Graph edges — every edge cites the file it was read from (R22). */
-const EDGES = [
-  { from:"onion-architecture",   to:"frontend-ui-architecture", why:"delimits", src:".claude/skills/onion-architecture/SKILL.md:3" },
-  { from:"dependency-checker",   to:"onion-architecture",       why:"delimits", src:".claude/skills/dependency-checker/SKILL.md:3" },
-  { from:"dependency-checker",   to:"repo-conventions",         why:"delimits", src:".claude/skills/dependency-checker/SKILL.md:3" },
-  { from:"repo-conventions",     to:"frontend-ui-architecture", why:"delimits", src:".claude/skills/repo-conventions/SKILL.md:3" },
-  { from:"impl",                 to:"plan-verifier",            why:"spawns",   src:".claude/skills/impl/SKILL.md:104" },
-  { from:"impl",                 to:"implementer",              why:"spawns",   src:".claude/skills/impl/SKILL.md:104" },
-  { from:"impl",                 to:"architecture-reviewer",    why:"spawns",   src:".claude/skills/impl/SKILL.md:104" },
-  { from:"spec-creator-guard",   to:"spec-creator",             why:"fences",   src:".claude/settings.json:5" },
-  { from:"plan-verifier",        to:"architecture-reviewer",    why:"delimits", src:".claude/agents/plan-verifier.md:3" },
-  { from:"architecture-reviewer",to:"repo-conventions",         why:"defers to",src:".claude/agents/architecture-reviewer.md:3" },
-];
-
-/* ══════════════════════════════════════════════════════════════════════════
-   SEARCH — lexical, over data prepared once at load. Unicode-aware tokenizer:
-   the index and the query MUST normalize identically or every Cyrillic query
-   silently returns nothing (spec 16, C1).
-   ══════════════════════════════════════════════════════════════════════════ */
-const norm = s => s.toLowerCase().normalize("NFKD");
+/* ── search ─────────────────────────────────────────────────────────────── */
+const norm = s => String(s).toLowerCase().normalize("NFKD");
 const tok  = s => norm(s).match(/[\p{L}\p{N}]+/gu) || [];
 
-A.forEach(a => {
-  a.plugin = TYPES[a.type].plugin;
-  a.tokName = tok(a.id);
-  a.tokDesc = tok(a.desc);
-  a.tokBody = tok(a.body);
-  a.trig = extractTriggers(a.desc);
-});
+function prepare(cat) {
+  for (const a of cat.artefacts) {
+    a.tokName = tok(a.id);
+    a.tokDesc = tok(a.description || "");
+    a.tokBody = tok(a.summary || "");
+    a.trig = extractTriggers(a.description || "");
+  }
+  return cat.artefacts;
+}
 
-/* Heuristic trigger extraction (R24) — quoted phrases plus "Use for/when/BEFORE"
-   clauses. Labelled as heuristic wherever it is shown. */
+/* Heuristic (R24): quoted phrases and "Use for/when/BEFORE" clauses, pulled from
+   the real description. Labelled as heuristic wherever shown. */
 function extractTriggers(d) {
   const out = [];
   for (const m of d.matchAll(/"([^"]{3,42})"/g)) out.push(m[1]);
@@ -635,10 +500,8 @@ function score(q, a) {
   if (!qt.length) return { s: 0, hits: [] };
   let s = 0; const hits = [];
   const nq = norm(q).trim();
-
-  for (const al of ALIASES) {
+  for (const al of ALIASES)
     if (nq.includes(norm(al.phrase)) && al.artefact === a.id) { s += 120; hits.push(al.phrase); }
-  }
   for (const t of qt) {
     if (a.tokName.includes(t)) { s += 30; hits.push(t); continue; }
     if (a.tokName.some(n => n.startsWith(t) && t.length > 2)) { s += 18; hits.push(t); continue; }
@@ -650,7 +513,6 @@ function score(q, a) {
   }
   return { s, hits: [...new Set(hits)] };
 }
-/* one-edit distance, enough for a typo; cheap on a 22-row index */
 function near(a, b) {
   if (Math.abs(a.length - b.length) > 1 || b.length < 4) return false;
   let i = 0, j = 0, d = 0;
@@ -661,7 +523,6 @@ function near(a, b) {
   }
   return d + (a.length - i) + (b.length - j) <= 1;
 }
-
 function highlight(text, hits, limit) {
   let t = limit && text.length > limit ? text.slice(0, limit).replace(/\s+\S*$/, "") + "…" : text;
   t = t.replace(/[&<>]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;" }[c]));
@@ -672,10 +533,7 @@ function highlight(text, hits, limit) {
 }
 const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/* ══════════════════════════════════════════════════════════════════════════
-   STATE — mirrored into the URL hash so a filtered search and a bundle are
-   both linkable (R17, R20).
-   ══════════════════════════════════════════════════════════════════════════ */
+/* ── state ──────────────────────────────────────────────────────────────── */
 const S = { view:"catalog", q:"", types:new Set(), plugins:new Set(), evalsOnly:false, sel:new Set(), open:null };
 
 function writeHash() {
@@ -700,41 +558,70 @@ function readHash() {
   S.open = p.get("a");
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   RENDER
-   ══════════════════════════════════════════════════════════════════════════ */
 const root = document.getElementById("root");
+const marketName = () => CAT?.marketplace?.name || null;
 
+/* ── boot ───────────────────────────────────────────────────────────────── */
+(async function boot() {
+  root.innerHTML = `<div class="state"><h3>Reading the catalog…</h3>
+    <p>Generated from the repository at build time by
+    <code>scripts/build-catalog.mjs</code>.</p></div>`;
+  try {
+    const res = await fetch("./catalog.json", { cache: "no-store" });
+    if (!res.ok) throw new Error(`catalog.json responded ${res.status}`);
+    CAT = await res.json();
+    A = prepare(CAT);
+  } catch (e) {
+    root.innerHTML = `<div class="state">
+      <h3>The catalog could not be loaded</h3>
+      <p>${escape_(e.message)}. This page holds no data of its own, so there is
+         nothing to show without it. Rebuild with
+         <code>node scripts/build-catalog.mjs --out prototype/catalog.json</code>,
+         or serve through <code>node prototype/dev.mjs</code>, which generates it
+         on every request.</p></div>`;
+    return;
+  }
+  readHash();
+  render();
+})();
+
+/* ── render ─────────────────────────────────────────────────────────────── */
 function results() {
   let list = A.map(a => ({ a, ...score(S.q, a) }));
   if (S.q.trim()) list = list.filter(r => r.s > 0).sort((x, y) => y.s - x.s || x.a.id.localeCompare(y.a.id));
   else list = list.map(r => ({ ...r, hits: [] })).sort((x, y) => x.a.id.localeCompare(y.a.id));
   return list;
 }
-function applyFilters(list) {
-  return list.filter(({ a }) =>
-    (!S.types.size || S.types.has(a.type)) &&
-    (!S.plugins.size || S.plugins.has(a.plugin)) &&
-    (!S.evalsOnly || !!a.evals));
-}
+const applyFilters = list => list.filter(({ a }) =>
+  (!S.types.size || S.types.has(a.type)) &&
+  (!S.plugins.size || S.plugins.has(a.plugin)) &&
+  (!S.evalsOnly || (a.evals && a.evals.length)));
 
 function render() {
   writeHash();
   document.querySelectorAll("#nav button").forEach(b =>
     b.setAttribute("aria-current", b.dataset.view === S.view && !S.open ? "page" : "false"));
-
-  if (S.open) return renderDetail(A.find(a => a.id === S.open));
+  if (S.open) { const a = A.find(x => x.id === S.open); return a ? renderDetail(a) : renderMissing(); }
   if (S.view === "graph")      return renderGraph();
   if (S.view === "boundaries") return renderBoundaries();
   if (S.view === "bundle")     return renderBundle();
   renderCatalog();
 }
 
+function renderMissing() {
+  root.innerHTML = `<div class="state">
+    <h3>No artefact named “${escape_(S.open)}”</h3>
+    <p>It is not in the generated catalog. Either the link predates a rename, or
+       the artefact was removed from the repository — the catalog only ever holds
+       what exists right now.</p>
+    <button class="btn" data-back>Back to the catalog</button></div>`;
+  wire();
+}
+
 function renderCatalog() {
   const scored = results();
   const shown = applyFilters(scored);
   const filtersOn = S.types.size || S.plugins.size || S.evalsOnly;
-
   root.innerHTML = `
   <div class="cols">
     <aside class="rail">${railHTML(scored)}</aside>
@@ -743,35 +630,34 @@ function renderCatalog() {
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
           <circle cx="7" cy="7" r="4.6"></circle><path d="M10.5 10.5L14 14"></path></svg>
         <input id="q" type="search" autocomplete="off" spellcheck="false"
-          placeholder="Describe what you need — “I need a skill for layering”" value="${attr(S.q)}">
+          placeholder="Describe what you need — “I need a skill for layering”" value="${escape_(S.q)}">
       </div></div>
       <p class="hintline"><b>Try:</b>
         ${["layering","де покласти компонент","скіл для архітектури","lockfile","blast radius","architecure"]
-          .map(s => `<button class="chip" data-try="${attr(s)}">${escape_(s)}</button>`).join("")}
+          .map(s => `<button class="chip" data-try="${escape_(s)}">${escape_(s)}</button>`).join("")}
       </p>
       ${body()}
     </section>
   </div>`;
-
   function body() {
     if (!S.q.trim() && !filtersOn) return browseAll(shown);
     if (shown.length) return listHTML(shown, S.q.trim() ? "" : "grouped");
     if (scored.length && filtersOn) return stateFiltersExclude(scored.length);
     return stateZero();
   }
-
   const q = document.getElementById("q");
-  q.addEventListener("input", e => { S.q = e.target.value; const p = q.selectionStart; render();
-    const n = document.getElementById("q"); n.focus(); n.setSelectionRange(p, p); });
+  q.addEventListener("input", e => {
+    S.q = e.target.value; const p = q.selectionStart; render();
+    const n = document.getElementById("q"); n.focus(); n.setSelectionRange(p, p);
+  });
   wire();
 }
 
 function railHTML(scored) {
   const inType = t => scored.filter(r => r.a.type === t &&
-      (!S.plugins.size || S.plugins.has(r.a.plugin)) && (!S.evalsOnly || r.a.evals)).length;
-  const inPlug = p => scored.filter(r => r.a.plugin === p &&
-      (!S.types.size || S.types.has(r.a.type)) && (!S.evalsOnly || r.a.evals)).length;
-  const plugins = [...new Set(A.map(a => a.plugin))].sort();
+      (!S.plugins.size || S.plugins.has(r.a.plugin)) && (!S.evalsOnly || r.a.evals.length)).length;
+  const plugins = [...new Set(A.map(a => a.plugin).filter(Boolean))].sort();
+  const withEvals = A.filter(a => a.evals.length).length;
 
   return `
   <div class="facet"><h3>Type</h3><ul>
@@ -780,25 +666,43 @@ function railHTML(scored) {
         <i class="dot" style="background:${v.color}"></i>${v.label}<span class="n">${inType(k)}</span>
       </button></li>`).join("")}
   </ul></div>
-  <div class="facet"><h3>Plugin</h3><ul>
-    ${plugins.map(p => `
-      <li><button class="f ${S.plugins.has(p) ? "on" : ""}" data-f="plugin" data-v="${p}">
-        ${p.replace("devdigest-", "")}<span class="n">${inPlug(p)}</span>
-      </button></li>`).join("")}
-  </ul></div>
+  <div class="facet"><h3>Plugin</h3>
+    ${plugins.length ? `<ul>${plugins.map(p => `
+      <li><button class="f ${S.plugins.has(p) ? "on" : ""}" data-f="plugin" data-v="${escape_(p)}">
+        ${escape_(p)}<span class="n">${A.filter(a => a.plugin === p).length}</span></button></li>`).join("")}</ul>`
+      : `<p class="railnote">No marketplace manifest in the repository yet, so no
+         artefact belongs to a plugin. This facet fills in on its own once
+         <code>.claude-plugin/marketplace.json</code> lands.</p>`}
+  </div>
   <div class="facet"><h3>Coverage</h3><ul>
     <li><button class="f ${S.evalsOnly ? "on" : ""}" data-f="evals" data-v="1">
       <i class="dot" style="background:var(--ok)"></i>Has evals
-      <span class="n">${A.filter(a => a.evals).length}</span></button></li>
+      <span class="n">${withEvals}</span></button></li>
   </ul></div>
   ${(S.types.size || S.plugins.size || S.evalsOnly)
     ? `<button class="clearfilters" id="clearf">Clear filters</button>` : ""}`;
 }
 
+function diagnosticsHTML() {
+  const d = CAT.diagnostics || [];
+  if (!d.length) return "";
+  return `<details class="diag"><summary>${d.length} generator diagnostic${d.length === 1 ? "" : "s"}
+      — what the repository could not answer</summary>
+    ${d.map(x => `<div class="drow"><span class="dsev ${x.severity}">${x.severity}</span>
+      <div><code>${escape_(x.path)}</code><p>${escape_(x.message)}</p></div></div>`).join("")}
+  </details>`;
+}
+
 function browseAll(list) {
-  let h = `<p class="note"><b>22 artefacts, ${A.filter(a => a.evals).length} with eval coverage.</b>
-    Everything below is generated from the repository at build time — no description,
-    version or tool list is authored in this site. Each card shows the file it came from.</p>`;
+  const withEvals = A.filter(a => a.evals.length).length;
+  let h = `<p class="note"><b>${A.length} artefacts, ${withEvals} with eval coverage.</b>
+    Every field below was read from a file in this repository by
+    <code>scripts/build-catalog.mjs</code> — nothing on this page is written by hand.
+    Each card shows the path its data came from.
+    ${marketName() ? "" : `<br><br><b>No marketplace exists yet.</b> Nothing here belongs to a
+      plugin and no install command can be produced, so the catalog says so instead
+      of naming a plugin that does not exist.`}</p>
+    ${diagnosticsHTML()}`;
   for (const [k, v] of Object.entries(TYPES)) {
     const g = list.filter(r => r.a.type === k);
     if (!g.length) continue;
@@ -806,226 +710,278 @@ function browseAll(list) {
   }
   return h;
 }
-
 function listHTML(list, mode) {
   if (mode === "grouped") return browseAll(list);
   return `<div class="groupbar">${list.length} result${list.length === 1 ? "" : "s"}</div>
           <div class="cards">${list.map(cardHTML).join("")}</div>`;
 }
 
+function evalBadge(a) {
+  if (!a.evals.length)
+    return `<span class="badge ev-none" title="No eval suite covers this yet — a warning, not a failure">no evals</span>`;
+  const cases = a.evals.reduce((n, s) => n + (s.cases || 0), 0);
+  return `<span class="badge ev-ok" title="${escape_(a.evals.map(s => s.path).join(" · "))}">evals · ${
+    cases ? cases + " case" + (cases === 1 ? "" : "s") : a.evals.length + " suite" + (a.evals.length === 1 ? "" : "s")}</span>`;
+}
+
 function cardHTML({ a, hits }) {
-  const t = TYPES[a.type];
-  const ev = a.evals
-    ? `<span class="badge ev-ok" title="${a.evals.where}">evals · ${a.evals.cases}</span>`
-    : `<span class="badge ev-none" title="No eval cases yet — a warning, not a failure">no evals</span>`;
+  const t = TYPES[a.type] || { label: a.type, color: "var(--line)" };
+  const canInstall = !!(marketName() && a.plugin);
   return `
   <article class="card ${S.sel.has(a.id) ? "sel" : ""}"
      style="--tc:${t.color};--tcbg:color-mix(in srgb, ${t.color} 15%, transparent)">
-    <input class="pick" type="checkbox" data-pick="${a.id}" ${S.sel.has(a.id) ? "checked" : ""}
-           aria-label="Add ${a.id} to bundle">
-    <h4><button data-open="${a.id}">${highlight(a.id, hits)}</button></h4>
+    <input class="pick" type="checkbox" data-pick="${escape_(a.id)}" ${S.sel.has(a.id) ? "checked" : ""}
+           ${canInstall ? "" : "disabled"} aria-label="Add ${escape_(a.id)} to bundle">
+    <h4><button data-open="${escape_(a.id)}">${highlight(a.id, hits)}</button></h4>
     <div class="path">${escape_(a.path)}</div>
-    <p class="desc clamp">${highlight(a.desc, hits, 240)}</p>
+    <p class="desc clamp">${highlight(a.description || "", hits, 240)}</p>
     ${a.trig.length ? `<div class="triggers">${a.trig.map(x =>
         `<span class="trig">${highlight(x, hits)}</span>`).join("")}</div>` : ""}
     <div class="side">
       <span class="badge type">${t.label}</span>
-      ${a.version ? `<span class="badge ver">v${a.version}</span>` : ""}
-      ${ev}
-      <span class="plugin">${a.plugin}</span>
-      <button class="copy" data-copy="install:${a.plugin}">Copy install</button>
+      ${a.version ? `<span class="badge ver">v${escape_(a.version)}</span>` : ""}
+      ${evalBadge(a)}
+      ${a.plugin ? `<span class="plugin">${escape_(a.plugin)}</span>`
+                 : `<span class="plugin none">no plugin yet</span>`}
+      ${canInstall
+        ? `<button class="copy" data-copy="install:${escape_(a.plugin)}">Copy install</button>`
+        : `<button class="copy" disabled title="No marketplace manifest exists in the repository yet, so there is no command to copy">Not installable yet</button>`}
     </div>
   </article>`;
 }
 
 function stateZero() {
   const nq = norm(S.q);
-  const nearest = ALIASES
-    .map(al => ({ al, d: overlap(nq, norm(al.phrase)) }))
+  const nearest = ALIASES.map(al => ({ al, d: overlap(nq, norm(al.phrase)) }))
     .filter(x => x.d > 0).sort((a, b) => b.d - a.d).slice(0, 3);
-  const issue = `https://github.com/${REPO}/issues/new?title=${encodeURIComponent("No catalog result for: " + S.q)}&body=${encodeURIComponent("Query: " + S.q + "\n\nExpected artefact:\n\nSuggested alias entry for site/aliases.json:\n")}`;
+  const issue = `https://github.com/${CAT.repo}/issues/new?title=${
+    encodeURIComponent("No catalog result for: " + S.q)}&body=${
+    encodeURIComponent("Query: " + S.q + "\n\nExpected artefact:\n\nSuggested alias entry for the catalog's alias table:\n")}`;
   return `<div class="state">
     <h3>Nothing matches “${escape_(S.q)}”</h3>
-    <p>The catalog searches names, descriptions and a committed alias table. A miss usually
-       means the alias table is missing a phrase — which is a one-line pull request, not a bug.</p>
+    <p>The catalog searches names, descriptions and a committed alias table. A miss
+       usually means the alias table is missing a phrase — a one-line pull request,
+       not a bug.</p>
     ${nearest.length ? `<div class="near">${nearest.map(({ al }) => `
-      <button data-try="${attr(al.phrase)}"><span class="k">${escape_(al.phrase)}</span>
+      <button data-try="${escape_(al.phrase)}"><span class="k">${escape_(al.phrase)}</span>
         <span>→ ${escape_(al.artefact)} · ${escape_(al.note)}</span></button>`).join("")}</div>` : ""}
     <a class="btn" href="${issue}" target="_blank" rel="noopener">Report the gap</a>
   </div>`;
 }
-function overlap(a, b) { const A_ = new Set(tok(a)), B = tok(b); return B.filter(x => A_.has(x)).length; }
+const overlap = (a, b) => { const set = new Set(tok(a)); return tok(b).filter(x => set.has(x)).length; };
 
 function stateFiltersExclude(n) {
   return `<div class="state">
     <h3>Filters exclude all ${n} match${n === 1 ? "" : "es"}</h3>
-    <p>The query found results — the active filters removed them. This is a different problem
-       from a query that matches nothing, and it has a different fix.</p>
-    <button class="btn" id="clearf2">Clear filters, keep the query</button>
-  </div>`;
+    <p>The query found results — the active filters removed them. That is a different
+       problem from a query that matches nothing, and it has a different fix.</p>
+    <button class="btn" id="clearf2">Clear filters, keep the query</button></div>`;
 }
 
+/* ── detail ─────────────────────────────────────────────────────────────── */
 function renderDetail(a) {
-  const t = TYPES[a.type];
-  const pairs = PAIRS.filter(p => p.a === a.id || p.b === a.id);
-  const edges = EDGES.filter(e => e.from === a.id || e.to === a.id);
+  const t = TYPES[a.type] || { label: a.type, color: "var(--line)" };
+  const outgoing = a.mentions || [];
+  const incoming = A.filter(x => (x.mentions || []).some(m => m.id === a.id))
+    .map(x => ({ from: x, m: x.mentions.find(m => m.id === a.id) }));
+  const canInstall = !!(marketName() && a.plugin);
+
   root.innerHTML = `
   <div class="detail">
     <div class="crumb"><button data-back>← Catalog</button><span>/</span><span>${t.label}</span></div>
     <h1>${escape_(a.id)}</h1>
-    <div class="sub">Source: <a href="https://github.com/${REPO}/blob/main/${a.path}" target="_blank"
-      rel="noopener">${escape_(a.path)}</a></div>
+    <div class="sub">Source: <a href="https://github.com/${CAT.repo}/blob/main/${escape_(a.path)}"
+      target="_blank" rel="noopener">${escape_(a.path)}</a></div>
     <div class="detailbar">
       <span class="badge type" style="--tc:${t.color};--tcbg:color-mix(in srgb, ${t.color} 15%, transparent)">${t.label}</span>
-      ${a.version ? `<span class="badge ver">v${a.version}</span>` : ""}
-      ${a.evals ? `<span class="badge ev-ok">evals · ${a.evals.cases} · baseline ${a.evals.at}</span>`
-                : `<span class="badge ev-none">no eval cases</span>`}
-      <button class="copy" data-copy="install:${a.plugin}">Copy install command</button>
-      <button class="copy" data-copy="raw:${a.id}">Copy raw</button>
+      ${a.version ? `<span class="badge ver">v${escape_(a.version)}</span>` : ""}
+      ${evalBadge(a)}
+      ${canInstall ? `<button class="copy" data-copy="install:${escape_(a.plugin)}">Copy install command</button>`
+        : `<button class="copy" disabled>Not installable yet</button>`}
     </div>
 
-    ${!a.evals ? `<p class="note">No eval cases cover this artefact yet. That is a
-      <b>warning, not a failure</b> — the free quality gate reports it the same way, because
-      artefacts that predate the harness would otherwise hold the gate red forever.</p>` : ""}
-    ${a.needsDesc ? `<p class="note">This hook has <b>no machine-readable description in its
-      source</b>. The text above is the one place in the catalog that would have to be authored
-      by hand — which the governing principle forbids. The source must gain a description
-      before this artefact can ship.</p>` : ""}
+    ${!a.plugin ? `<p class="note">${marketName()
+      ? `This artefact belongs to <b>no plugin</b> in <code>${escape_(marketName())}</code>. It is
+         findable here but cannot be installed until a plugin claims it.`
+      : `The repository has <b>no marketplace manifest yet</b>, so nothing is attributable to a
+         plugin and no install command exists. This page reports that rather than showing a
+         plugin name that would not resolve.`}</p>` : ""}
 
-    <div class="sec">Frontmatter</div>
+    ${!a.evals.length ? `<p class="note">No eval suite covers this artefact. That is a
+      <b>warning, not a failure</b> — the free quality gate reports it the same way, because
+      artefacts predating the harness would otherwise hold the gate red forever.</p>` : ""}
+
+    ${a.descriptionSource === "comment-block" ? `<p class="note">This description was
+      <b>derived from the file's leading comment block</b>, not declared. Hooks carry no
+      frontmatter, and the catalog will not author text of its own — so it extracts, and
+      says that it extracted. A sibling <code>hook.json</code> would make it authoritative.</p>` : ""}
+
+    <div class="sec">Read from source</div>
     <table class="fm"><tbody>
       <tr><th>name</th><td>${escape_(a.id)}</td></tr>
-      ${a.version ? `<tr><th>version</th><td>${a.version}</td></tr>` : ""}
-      ${a.model ? `<tr><th>model</th><td>${a.model}</td></tr>` : ""}
-      ${a.tools ? `<tr><th>tools</th><td>${escape_(a.tools)}</td></tr>` : ""}
-      <tr><th>owning plugin</th><td>${a.plugin}</td></tr>
+      <tr><th>type</th><td>${escape_(a.type)}</td></tr>
+      ${a.version ? `<tr><th>version</th><td>${escape_(a.version)}</td></tr>` : ""}
+      ${a.model ? `<tr><th>model</th><td>${escape_(a.model)}</td></tr>` : ""}
+      ${a.tools ? `<tr><th>tools</th><td>${escape_(a.tools.join(", "))}</td></tr>` : ""}
+      ${a.title ? `<tr><th>title</th><td>${escape_(a.title)}</td></tr>` : ""}
+      ${a.wiring?.length ? `<tr><th>wired on</th><td>${a.wiring.map(w =>
+        escape_(w.event + (w.matcher ? ` — ${w.matcher}` : ""))).join("<br>")}</td></tr>` : ""}
+      <tr><th>plugin</th><td>${a.plugin ? escape_(a.plugin) : "— none yet —"}</td></tr>
+      <tr><th>description from</th><td>${escape_(a.descriptionSource || "—")}</td></tr>
       <tr><th>source path</th><td>${escape_(a.path)}</td></tr>
+      ${a.evals.length ? `<tr><th>eval suites</th><td>${a.evals.map(s =>
+        escape_(s.path + (s.cases ? ` — ${s.cases} case${s.cases === 1 ? "" : "s"}` : ""))).join("<br>")}</td></tr>` : ""}
     </tbody></table>
 
-    <div class="sec">Description (verbatim from source)</div>
-    <div class="body"><p>${escape_(a.desc)}</p></div>
+    <div class="sec">Description · verbatim from source</div>
+    <div class="body"><p>${escape_(a.description || "— none —")}</p></div>
 
     <div class="sec">Trigger phrases · heuristic extraction</div>
     <div class="body">
       ${a.trig.length ? `<div class="triggers" style="margin:0">${a.trig.map(x =>
         `<span class="trig">${escape_(x)}</span>`).join("")}</div>`
-        : `<p>Nothing extracted. The description carries no quoted phrase and no “Use for/when” clause.</p>`}
-      <p style="margin-top:14px;font-size:12.5px;color:var(--ink-faint)">Extracted by pattern, not by a model.
-      The full description above is the authority — read it to see what the extractor missed.</p>
+        : `<p>Nothing extracted — the description carries no quoted phrase and no “Use for/when” clause.</p>`}
+      <p style="margin-top:14px;font-size:12.5px;color:var(--ink-faint)">Extracted by pattern, not by a
+        model. The full description above is the authority — read it to see what the extractor missed.</p>
     </div>
 
-    <div class="sec">Body</div>
-    <div class="body"><p>${escape_(a.body)}</p></div>
+    ${a.summary ? `<div class="sec">Opening paragraph</div>
+      <div class="body"><p>${escape_(a.summary)}</p></div>` : ""}
 
-    ${pairs.length ? `<div class="sec">Easily confused with</div><div class="pairs">${pairs.map(p => {
-      const other = p.a === a.id ? p.b : p.a;
-      const mine = p.a === a.id ? p.qa : p.qb, theirs = p.a === a.id ? p.qb : p.qa;
-      return `<div class="pair">
-        <div><h5>${escape_(a.id)}</h5><q>${escape_(mine)}</q>
-          <span class="src">${escape_(a.path)}</span></div>
-        <div><h5><button style="background:none;border:0;padding:0;font:inherit;color:var(--accent)"
-          data-open="${other}">${escape_(other)}</button></h5><q>${escape_(theirs)}</q>
-          <span class="src">${escape_((A.find(x => x.id === other) || {}).path || "")}</span></div>
-      </div>`; }).join("")}</div>` : ""}
+    ${outgoing.length ? `<div class="sec">This artefact names</div><div class="pairs">${outgoing.map(m => `
+      <div class="pair"><div><h5>${escape_(a.id)}</h5><q>${escape_(m.sentence)}</q>
+        <span class="src">${escape_(a.path)}</span></div>
+      <div><h5><button class="linkish" data-open="${escape_(m.id)}">${escape_(m.id)}</button></h5>
+        <q>${escape_((A.find(x => x.id === m.id) || {}).description?.slice(0, 180) || "")}…</q>
+        <span class="src">${escape_((A.find(x => x.id === m.id) || {}).path || "")}</span></div></div>`).join("")}</div>` : ""}
 
-    ${edges.length ? `<div class="sec">Relationships</div><div class="log">${edges.map(e => `
-      <div><time>${escape_(e.why)}</time>
-        <span>${escape_(e.from === a.id ? "→ " + e.to : "← " + e.from)}</span>
-        <code style="margin-left:auto">${escape_(e.src)}</code></div>`).join("")}</div>` : ""}
-
-    <div class="sec">Changelog · from git history</div>
-    <div class="log">${a.log.map(([d, m]) => `<div><time>${d}</time><span>${escape_(m)}</span></div>`).join("")}</div>
+    ${incoming.length ? `<div class="sec">Named by</div><div class="log">${incoming.map(({ from, m }) => `
+      <div><time>mentions</time><span><button class="linkish" data-open="${escape_(from.id)}">${escape_(from.id)}</button>
+        — “${escape_(m.sentence.slice(0, 110))}${m.sentence.length > 110 ? "…" : ""}”</span>
+        <code style="margin-left:auto">${escape_(from.path)}</code></div>`).join("")}</div>` : ""}
   </div>`;
   wire();
 }
 
+/* ── boundaries ─────────────────────────────────────────────────────────── */
 function renderBoundaries() {
+  const pairs = [];
+  const seen = new Set();
+  for (const a of A) for (const m of a.mentions || []) {
+    const other = A.find(x => x.id === m.id);
+    if (!other) continue;
+    const back = (other.mentions || []).find(x => x.id === a.id);
+    const key = [a.id, other.id].sort().join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pairs.push({ a, other, qa: m.sentence, qb: back ? back.sentence : null, mutual: !!back });
+  }
+  pairs.sort((x, y) => (y.mutual - x.mutual) || x.a.id.localeCompare(y.a.id));
+
   root.innerHTML = `<div class="detail">
     <h1>Boundaries</h1>
-    <p class="note">These artefacts deliberately delimit each other. Each side quotes
-      <b>its own description</b> — nothing here is written by the site, so a boundary that
-      drifts in the source drifts here too, visibly.</p>
-    <div class="pairs">${PAIRS.map(p => {
-      const A_ = A.find(x => x.id === p.a), B = A.find(x => x.id === p.b);
-      return `<div class="pair">
-        <div><h5><button style="background:none;border:0;padding:0;font:inherit;color:var(--accent)"
-          data-open="${p.a}">${p.a}</button></h5><q>${escape_(p.qa)}</q>
-          <span class="src">${escape_(A_.path)}</span></div>
-        <div><h5><button style="background:none;border:0;padding:0;font:inherit;color:var(--accent)"
-          data-open="${p.b}">${p.b}</button></h5><q>${escape_(p.qb)}</q>
-          <span class="src">${escape_(B.path)}</span></div>
-      </div>`; }).join("")}</div>
+    <p class="note">Every pair here was found by one artefact <b>naming another inside its own
+      description</b>. Each side quotes the sentence it actually wrote, with the file that
+      sentence lives in. Nothing is authored by this page, so a boundary that drifts in the
+      source drifts here too — visibly. <b>${pairs.filter(p => p.mutual).length}</b> of
+      ${pairs.length} pairs are mutual: both sides point at each other.</p>
+    <div class="pairs">${pairs.map(p => `
+      <div class="pair">
+        <div><h5><button class="linkish" data-open="${escape_(p.a.id)}">${escape_(p.a.id)}</button>
+          ${p.mutual ? `<span class="badge ev-ok" style="margin-left:8px">mutual</span>` : ""}</h5>
+          <q>${escape_(p.qa)}</q><span class="src">${escape_(p.a.path)}</span></div>
+        <div><h5><button class="linkish" data-open="${escape_(p.other.id)}">${escape_(p.other.id)}</button></h5>
+          ${p.qb ? `<q>${escape_(p.qb)}</q>`
+                 : `<q class="dim">Does not name ${escape_(p.a.id)} back — this boundary is stated from one side only.</q>`}
+          <span class="src">${escape_(p.other.path)}</span></div>
+      </div>`).join("")}</div>
   </div>`;
   wire();
 }
 
+/* ── graph ──────────────────────────────────────────────────────────────── */
 function renderGraph() {
-  const ids = [...new Set(EDGES.flatMap(e => [e.from, e.to]))];
-  const cols = { skill: 90, agent: 400, hook: 400, "mcp-tool": 700, product: 700 };
-  const byCol = {};
-  const pos = {};
-  ids.forEach(id => {
-    const a = A.find(x => x.id === id); const c = cols[a.type];
-    byCol[c] = (byCol[c] || 0); pos[id] = { x: c, y: 44 + byCol[c] * 56, a }; byCol[c]++;
-  });
-  const W = 900, H = Math.max(...Object.values(pos).map(p => p.y)) + 70;
+  const edges = [];
+  for (const a of A) for (const m of a.mentions || [])
+    if (A.some(x => x.id === m.id)) edges.push({ from: a.id, to: m.id, src: a.path, sentence: m.sentence });
+
+  const ids = [...new Set(edges.flatMap(e => [e.from, e.to]))].sort();
+  const colX = { skill: 60, "product-skill": 60, agent: 400, hook: 400, "mcp-tool": 740 };
+  const used = {}, pos = {};
+  for (const id of ids) {
+    const a = A.find(x => x.id === id);
+    const x = colX[a.type] ?? 400;
+    used[x] = used[x] || 0;
+    pos[id] = { x, y: 40 + used[x] * 52, a };
+    used[x]++;
+  }
+  const H = Math.max(...Object.values(pos).map(p => p.y), 120) + 60;
 
   root.innerHTML = `<div class="detail" style="max-width:none">
     <h1>Relationships</h1>
-    <p class="note">Every edge is drawn <b>only</b> from a cross-reference that already exists
-      in a source file, and carries the path and line it was read from. An edge with no citation
-      is not drawn — which is why this graph is sparser than the real dependency web.</p>
-    <div class="graphwrap"><svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">
-      ${EDGES.map((e, i) => {
+    <p class="note">${edges.length} edges, every one of them a real mention inside a real
+      description. No edge is inferred, so this graph is sparser than the true dependency web —
+      and everything it does show can be checked against the file named beside it.</p>
+    <div class="graphwrap"><svg viewBox="0 0 900 ${H}" width="100%" height="${H}">
+      ${edges.map(e => {
         const f = pos[e.from], t = pos[e.to];
         const mx = (f.x + t.x) / 2;
-        return `<path class="gedge" id="e${i}" d="M${f.x + 150},${f.y} C${mx + 60},${f.y} ${mx - 60},${t.y} ${t.x},${t.y}"></path>
-          <text class="elabel" x="${mx + 6}" y="${(f.y + t.y) / 2 - 5}" text-anchor="middle">${e.why}</text>`;
+        return `<path class="gedge" d="M${f.x + 150},${f.y} C${mx + 60},${f.y} ${mx - 60},${t.y} ${t.x},${t.y}"></path>`;
       }).join("")}
       ${Object.entries(pos).map(([id, p]) => `
-        <g class="gnode" data-open="${id}" style="cursor:pointer">
-          <rect x="${p.x}" y="${p.y - 15}" width="150" height="30" rx="6"
-                stroke="${TYPES[p.a.type].color}"></rect>
-          <text x="${p.x + 10}" y="${p.y + 4}">${id.length > 19 ? id.slice(0, 18) + "…" : id}</text>
+        <g class="gnode" data-open="${escape_(id)}" style="cursor:pointer">
+          <rect x="${p.x}" y="${p.y - 14}" width="150" height="28" rx="6" stroke="${TYPES[p.a.type].color}"></rect>
+          <text x="${p.x + 10}" y="${p.y + 4}">${escape_(id.length > 19 ? id.slice(0, 18) + "…" : id)}</text>
         </g>`).join("")}
     </svg></div>
     <div class="legend">${Object.entries(TYPES).map(([k, v]) =>
       `<span><i style="background:${v.color}"></i>${v.label}</span>`).join("")}</div>
-    <div class="sec" style="margin-top:26px">Edge sources</div>
-    <div class="log">${EDGES.map(e => `<div><time>${e.why}</time>
-      <span>${e.from} → ${e.to}</span><code style="margin-left:auto">${escape_(e.src)}</code></div>`).join("")}</div>
+    <div class="sec" style="margin-top:26px">Every edge, and the sentence it came from</div>
+    <div class="log">${edges.map(e => `<div><time>${escape_(e.from)}</time>
+      <span>→ ${escape_(e.to)} — “${escape_(e.sentence.slice(0, 96))}${e.sentence.length > 96 ? "…" : ""}”</span>
+      <code style="margin-left:auto">${escape_(e.src)}</code></div>`).join("")}</div>
   </div>`;
   wire();
 }
 
+/* ── bundle ─────────────────────────────────────────────────────────────── */
 function bundleJSON() {
   const plugins = [...new Set([...S.sel].map(id => (A.find(a => a.id === id) || {}).plugin))].filter(Boolean);
   const enabled = {};
-  plugins.forEach(p => enabled[p + "@" + MARKET] = true);
+  for (const p of plugins.sort()) enabled[`${p}@${marketName()}`] = true;
   return JSON.stringify({
-    extraKnownMarketplaces: { [MARKET]: { source: { source: "github", repo: REPO } } },
-    enabledPlugins: enabled
+    extraKnownMarketplaces: { [marketName()]: { source: { source: "github", repo: CAT.repo } } },
+    enabledPlugins: enabled,
   }, null, 2);
 }
 
 function renderBundle() {
+  if (!marketName()) {
+    root.innerHTML = `<div class="detail"><h1>Bundle</h1>
+      <div class="state"><h3>There is no marketplace to install from yet</h3>
+      <p>A settings block needs two things this repository does not have:
+         <code>.claude-plugin/marketplace.json</code>, and at least one plugin under
+         <code>plugins/</code>. Until both exist, any block shown here would name a
+         marketplace that cannot be added and plugins that cannot be installed.</p>
+      <p>The catalog is still useful without them — search, boundaries and the graph all
+         read from artefacts that do exist.</p>
+      <button class="btn" data-back>Back to the catalog</button></div></div>`;
+    wire(); return;
+  }
   const chosen = [...S.sel].map(id => A.find(a => a.id === id)).filter(Boolean);
-  const plugins = [...new Set(chosen.map(a => a.plugin))];
-  root.innerHTML = `<div class="detail">
-    <h1>Bundle</h1>
-    ${!chosen.length ? `<div class="state">
-        <h3>Nothing selected yet</h3>
+  const plugins = [...new Set(chosen.map(a => a.plugin).filter(Boolean))];
+  root.innerHTML = `<div class="detail"><h1>Bundle</h1>
+    ${!chosen.length ? `<div class="state"><h3>Nothing selected yet</h3>
         <p>Tick artefacts in the catalog and this page assembles the settings block that
-           installs them. Plugins are the unit Claude Code enables, so selecting several
-           artefacts from one plugin produces one entry, not several.</p>
+           installs them. Plugins are the unit Claude Code enables, so several artefacts
+           from one plugin produce one entry, not several.</p>
         <button class="btn" data-back>Go to the catalog</button></div>`
       : `<p class="note">${chosen.length} artefact${chosen.length === 1 ? "" : "s"} resolve to
-          <b>${plugins.length} plugin${plugins.length === 1 ? "" : "s"}</b>.
-          Paste this into <code>.claude/settings.json</code> and the marketplace is added and
-          the plugins enabled on the next session — nobody runs an install command by hand.</p>
+          <b>${plugins.length} plugin${plugins.length === 1 ? "" : "s"}</b>. Paste this into
+          <code>.claude/settings.json</code> and the marketplace is added and the plugins
+          enabled on the next session — nobody runs an install command by hand.</p>
         <div class="sec">Selected</div>
-        <div class="cards" style="margin-bottom:24px">${chosen.map(a =>
-          cardHTML({ a, hits: [] })).join("")}</div>
+        <div class="cards" style="margin-bottom:24px">${chosen.map(a => cardHTML({ a, hits: [] })).join("")}</div>
         <div class="sec">.claude/settings.json</div>
         <pre class="out">${escape_(bundleJSON())}</pre>
         <div class="detailbar" style="margin-top:14px">
@@ -1037,9 +993,7 @@ function renderBundle() {
   wire();
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   EVENTS
-   ══════════════════════════════════════════════════════════════════════════ */
+/* ── events ─────────────────────────────────────────────────────────────── */
 function wire() {
   document.querySelectorAll("[data-try]").forEach(b => b.onclick = () => {
     S.q = b.dataset.try; S.view = "catalog"; S.open = null; render(); });
@@ -1054,8 +1008,7 @@ function wire() {
     if (f === "evals") S.evalsOnly = !S.evalsOnly;
     render(); });
   const cf = () => { S.types.clear(); S.plugins.clear(); S.evalsOnly = false; render(); };
-  const c1 = document.getElementById("clearf"); if (c1) c1.onclick = cf;
-  const c2 = document.getElementById("clearf2"); if (c2) c2.onclick = cf;
+  for (const id of ["clearf", "clearf2"]) { const el = document.getElementById(id); if (el) el.onclick = cf; }
   document.querySelectorAll("[data-pick]").forEach(cb => cb.onchange = () => {
     cb.checked ? S.sel.add(cb.dataset.pick) : S.sel.delete(cb.dataset.pick);
     render(); syncTray(); });
@@ -1074,8 +1027,7 @@ function wire() {
 function copy(b) {
   const [kind, arg] = b.dataset.copy.split(":");
   let text = "";
-  if (kind === "install") text = `/plugin marketplace add ${REPO}\n/plugin install ${arg}@${MARKET}`;
-  if (kind === "raw") { const a = A.find(x => x.id === arg); text = `---\nname: ${a.id}\ndescription: ${a.desc}\n---\n\n${a.body}`; }
+  if (kind === "install") text = `/plugin marketplace add ${CAT.repo}\n/plugin install ${arg}@${marketName()}`;
   if (kind === "bundle") text = bundleJSON();
   if (kind === "link") text = location.href;
   navigator.clipboard?.writeText(text);
@@ -1101,7 +1053,6 @@ function syncTray() {
 }
 document.getElementById("trayclear").onclick = () => { S.sel.clear(); render(); };
 document.getElementById("traygo").onclick = () => { S.view = "bundle"; S.open = null; window.scrollTo(0, 0); render(); };
-
 document.getElementById("nav").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   S.view = b.dataset.view; S.open = null; window.scrollTo(0, 0); render();
@@ -1109,28 +1060,24 @@ document.getElementById("nav").addEventListener("click", e => {
 
 /* Theme — dark is the default in every state; the toggle is an explicit stamp. */
 const themeBtn = document.getElementById("theme");
-function labelTheme() {
+const isLight = () => {
   const stamped = document.documentElement.getAttribute("data-theme");
-  const light = stamped === "light" ||
-    (!stamped && window.matchMedia("(prefers-color-scheme: light)").matches);
-  themeBtn.textContent = light ? "Dark" : "Light";
-}
+  return stamped === "light" || (!stamped && window.matchMedia("(prefers-color-scheme: light)").matches);
+};
+function labelTheme() { themeBtn.textContent = isLight() ? "Dark" : "Light"; }
 themeBtn.onclick = () => {
-  const stamped = document.documentElement.getAttribute("data-theme");
-  const light = stamped === "light" ||
-    (!stamped && window.matchMedia("(prefers-color-scheme: light)").matches);
-  document.documentElement.setAttribute("data-theme", light ? "dark" : "light");
-  try { localStorage.setItem("dd-theme", light ? "dark" : "light"); } catch {}
+  const next = isLight() ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("dd-theme", next); } catch {}
   labelTheme();
 };
 try { const t = localStorage.getItem("dd-theme"); if (t) document.documentElement.setAttribute("data-theme", t); } catch {}
 labelTheme();
 
-function escape_(s) { return String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
-function attr(s) { return escape_(s); }
+function escape_(s) {
+  return String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+}
 
-readHash();
-render();
 </script>
 </body>
 </html>

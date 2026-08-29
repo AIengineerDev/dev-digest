@@ -45,6 +45,7 @@ To produce the deployable output without serving it:
 
 ```bash
 node scripts/build-pages.mjs        # writes ./_site (gitignored)
+node scripts/build-catalog.mjs --report   # what the generator reads, and what it could not answer
 ```
 
 ## What it is not
@@ -54,13 +55,27 @@ with a build-time index generator and per-artefact static pages. This folder is
 deliberately outside that: it is a design surface, and it is kept apart from the
 marketplace's own structure (`.claude-plugin/`, `plugins/`) so the two never mix.
 
-**Not wired to the repository.** The artefact data is a literal at the top of the
-script. Every name, description, version, model, tool list, source path and eval
-coverage flag in it was read from this repository and is accurate as of
-2026-08-29 — but nothing re-reads it. In the real site that object is the
-generator's output and is never hand-authored (R1, R3). When an artefact changes
-here, this prototype goes stale silently. That is acceptable for a prototype and
-is exactly the failure the R2 staleness gate exists to prevent in `site/`.
+**Wired to the repository, not to a copy of it.** The page ships with no artefact
+data at all. `scripts/build-catalog.mjs` reads `.claude/skills/`, `.claude/agents/`,
+`.claude/hooks/`, `mcp/src/tools/` and `skills/` and emits `catalog.json`, which the
+page fetches at load. It is regenerated on every request in dev and on every deploy
+in CI, so there is no committed copy that can drift — and therefore nothing for a
+staleness gate to catch.
+
+What it will not do is invent. There is no `.claude-plugin/marketplace.json` in this
+repository yet, so no artefact belongs to a plugin and no install command exists. The
+catalog reports that state explicitly: the plugin facet explains itself, install
+buttons are disabled with the reason, and the bundle builder says what is missing.
+The moment a marketplace manifest lands, those surfaces fill in on their own with no
+edit to this page.
+
+Anything the sources cannot answer becomes a diagnostic, shown in the catalog rather
+than hidden: a directory under `.claude/skills/` with no `SKILL.md` is not a skill and
+is left out; a hook with no declared description gets one derived from its comment
+block and is labelled as derived.
+
+The generator declares a minimum count per class. If a source directory moves or
+empties, the build fails naming the class — it never quietly ships a smaller catalog.
 
 ## Base path
 

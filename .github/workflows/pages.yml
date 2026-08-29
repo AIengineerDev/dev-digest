@@ -48,8 +48,27 @@ jobs:
           test -f _site/.nojekyll             || { echo "missing .nojekyll"; exit 1; }
           test -f _site/index.html            || { echo "root page missing"; exit 1; }
           test -f _site/prototype/index.html  || { echo "prototype missing"; exit 1; }
+          test -f _site/prototype/catalog.json || { echo "catalog missing"; exit 1; }
           grep -q "<!doctype html>" _site/prototype/index.html \
             || { echo "prototype/index.html is not a standalone document"; exit 1; }
+
+          # The page must hold no artefact data of its own — it reads catalog.json.
+          # A plugin name in the HTML would mean someone hard-coded one back in.
+          ! grep -qE 'devdigest-(skills|agents|mcp)' _site/prototype/index.html \
+            || { echo "prototype/index.html names a plugin — data must come from catalog.json"; exit 1; }
+
+          node -e '
+            const c = require("./_site/prototype/catalog.json");
+            if (!c.artefacts.length) { console.error("catalog is empty"); process.exit(1); }
+            const bad = c.artefacts.filter(a => !a.id || !a.path);
+            if (bad.length) { console.error("artefacts without id or source path:", bad.length); process.exit(1); }
+            const errs = (c.diagnostics || []).filter(d => d.severity === "error");
+            if (errs.length) {
+              for (const e of errs) console.error(`  ${e.path}: ${e.message}`);
+              process.exit(1);
+            }
+            console.log(`  catalog ok — ${c.artefacts.length} artefacts, marketplace: ${c.marketplace ? c.marketplace.name : "none yet"}`);
+          '''
           find _site -type f | sed 's/^/  /'
 
       - uses: actions/configure-pages@v5

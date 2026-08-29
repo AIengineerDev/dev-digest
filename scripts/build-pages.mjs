@@ -16,6 +16,7 @@
 import { mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildCatalog } from "./build-catalog.mjs";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -60,9 +61,15 @@ export async function assemble() {
   if (!prototype.startsWith("<!doctype html>"))
     throw new Error("prototype/index.html is not a standalone document — it must start with <!doctype html>");
 
+  /* Generated fresh on every assembly, so the page cannot show a stale repo.
+     This is why the prototype has no committed index and needs no staleness
+     gate: there is no committed copy to drift. */
+  const catalog = JSON.stringify(await buildCatalog(), null, 2) + "\n";
+
   return new Map([
     ["/index.html", { body: rootPage, type: "text/html; charset=utf-8" }],
     ["/prototype/index.html", { body: prototype, type: "text/html; charset=utf-8" }],
+    ["/prototype/catalog.json", { body: catalog, type: "application/json; charset=utf-8" }],
     ["/.nojekyll", { body: "", type: "text/plain" }],
   ]);
 }
