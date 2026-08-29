@@ -95,6 +95,13 @@ regression.
 
 ## Requirements
 
+Every requirement `Rn` carries at least one acceptance criterion `AC-n`, and the
+numbers match on purpose: `AC-7` is what proves `R7`, and nothing else. Cite the
+id — a verifier reporting "acceptance criteria met" without one has checked
+nothing anybody can re-check, and `plan-verifier` returns one verdict per id.
+`AC-15`–`AC-18` cover the corner cases below, which belong to no single
+requirement.
+
 ### R1 — One click from a finding to a case
 `FindingCard` gains a `Turn into eval case` action, visible only on a finding
 that has been decided. The expectation type follows the decision and is not a
@@ -112,7 +119,7 @@ accept/dismiss has a second purpose, and nobody discovers a control that is
 never on screen. A disabled control must say why, which is what the title is
 for — a dead button with no explanation would be worse than either.
 
-**Acceptance:** on a PR with one accepted and one dismissed finding, two clicks
+**AC-1** — on a PR with one accepted and one dismissed finding, two clicks
 produce two rows in `eval_cases` whose `expected_output[0].kind` is `must_find`
 and `must_not_flag` respectively.
 
@@ -126,7 +133,7 @@ run time.
 metric delta measures the diff, not the change. A case whose input is re-fetched
 is not a regression test.
 
-**Acceptance:** deleting the source PR's rows leaves the case runnable and its
+**AC-2** — deleting the source PR's rows leaves the case runnable and its
 `input_diff` unchanged.
 
 ### R3 — `POST /agents/:id/eval-runs` runs the whole set
@@ -135,7 +142,7 @@ sequentially, and returns `EvalRunResult[]`. Each case produces one `eval_runs`
 row. The route is rate-limited like the review routes and rejects an agent with
 zero cases with `422`.
 
-**Acceptance:** an agent with 8 cases yields 8 `eval_runs` rows with the same
+**AC-3** — an agent with 8 cases yields 8 `eval_runs` rows with the same
 `ran_at` minute and a single response body.
 
 ### R4 — Scoring is code, and makes no model call
@@ -167,7 +174,7 @@ answer:
 - `|Fraw| = 0` → `citation_accuracy = 1`. No finding was dropped because none
   existed.
 
-**Acceptance:** a unit test asserts each of the three, and `grep` over the
+**AC-4** — a unit test asserts each of the three, and `grep` over the
 scorer module finds no import of an LLM provider or of `reviewer-core`'s `run`.
 
 ### R5 — `precision` is what dismissals buy
@@ -175,7 +182,7 @@ A `must_not_flag` expectation only ever lowers `precision`, and only when the
 agent flags those lines. It is the one metric that moves when an agent becomes
 noisier, and the reason the dataset needs dismissals at all.
 
-**Acceptance:** adding one `must_not_flag` case that the agent does flag lowers
+**AC-5** — adding one `must_not_flag` case that the agent does flag lowers
 `precision` for the set and leaves `recall` unchanged.
 
 ### R6 — A run records what it ran against
@@ -184,7 +191,7 @@ comparison can show *why* a number moved, not only that it did. The run also
 records the agent's `provider`, `model` and system prompt **version**, taken
 from the `agent_versions` snapshot at run time.
 
-**Acceptance:** the compare view can render a prompt diff between two runs
+**AC-6** — the compare view can render a prompt diff between two runs
 without re-reading the agent, which may have changed again since.
 
 ### R7 — Evals tab in the agent editor
@@ -192,7 +199,7 @@ A tab listing the agent's cases with per-case last result, a `Run all evals`
 action, and the three metric tiles for the latest run. A case row shows its
 expectation kind and `expected N findings, got M`.
 
-**Acceptance:** the mockup's `3 / 5 passing` header, per-case pass icons and the
+**AC-7** — the mockup's `3 / 5 passing` header, per-case pass icons and the
 `never run` state for a case with no runs are all reachable.
 
 ### R8 — Eval Dashboard page
@@ -201,25 +208,29 @@ A sidebar entry under Skills Lab, listing every agent with `recall`,
 `Recent eval runs · all agents` table. Selecting an agent opens its detail with
 the trend chart and the run table.
 
-**Acceptance:** an agent that has never been evaluated appears with an explicit
+**AC-8** — an agent that has never been evaluated appears with an explicit
 "never run" state, not a zero — a zero and an absence are different claims.
 
 ### R9 — Compare two runs
 Selecting two runs and pressing `Compare` shows the metric deltas and the
 system-prompt diff between them.
 
-**Acceptance:** the delta is computed from the two stored rows only; no re-run.
+**AC-9** — the delta is computed from the two stored rows only; no re-run.
 
 ### R10 — At least eight cases, from real decisions
 The seeded workspace ends with ≥8 cases for one agent, all created through R1
 from findings that already carry a decision — none hand-written.
+
+**AC-10** — `SELECT count(*) FROM eval_cases WHERE owner_id = <agent>` is ≥ 8,
+every row has a non-null `input_meta.source_finding_id`, and both expectation
+kinds appear across the set.
 
 ### R11 — The experiment
 Two runs of the same set: current system prompt, then an edited one. Then a
 deliberately degraded prompt (e.g. instructing the agent to also report style
 nits) and a third run.
 
-**Acceptance:** run 1 → run 2 moves `recall` or `precision` visibly; run 3 drops
+**AC-11** — run 1 → run 2 moves `recall` or `precision` visibly; run 3 drops
 `precision` below both. Screenshot of the compare view is the artefact.
 
 ### R12 — `pnpm verify:l06`
@@ -227,6 +238,9 @@ A script that fails unless: both tables have rows; the scorer module imports no
 provider; the three edge cases hold; a set of ≥8 cases exists with both
 expectation kinds present; and two runs of the same set with different prompt
 versions exist.
+
+**AC-12** — `pnpm verify:l06` exits 0 on a seeded workspace and non-zero when
+any one of those five conditions is removed.
 
 ---
 
@@ -252,7 +266,7 @@ case that asserts more than one thing, and a case asserting several is exactly
 what this pipeline is for. `Finding skeleton` is what keeps that from being a
 blank box.
 
-**Acceptance:** there is one modal component; removing any of the three that
+**AC-13** — there is one modal component; removing any of the three that
 existed before breaks nothing, because there are no longer three.
 
 ### R14 — What a skill is judged by
@@ -267,7 +281,7 @@ means running it through an agent, and which agent that is, is a choice. One
 "run everything" button on a skill linked to three agents would spend three
 budgets on the user's behalf without asking.
 
-**Acceptance:** a skill linked to an agent with cases shows them, grouped by
+**AC-14** — a skill linked to an agent with cases shows them, grouped by
 agent; a skill linked to none says which of the two reasons it is.
 
 ## What this spec deliberately does not cover
@@ -283,17 +297,20 @@ agent; a skill linked to none says which of the two reasons it is.
 
 ## Corner cases the mockups do not show
 
-1. **A case whose file no longer exists in the input diff.** The finding it came
+Each carries its own criterion: these are the four places a reviewer should look
+first, because none of them is visible in a mockup.
+
+1. **(AC-15) A case whose file no longer exists in the input diff.** The finding it came
    from cited a file; nothing guarantees the pinned diff still contains it if
    the case was edited. The scorer must treat an expectation whose file is
    absent from `input_diff` as an authoring error and surface it on the case,
    not silently score it 0.
-2. **Two findings matching one `must_find`.** Recall counts expectations, not
+2. **(AC-16) Two findings matching one `must_find`.** Recall counts expectations, not
    findings, so this is 1/1 — but precision must not double-count either. State
    that matching is per-expectation and a finding may satisfy at most one.
-3. **An agent that errors mid-set.** Cases already run keep their rows; the
+3. **(AC-17) An agent that errors mid-set.** Cases already run keep their rows; the
    response reports the failure per case rather than rolling back, or a single
    provider timeout costs the whole set.
-4. **A deleted agent with cases.** `eval_cases.owner_id` is a bare uuid with no
+4. **(AC-18) A deleted agent with cases.** `eval_cases.owner_id` is a bare uuid with no
    FK. Deleting the agent orphans them; the dashboard must not crash on an
    owner it cannot resolve.
