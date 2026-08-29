@@ -1,0 +1,167 @@
+{
+  "$comment": "Every piece of UI copy in the catalog. Nothing user-facing is written inside a render function — a string that lives in a component cannot be reviewed, cannot be reused, and cannot be translated without touching logic. Placeholders are {name}; the renderer substitutes them.",
+  "lang": "en",
+
+  "app": {
+    "name": "Artefact Catalog",
+    "scope": "dev-digest"
+  },
+
+  "nav": {
+    "catalog": "Catalog",
+    "graph": "Graph",
+    "boundaries": "Boundaries",
+    "bundle": "Bundle"
+  },
+
+  "theme": {
+    "toLight": "Light",
+    "toDark": "Dark"
+  },
+
+  "tray": {
+    "selected": "selected",
+    "clear": "Clear",
+    "build": "Build settings.json"
+  },
+
+  "boot": {
+    "loadingTitle": "Reading the catalog…",
+    "loadingBody": "Generated from the repository at build time by <code>scripts/build-catalog.mjs</code>.",
+    "failedTitle": "The catalog could not be loaded",
+    "failedBody": "{error}. This page holds no data of its own, so there is nothing to show without it. Rebuild with <code>node scripts/build-catalog.mjs --out prototype/catalog.json</code>, or serve through <code>node prototype/dev.mjs</code>, which generates it on every request."
+  },
+
+  "search": {
+    "placeholder": "Describe what you need — “I need a skill for layering”",
+    "tryLabel": "Try:",
+    "resultOne": "{n} result",
+    "resultMany": "{n} results"
+  },
+
+  "facets": {
+    "type": "Type",
+    "plugin": "Plugin",
+    "coverage": "Coverage",
+    "hasEvals": "Has evals",
+    "clear": "Clear filters",
+    "noPlugins": "No marketplace manifest in the repository yet, so no artefact belongs to a plugin. This facet fills in on its own once <code>.claude-plugin/marketplace.json</code> lands."
+  },
+
+  "browse": {
+    "summary": "<b>{total} artefacts, {withEvals} with eval coverage.</b> Every field below was read from a file in this repository by <code>scripts/build-catalog.mjs</code> — nothing on this page is written by hand. Each card shows the path its data came from.",
+    "noMarketplace": "<b>No marketplace exists yet.</b> Nothing here belongs to a plugin and no install command can be produced, so the catalog says so instead of naming a plugin that does not exist.",
+    "diagnosticsOne": "{n} generator diagnostic — what the repository could not answer",
+    "diagnosticsMany": "{n} generator diagnostics — what the repository could not answer"
+  },
+
+  "card": {
+    "noPlugin": "no plugin yet",
+    "copyInstall": "Copy install",
+    "notInstallable": "Not installable yet",
+    "notInstallableWhy": "No marketplace manifest exists in the repository yet, so there is no command to copy",
+    "addToBundle": "Add {name} to bundle",
+    "evalsNone": "no evals",
+    "evalsNoneWhy": "No eval suite covers this yet — a warning, not a failure",
+    "evalsCase": "evals · {n} case",
+    "evalsCases": "evals · {n} cases",
+    "evalsSuite": "evals · {n} suite",
+    "evalsSuites": "evals · {n} suites"
+  },
+
+  "zero": {
+    "title": "Nothing matches “{query}”",
+    "body": "The catalog searches names, descriptions and a committed alias table. A miss usually means the alias table is missing a phrase — a one-line pull request, not a bug.",
+    "report": "Report the gap",
+    "issueTitle": "No catalog result for: {query}",
+    "issueBody": "Query: {query}\n\nExpected artefact:\n\nSuggested alias entry for prototype/aliases.json:\n"
+  },
+
+  "excluded": {
+    "titleOne": "Filters exclude the only match",
+    "titleMany": "Filters exclude all {n} matches",
+    "body": "The query found results — the active filters removed them. That is a different problem from a query that matches nothing, and it has a different fix.",
+    "action": "Clear filters, keep the query"
+  },
+
+  "missing": {
+    "title": "No artefact named “{id}”",
+    "body": "It is not in the generated catalog. Either the link predates a rename, or the artefact was removed from the repository — the catalog only ever holds what exists right now.",
+    "action": "Back to the catalog"
+  },
+
+  "detail": {
+    "back": "← Catalog",
+    "source": "Source:",
+    "copyInstall": "Copy install command",
+    "sectionRead": "Read from source",
+    "sectionDescription": "Description · verbatim from source",
+    "sectionTriggers": "Trigger phrases · heuristic extraction",
+    "sectionSummary": "Opening paragraph",
+    "sectionNames": "This artefact names",
+    "sectionNamedBy": "Named by",
+    "triggersNone": "Nothing extracted — the description carries no quoted phrase and no “Use for/when” clause.",
+    "triggersCaveat": "Extracted by pattern, not by a model. The full description above is the authority — read it to see what the extractor missed.",
+    "noPluginYet": "The repository has <b>no marketplace manifest yet</b>, so nothing is attributable to a plugin and no install command exists. This page reports that rather than showing a plugin name that would not resolve.",
+    "noPluginInMarket": "This artefact belongs to <b>no plugin</b> in <code>{marketplace}</code>. It is findable here but cannot be installed until a plugin claims it.",
+    "noEvals": "No eval suite covers this artefact. That is a <b>warning, not a failure</b> — the free quality gate reports it the same way, because artefacts predating the harness would otherwise hold the gate red forever.",
+    "derivedDescription": "This description was <b>derived from the file's leading comment block</b>, not declared. Hooks carry no frontmatter, and the catalog will not author text of its own — so it extracts, and says that it extracted. A sibling <code>hook.json</code> would make it authoritative.",
+    "fieldName": "name",
+    "fieldType": "type",
+    "fieldVersion": "version",
+    "fieldModel": "model",
+    "fieldTools": "tools",
+    "fieldTitle": "title",
+    "fieldWiring": "wired on",
+    "fieldPlugin": "plugin",
+    "fieldDescriptionFrom": "description from",
+    "fieldPath": "source path",
+    "fieldEvalSuites": "eval suites",
+    "valueNone": "— none —",
+    "valueNonePlugin": "— none yet —",
+    "caseOne": "{n} case",
+    "caseMany": "{n} cases",
+    "mentions": "mentions"
+  },
+
+  "boundaries": {
+    "title": "Boundaries",
+    "intro": "Every pair here was found by one artefact <b>naming another inside its own description</b>. Each side quotes the sentence it actually wrote, with the file that sentence lives in. Nothing is authored by this page, so a boundary that drifts in the source drifts here too — visibly. <b>{mutual}</b> of {total} pairs are mutual: both sides point at each other.",
+    "mutual": "mutual",
+    "oneSided": "Does not name {other} back — this boundary is stated from one side only."
+  },
+
+  "graph": {
+    "title": "Relationships",
+    "intro": "{n} edges, every one of them a real mention inside a real description. No edge is inferred, so this graph is sparser than the true dependency web — and everything it does show can be checked against the file named beside it.",
+    "edgeList": "Every edge, and the sentence it came from"
+  },
+
+  "bundle": {
+    "title": "Bundle",
+    "noMarketplaceTitle": "There is no marketplace to install from yet",
+    "noMarketplaceBody": "A settings block needs two things this repository does not have: <code>.claude-plugin/marketplace.json</code>, and at least one plugin under <code>plugins/</code>. Until both exist, any block shown here would name a marketplace that cannot be added and plugins that cannot be installed.",
+    "noMarketplaceBody2": "The catalog is still useful without them — search, boundaries and the graph all read from artefacts that do exist.",
+    "emptyTitle": "Nothing selected yet",
+    "emptyBody": "Tick artefacts in the catalog and this page assembles the settings block that installs them. Plugins are the unit Claude Code enables, so several artefacts from one plugin produce one entry, not several.",
+    "emptyAction": "Go to the catalog",
+    "summary": "{artefacts} resolve to <b>{plugins}</b>. Paste this into <code>.claude/settings.json</code> and the marketplace is added and the plugins enabled on the next session — nobody runs an install command by hand.",
+    "artefactOne": "{n} artefact",
+    "artefactMany": "{n} artefacts",
+    "pluginOne": "{n} plugin",
+    "pluginMany": "{n} plugins",
+    "sectionSelected": "Selected",
+    "sectionBlock": ".claude/settings.json",
+    "copyBlock": "Copy block",
+    "download": "Download settings.json",
+    "copyLink": "Copy shareable link",
+    "backToCatalog": "Back to the catalog"
+  },
+
+  "toast": {
+    "copied": "Copied to clipboard",
+    "copiedCommands": "Both commands copied",
+    "downloaded": "settings.json downloaded",
+    "copiedShort": "Copied"
+  }
+}

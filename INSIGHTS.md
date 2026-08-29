@@ -16,6 +16,29 @@ move it into `docs/` and delete it here.
 
 ## Decisions
 
+### 2026-08-29 — Marketplace rollback is forward-only, and a plugin has no ref of its own
+
+**What:** undoing a bad plugin release is a **new commit** that restores the
+previous content — never a force-push, a reset, or a rewritten tag.
+`scripts/rollback.sh` implements only that shape: `--to <tag>` restores
+`.claude-plugin/` and `plugins/` from a release tag, `--withdraw <name>` delists
+one plugin and records `renames: {"<name>": null}` so already-installed clients
+resolve it as removed instead of failing. Both verify before committing and both
+are dry-run unless given `--push`.
+**Why:** `/plugin marketplace add owner/repo` clones the **default branch** and
+updates it with a pull, so the published history lives in user-side clones. A
+rewrite does not "just resolve" on the next pull — it breaks, on their machine,
+mid-session, with an error naming the marketplace rather than us. The second
+half follows from the same fact: a plugin whose `source` is a relative path has
+no ref of its own, so the marketplace's commit *is* the plugin's commit. There
+is no releasing or reverting one plugin in isolation, which is why the withdraw
+path delists rather than pretending to roll back.
+**Rejected:** per-plugin version pinning as the rollback mechanism. It only
+works for `github`/`url` sources pinned to a `ref`; for the in-repo plugins this
+marketplace actually ships it is unimplementable, and offering it would have
+produced a script that silently no-ops on the common case.
+`scripts/rollback.sh:1-32`
+
 ### 2026-08-18 — The build chain buys judgement only where it changes a verdict
 
 **What:** the agent set is now mixed-model on purpose, not uniformly `opus`.
@@ -156,6 +179,19 @@ input but left responses unchecked, so contract drift surfaced in the browser.
   the list as exhaustive. `server/src/vendor/shared/contracts/brief.ts` (`DerivedIntent`).
 
 ## What Doesn't Work
+
+- **2026-08-29** — A build step that reads `design-mocks/` passes locally and
+  fails in **every** CI checkout: the directory is gitignored (`.gitignore:22`,
+  rationale at `:17-21` — it is unpacked from a 1.7 MB base64 bundle that does
+  not diff). It exists on developer machines and in no clone, so the failure
+  arrives only once something is wired to Actions. The committed
+  `client/src/vendor/ui/` is the only shared visual source a CI job can actually
+  read; this is why `specs/16-marketplace-catalog-site.md` routes the catalog
+  site's visual language through it instead. Same trap one level up: `.claude/*`
+  is ignored behind a four-path allowlist (`.gitignore:37-41`), so a fifth
+  artefact class added under `.claude/` is indexed locally and invisible in CI —
+  a generator that walks those directories must assert a minimum count per class
+  rather than silently emitting a smaller index. `.gitignore:22`
 
 - **2026-08-28** — To make a reviewer agent measurably **noisier**, add a narrow
   RULE, never a quota. Measured on the eval pipeline against the same 5-case set
