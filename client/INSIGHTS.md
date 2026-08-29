@@ -103,6 +103,35 @@ to display data already sitting in memory.
 
 ## Codebase Patterns
 
+- **2026-08-28** — There is **no page-frame convention** in `client/src/app`, and
+  the names that look like one are lying. Measured on `w8`: horizontal page
+  padding is `28px` on the Eval dashboard, Conventions and Project Context but
+  `32px` on the Agents list and `PageContainer`; the max width is 880, 1080,
+  1100, 1180, 1200 or 1280 depending on the screen; and **`CONTENT_MAX_WIDTH` is
+  declared three times with three different values** — 1280
+  (`app/repos/[repoId]/context/_components/ProjectContextView/constants.ts:5`),
+  880 (`.../conventions/_components/ConventionsView/constants.ts:12`), 1080
+  (`.../tour/_components/TourView/constants.ts:5`). Two files reading
+  `maxWidth: CONTENT_MAX_WIDTH` are not agreeing about anything. `PageContainer`
+  (`components/page-shell/styles.ts:5`) is the only shared helper and has
+  exactly **one** consumer (`app/page.tsx`), so it is not the convention either
+  — it is a helper nobody adopted. For a new screen, write the literal
+  `{ padding: "24px 32px 44px", maxWidth: 1200, margin: "0 auto" }` rather than
+  importing one of the three constants, and do not copy a mock's `28px`: the
+  mocks were drawn in a fixed-width frame and none of them has a `maxWidth` or a
+  `margin: 0 auto` at all. Also verified in passing: the Eval dashboard was the
+  one screen with **no** `margin: "0 auto"`, so it hugged the left edge on a wide
+  monitor while every sibling centred — fixed the same day.
+
+- **2026-08-28** — `pnpm lint`'s documented baseline is **stale**: `CLAUDE.md`
+  says 43 warnings, the tree reports **49** (0 errors) on `w8`, verified by
+  stashing a one-line change and re-running. This matters more than the six
+  warnings do — the whole point of a baselined gate is "green means nothing
+  new", and that only works if the number in the doc is the number on disk. When
+  a gate's count disagrees with the doc, measure before assuming you caused it:
+  `git stash push -- <your file> && pnpm lint` costs seconds and is the
+  difference between a real regression and a doc that drifted.
+
 - **2026-08-26** — `activeKeyFor`'s substring chain (`components/app-shell/helpers.ts`)
   is **order-dependent**, and this is not hypothetical: it already bit R20's tour
   route (`if (pathname.includes("/onboarding")) return "onboarding-tour"` fired

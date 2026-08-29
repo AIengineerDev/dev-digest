@@ -215,6 +215,56 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## Codebase Patterns
 
+- **2026-08-28** — `design-mocks/` is a **stale artefact, not a source of
+  truth**, and at least one screen asserts a capability is unavailable when it
+  is the product's headline capability. Verified in
+  `design-mocks/src/20-screen_export.jsx`: `Block merge on findings` is drawn as
+  a permanently disabled toggle captioned "Requires a GitHub App — not
+  available with PAT in local mode" (`:89-93`) — untrue here, because
+  `agents.ci_fail_on` (`server/src/db/schema/agents.ts:25`) plus
+  `countBlockers` (`server/src/modules/reviews/run-executor.ts:359`) already
+  decide the block, and a non-zero exit plus a required status check delivers it
+  with a plain PAT. Two more in the same file: the workflow references
+  `secrets.OPENAI_API_KEY` (`:30`) when the provider→key map defaults to
+  `openrouter` (`server/src/modules/settings/constants.ts:9-11`), and
+  `uses: devdigest/review-action@v1` (`:29`) names an action nobody published,
+  so a repo receiving that workflow fails on its first PR. Before specifying
+  from a mock, check each claim it makes against the code and record the
+  divergence as a deliberate decision — building one faithfully ships a dead
+  control that teaches the user the feature does not exist.
+
+- **2026-08-28** — Before specifying a feature this repo has "not built yet",
+  grep for its contracts and its i18n keys — several unbuilt features are
+  **pre-seeded end to end and imported by nobody**, and reading the schema or
+  the string catalogue makes them look half-finished. Verified this session for
+  the two L07 features: every Export-to-CI contract exists
+  (`AgentManifest`, `CiExportInput`, `CiExport`, `CiRun`, `CiResultArtifact`,
+  `contracts/eval-ci.ts:284-390`), `ci_installations` / `ci_runs` are in the
+  schema barrel, `client/messages/en/ci.json` holds the complete wizard + CI
+  Runs string set, and `ExportWizardSteps` / `AutoTriggerStatus` are vendored —
+  yet `grep -rn 'CiService\|export-ci\|CiExport' server/src client/src` returns
+  only the schema-barrel import. Same for Multi-Agent Review: the whole
+  `runs.json` page/conflicts/column string set exists and
+  `grep -rn 'useTranslations("runs")'` matches only the trace drawer and the
+  cost badge. Two consequences: the contract is a **spec input, not a
+  constraint you may quietly restate**, and where a seeded string contradicts
+  the new requirement it changes with the feature — `runs.json:127` says
+  `Run all agents` and `fan-out via p-queue`, which is right about the
+  mechanism (`platform/jobs.ts:42`) and wrong about the picker.
+  `server/src/vendor/shared/contracts/eval-ci.ts:284` · `client/messages/en/ci.json:1`
+
+- **2026-08-28** — Two branches that each change the DB schema **cannot both
+  merge without one of them regenerating its migration**, and the conflict is
+  in files this repo forbids hand-editing. `pnpm db:generate` writes
+  `src/db/migrations/NNNN_*.sql` plus an entry in `meta/_journal.json` and a
+  `meta/NNNN_snapshot.json` (latest on `w8`: `0017_amusing_chimera.sql`), so two
+  parallel worktrees both produce `0018_*` and collide in the journal and the
+  snapshot — which `AGENTS.md` says must never be hand-written or edited. The
+  resolution is procedural, not textual: merge one branch, then on the second
+  **delete its generated migration, re-run `pnpm db:generate` to land as
+  `0019`, and `pnpm db:migrate`**. Plan the merge order around this before the
+  branches start, not at the merge. `server/src/db/migrations/meta/_journal.json`
+
 - **2026-08-11** — "The latest review" is **one agent's opinion, not the PR's
   review.** One trigger of "run all agents" writes one `reviews` row per agent,
   so `ORDER BY created_at DESC LIMIT 1` returns whichever agent happened to

@@ -8,6 +8,7 @@ one package. Human-first prose and diagrams; agents read it on demand via the
 | ---------------- | ------------------------------------------------------------ |
 | `agent-prompts/` | System prompts for the built-in reviewers + model choice notes |
 | `retro/`         | Running ledger of what we learned about the agent system itself |
+| `retro/*-session-log.md` | Raw per-session material for a later `/workflow-retro` — evidence, not findings |
 
 Package-local reference material goes in `<package>/docs/`.
 

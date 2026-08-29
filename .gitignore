@@ -44,3 +44,4 @@ e2e/test-results/
 # Failure screenshots from the browser suite — regenerated per run, never committed
 # (e2e/README.md has always claimed these were ignored; they were not).
 e2e/test-results/
+Dev Digest*.zip
