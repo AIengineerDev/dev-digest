@@ -7,6 +7,7 @@
  * It answers structural questions only. Whether a skill is any good is what
  * `eval:skills` measures; whether it is well-formed is here.
  */
+import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,17 +60,46 @@ function internalLinks(body: string, from: string): string[] {
   return [...out];
 }
 
+/**
+ * Is this path deliberately absent from the repository?
+ *
+ * `design-mocks/` is gitignored on purpose — 28 modules regenerated locally
+ * from a 1.8 MB bundle that must never be committed — and `.claude/agents/spec-creator.md`
+ * links into it because that IS the design source it reads. The link is dead in
+ * a fresh checkout and alive on every machine that does the work, so it is a
+ * warning, not an error: failing the gate on it would ask someone to either
+ * commit the bundle or delete a correct pointer.
+ */
+const ignoreCache = new Map<string, boolean>();
+function isGitIgnored(path: string): boolean {
+  const cached = ignoreCache.get(path);
+  if (cached !== undefined) return cached;
+  let ignored = false;
+  try {
+    execFileSync('git', ['check-ignore', '-q', '--', path], { cwd: REPO, stdio: 'ignore' });
+    ignored = true;
+  } catch {
+    ignored = false; // exit 1 = not ignored; exit 128 = no git, treat the same
+  }
+  ignoreCache.set(path, ignored);
+  return ignored;
+}
+
 function checkLinks(file: string, body: string, issues: Issue[]): void {
   for (const link of internalLinks(body, file)) {
     const repoRooted = link.startsWith('::repo::');
     const target = repoRooted ? join(REPO, link.slice(8)) : join(dirname(file), link);
-    if (!existsSync(target)) {
-      issues.push({
-        level: 'error',
-        where: relative(REPO, file),
-        what: `link points at nothing: ${repoRooted ? link.slice(8) : link}`,
-      });
-    }
+    if (existsSync(target)) continue;
+    const shown = repoRooted ? link.slice(8) : link;
+    issues.push(
+      isGitIgnored(target)
+        ? {
+            level: 'warning',
+            where: relative(REPO, file),
+            what: `link points at a gitignored path — present locally, dead in a fresh checkout: ${shown}`,
+          }
+        : { level: 'error', where: relative(REPO, file), what: `link points at nothing: ${shown}` },
+    );
   }
 }
 
