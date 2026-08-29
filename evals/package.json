@@ -3,17 +3,26 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A/B eval harness for skill-carrying review agents. The suites live in skills/<name>/evals/.",
+  "description": "Two eval harnesses for this repo's skills and agents: an A/B fixture harness (run.ts, ANTHROPIC_API_KEY) and a session harness on the Claude Agent SDK (eval.ts, your Claude login).",
   "scripts": {
     "eval": "tsx run.ts",
+    "eval:quality": "vitest run quality.test.ts",
+    "eval:skills": "tsx eval.ts --kind skill",
+    "eval:agents": "tsx eval.ts --kind agent",
+    "eval:workflow": "tsx eval.ts --kind workflow",
+    "eval:repeat": "tsx eval.ts",
+    "eval:delta": "tsx series.ts delta",
+    "eval:benchmark": "tsx series.ts benchmark",
+    "delta": "tsx delta.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc --noEmit -p tsconfig.json",
-    "delta": "tsx delta.ts"
+    "build": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.251",
     "@anthropic-ai/sdk": "^0.33.1",
     "@types/node": "^22.10.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
   }
 }
