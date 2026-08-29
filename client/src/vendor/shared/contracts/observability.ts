@@ -138,3 +138,90 @@ export const CuratorResult = z.object({
   dry_run: z.boolean(),
 });
 export type CuratorResult = z.infer<typeof CuratorResult>;
+
+/* ── Agent performance ─────────────────────────────────────────────────────
+   The global dashboard and a single agent's Stats read the SAME shape from the
+   SAME aggregation. `AgentStats` above is one agent over a period; the rows in
+   `AgentPerformance` are that shape, so a number shown on the dashboard and the
+   number on that agent's own page cannot disagree — there is only one of them.
+
+   Nothing here triggers work: every field is computed from runs and findings
+   already stored. Opening, sorting or reloading the dashboard must never start
+   a review or a model call.                                                  */
+
+export const PerfPeriod = z.object({
+  /** ISO-8601, inclusive. */
+  from: z.string(),
+  /** ISO-8601, exclusive, so adjacent periods do not double-count a run. */
+  to: z.string(),
+});
+export type PerfPeriod = z.infer<typeof PerfPeriod>;
+
+/** How a cost figure was arrived at. Estimated and reconciled must never be
+ *  presented as the same number without saying which is which. */
+export const CostBasis = z.enum(['estimated', 'reconciled', 'mixed']);
+export type CostBasis = z.infer<typeof CostBasis>;
+
+export const AgentPerformanceRow = z.object({
+  agent_id: z.string(),
+  agent_name: z.string(),
+  /** Null when the agent was deleted but its runs remain. */
+  deleted: z.boolean(),
+  runs: z.number().int(),
+  /** Runs that produced a usable result. Cost and duration average over these. */
+  counted_runs: z.number().int(),
+  total_cost_usd: z.number().nullable(),
+  avg_cost_usd: z.number().nullable(),
+  avg_duration_ms: z.number().nullable(),
+  /** Findings acted on in the period — the denominator of accept_rate. */
+  decided: z.number().int(),
+  accepted: z.number().int(),
+  dismissed: z.number().int(),
+  pending: z.number().int(),
+  /** 0..1 over `decided`. Null when nothing was decided: a rate over zero
+   *  decisions is not 0%, it is unknown, and rendering it as 0% is a lie. */
+  accept_rate: z.number().nullable(),
+  /** False when `decided` is below the threshold the API applies. The UI must
+   *  mark these rather than ranking them silently against well-sampled rows. */
+  accept_rate_reliable: z.boolean(),
+  last_run_at: z.string().nullable(),
+  cost_basis: CostBasis,
+});
+export type AgentPerformanceRow = z.infer<typeof AgentPerformanceRow>;
+
+export const CostSlice = z.object({
+  label: z.string(),
+  cost_usd: z.number(),
+  runs: z.number().int(),
+});
+export type CostSlice = z.infer<typeof CostSlice>;
+
+export const AgentPerformance = z.object({
+  period: PerfPeriod,
+  /** Totals over the same counted runs the rows use, so the breakdowns sum to
+   *  the total exactly rather than approximately. */
+  total_runs: z.number().int(),
+  counted_runs: z.number().int(),
+  total_cost_usd: z.number(),
+  cost_basis: CostBasis,
+  /** Mean of the per-agent rates weighted by decisions, not a mean of means.
+   *  Null when nothing was decided anywhere in the period. */
+  avg_accept_rate: z.number().nullable(),
+  total_decided: z.number().int(),
+  /** Most runs in the period. Null when no agent ran at all. */
+  most_active: z
+    .object({ agent_id: z.string(), agent_name: z.string(), runs: z.number().int(), accept_rate: z.number().nullable() })
+    .nullable(),
+  rows: z.array(AgentPerformanceRow),
+  cost_by_agent: z.array(CostSlice),
+  cost_by_model: z.array(CostSlice),
+  /** Runs excluded from cost and duration, and why — so a total that looks low
+   *  can be explained instead of doubted. */
+  excluded: z.object({
+    no_cost: z.number().int(),
+    failed: z.number().int(),
+  }),
+  /** The minimum decisions a row needs before `accept_rate_reliable` is true. */
+  min_decisions_for_rate: z.number().int(),
+});
+export type AgentPerformance = z.infer<typeof AgentPerformance>;

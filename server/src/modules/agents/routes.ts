@@ -6,6 +6,17 @@ import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { NotFoundError } from '../../platform/errors.js';
 import { AgentsService } from './service.js';
+import { AgentPerformanceService } from './performance.service.js';
+
+/**
+ * Period for the performance endpoints. `to` is exclusive so two adjacent
+ * periods never count the same run twice. Both default to a 30-day window
+ * ending now, which is what the dashboard opens on.
+ */
+const PerfQuery = z.object({
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+});
 
 /** `/providers/:id` addresses a provider by name, not a uuid. */
 const ProviderParams = z.object({ id: Provider });
@@ -70,11 +81,41 @@ const SetSkillsBody = z
 export default async function agentsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const service = new AgentsService(app.container);
+  const perf = new AgentPerformanceService(app.container);
 
   app.get('/agents', async (req) => {
     const { workspaceId } = await getContext(app.container, req);
     return service.list(workspaceId);
   });
+
+  /**
+   * Agent performance. Read-only: both endpoints select from `agent_runs` and
+   * `findings` and nothing else — opening, sorting or reloading the dashboard
+   * must never start a review or a model call.
+   *
+   * `/agents/performance` is registered BEFORE `/agents/:id` on purpose:
+   * Fastify would otherwise match `performance` as an id and fail validation.
+   */
+  app.get('/agents/performance', { schema: { querystring: PerfQuery } }, async (req) => {
+    const { workspaceId } = await getContext(app.container, req);
+    return perf.overview(windowFrom(workspaceId, req.query));
+  });
+
+  app.get(
+    '/agents/:id/performance',
+    { schema: { params: IdParams, querystring: PerfQuery } },
+    async (req) => {
+      const { workspaceId } = await getContext(app.container, req);
+      const row = await perf.forAgent(windowFrom(workspaceId, req.query), req.params.id);
+      // A known agent with no runs in the period is not a 404 — it is an agent
+      // with no runs, and the caller needs to tell those apart.
+      if (!row) {
+        await service.get(workspaceId, req.params.id);
+        return null;
+      }
+      return row;
+    },
+  );
 
   app.get('/agents/:id', { schema: { params: IdParams } }, async (req) => {
     const { workspaceId } = await getContext(app.container, req);
@@ -175,4 +216,11 @@ export default async function agentsRoutes(appBase: FastifyInstance) {
     await getContext(app.container, req);
     return service.listModels(req.params.id);
   });
+}
+
+/** Default window: the trailing 30 days, ending now. */
+function windowFrom(workspaceId: string, q: { from?: Date; to?: Date }) {
+  const to = q.to ?? new Date();
+  const from = q.from ?? new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  return { workspaceId, from, to };
 }
