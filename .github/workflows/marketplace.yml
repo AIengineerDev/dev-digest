@@ -1,0 +1,42 @@
+name: marketplace
+
+# The only gate the plugin manifests get. There is no type checker for a
+# marketplace entry and no test suite for a plugin.json — a name that drifted, a
+# relative source that stopped resolving, or a version that disagrees with the
+# manifest all fail silently, at install time, in someone else's session.
+#
+# Cheap and deterministic, so unlike `evals` this one is safe to block on.
+
+on:
+  pull_request:
+    paths:
+      - ".claude-plugin/**"
+      - "plugins/**"
+      # Plugin directories hold symlinks, so the bodies live here. Without this
+      # line a skill edit ships to every user without passing the gate.
+      - ".claude/skills/**"
+      - ".claude/agents/**"
+      - ".claude/hooks/**"
+      - "scripts/marketplace-verify.mjs"
+      - ".github/workflows/marketplace.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".claude-plugin/**"
+      - "plugins/**"
+      - ".claude/skills/**"
+      - ".claude/agents/**"
+      - ".claude/hooks/**"
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # No install step on purpose: the gate uses only the Node standard
+      # library, so it cannot be broken by a dependency it does not have.
+      - run: node scripts/marketplace-verify.mjs

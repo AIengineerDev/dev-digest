@@ -44,4 +44,10 @@ e2e/test-results/
 # Failure screenshots from the browser suite — regenerated per run, never committed
 # (e2e/README.md has always claimed these were ignored; they were not).
 e2e/test-results/
+# The design bundle's zip, which otherwise sits untracked in the working tree.
 Dev Digest*.zip
+
+# Assembled GitHub Pages output. Built by scripts/build-pages.mjs on demand and
+# in CI; never committed, because a checked-in copy of the prototype would be a
+# second source of truth that nothing keeps in sync.
+_site/

@@ -1,0 +1,157 @@
+name: site
+
+# Publishes the static surfaces of this repository to GitHub Pages.
+#
+# Today that is `prototype/` only, mounted at /prototype/. It is mounted in a
+# subdirectory rather than at the root on purpose: `specs/16` puts the real
+# catalog site in `site/` as a Next.js static export, and that will take the
+# root. Keeping the prototype in its own path now means the real site can land
+# later without breaking a single shared link.
+#
+# `.nojekyll` is not optional. Without it Pages runs the output through Jekyll,
+# which strips directories beginning with an underscore — including `_next/`,
+# which the Next.js export will need.
+
+on:
+  # The build runs on pull requests as well, so "does the site still build" is a
+  # check you can see before merging rather than a surprise at deploy time. The
+  # deploy job stays main-only.
+  pull_request:
+    paths:
+      # Every source scripts/build-catalog.mjs reads. The catalog is generated
+      # at deploy time and never committed, so it cannot go stale — as long as a
+      # change to any of these actually fires this workflow.
+      # `scripts/check-pages-trigger.mjs` fails the build if this list falls
+      # behind the generator's declared SOURCES.
+      - "prototype/**"
+      - "scripts/build-pages.mjs"
+      - "scripts/build-catalog.mjs"
+      - "scripts/check-pages-trigger.mjs"
+      - ".claude/skills/**"
+      - ".claude/agents/**"
+      - ".claude/hooks/**"
+      - ".claude/settings.json"
+      - ".claude-plugin/**"
+      - "plugins/**"
+      - "mcp/src/tools/**"
+      - "mcp/src/server.ts"
+      - "skills/**"
+      - "evals/**"
+      - ".github/workflows/pages.yml"
+
+  push:
+    branches: [main]
+    paths:
+      # Every source scripts/build-catalog.mjs reads. The catalog is generated
+      # at deploy time and never committed, so it cannot go stale — as long as a
+      # change to any of these actually fires this workflow.
+      # `scripts/check-pages-trigger.mjs` fails the build if this list falls
+      # behind the generator's declared SOURCES.
+      - "prototype/**"
+      - "scripts/build-pages.mjs"
+      - "scripts/build-catalog.mjs"
+      - "scripts/check-pages-trigger.mjs"
+      - ".claude/skills/**"
+      - ".claude/agents/**"
+      - ".claude/hooks/**"
+      - ".claude/settings.json"
+      - ".claude-plugin/**"
+      - "plugins/**"
+      - "mcp/src/tools/**"
+      - "mcp/src/server.ts"
+      - "skills/**"
+      - "evals/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; queue rather than cancel, so a merge never lands a
+# half-published site.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same assembler the local dev server uses (prototype/dev.mjs), so the
+      # layout cannot drift between what you see locally and what ships.
+      - name: Check the deploy trigger still covers every catalog source
+        run: node scripts/check-pages-trigger.mjs
+
+      - name: Assemble the site
+        run: node scripts/build-pages.mjs --out _site
+
+      - name: Check what is about to ship
+        run: |
+          set -euo pipefail
+          test -f _site/.nojekyll             || { echo "missing .nojekyll"; exit 1; }
+          test -f _site/index.html            || { echo "root page missing"; exit 1; }
+          test -f _site/prototype/index.html  || { echo "prototype missing"; exit 1; }
+          test -f _site/prototype/catalog.json || { echo "catalog missing"; exit 1; }
+          test -f _site/prototype/strings.json || { echo "strings.json missing — the page has no copy without it"; exit 1; }
+          test -f _site/prototype/aliases.json || { echo "aliases.json missing — search loses every alias"; exit 1; }
+          grep -q "<!doctype html>" _site/prototype/index.html \
+            || { echo "prototype/index.html is not a standalone document"; exit 1; }
+
+          # Copy belongs in strings.json. A user-facing sentence that reappears in
+          # the markup is a string no translator will ever find.
+          node -e '
+            const fs = require("fs");
+            const html = fs.readFileSync("_site/prototype/index.html", "utf8");
+            const js = html.match(/<script>([\s\S]*)<\/script>/)[1];
+            const leftovers = [...js.matchAll(/>([A-Z][a-z][^<>{}`$]{8,90})</g)].map(m => m[1]);
+            if (leftovers.length) {
+              console.error("UI copy hardcoded in the page instead of strings.json:");
+              for (const l of leftovers) console.error("  " + l);
+              process.exit(1);
+            }
+            const t = (js.match(/t\("/g) || []).length;
+            console.log(`  copy ok — ${t} string lookups, 0 hardcoded`);
+          '
+
+          # The page must hold no artefact data of its own — it reads catalog.json.
+          # A plugin name in the HTML would mean someone hard-coded one back in.
+          ! grep -qE 'devdigest-(skills|agents|mcp)' _site/prototype/index.html \
+            || { echo "prototype/index.html names a plugin — data must come from catalog.json"; exit 1; }
+
+          node -e '
+            const c = require("./_site/prototype/catalog.json");
+            if (!c.artefacts.length) { console.error("catalog is empty"); process.exit(1); }
+            const bad = c.artefacts.filter(a => !a.id || !a.path);
+            if (bad.length) { console.error("artefacts without id or source path:", bad.length); process.exit(1); }
+            const errs = (c.diagnostics || []).filter(d => d.severity === "error");
+            if (errs.length) {
+              for (const e of errs) console.error(`  ${e.path}: ${e.message}`);
+              process.exit(1);
+            }
+            console.log(`  catalog ok — ${c.artefacts.length} artefacts, marketplace: ${c.marketplace ? c.marketplace.name : "none yet"}`);
+          '''
+          find _site -type f | sed 's/^/  /'
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: deploy to Pages
+    needs: build
+    # Never from a pull request: a fork PR would otherwise publish to the live
+    # site. The build above still runs and still reports.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
