@@ -1,4 +1,120 @@
-# `@devdigest/evals` — the skill A/B harness
+# `@devdigest/evals`
+
+Two harnesses live here. They answer different questions, authenticate
+differently, and share nothing but this directory.
+
+| | `run.ts` — A/B fixture harness | `eval.ts` — session harness |
+| --- | --- | --- |
+| Question | does attaching a skill change what the **reviewer** finds? | does the **harness** route, activate and dispatch correctly? |
+| Runs | `reviewer-core`'s single-pass review over a checked-in diff | a real Claude Code session through the Claude Agent SDK |
+| Auth | `ANTHROPIC_API_KEY`, else `~/.devdigest/secrets.json` | **your Claude login** — the same credential `claude` uses. No key. |
+| Fixtures | inside the skill (`skills/<n>/evals/`) | outside it (`evals/**/fixtures/`) |
+| Commands | `npm run eval`, `npm run delta` | `eval:quality`, `eval:skills`, `eval:agents`, `eval:workflow`, `eval:repeat`, `eval:delta`, `eval:benchmark` |
+
+Both are documented below. `pnpm <script>` and `npm run <script> --` both work;
+the package installs with **npm** (its lockfile is `package-lock.json`).
+
+---
+
+## The session harness — `eval.ts`
+
+```
+evals/
+  quality.test.ts               # eval:quality — static, free, blocking
+  eval.ts                       # the runner for the three session levels
+  series.ts                     # eval:delta / eval:benchmark, over the records
+  src/                          # session, grading, records, static checks
+  skills/<name>/<name>.eval.ts    how the suite runs — arms, model, tools
+  skills/<name>/<name>.cases.ts   prompts and expectations
+  skills/<name>/fixtures/         untrusted test data
+  agents/<name>/...
+  workflow/...
+  results/records.jsonl         # one line per (suite, case, arm, trial)
+```
+
+**Fixtures live outside the skill on purpose**, and this is the one place the
+two harnesses disagree. The A/B harness keeps a suite inside the skill folder so
+the skill stays deliverable as one directory. A session harness cannot: the
+session reads the working tree, and a planted violation sitting inside the skill
+it is being judged against reads as *reference material* — the model treats the
+plant as an example of correct code. So `fixtures/` sits under `evals/`, and
+every fixture README says it is untrusted test data.
+
+### Three levels
+
+| Command | Costs | What it proves |
+| --- | --- | --- |
+| `pnpm eval:quality` | nothing — no model, no key, no network | every skill and agent is well-formed: frontmatter, `name` matches its directory, internal links resolve, no stub bodies. **The only gate safe to block CI on.** |
+| `pnpm eval:skills` · `pnpm eval:agents` | a session per arm per case | the CONTENT of one skill or agent, in isolation: `settingSources: []`, so no CLAUDE.md and no project skills leak into the measurement |
+| `pnpm eval:workflow` | a session per case | ROUTING, against the live repo with project settings loaded: dispatch, positive and negative activation, and whether CLAUDE.md actually sends a session to the document it names |
+
+```sh
+pnpm eval:quality                                          # free, run it first
+pnpm eval:skills --list                                    # what would run, no spend
+pnpm eval:skills --suite onion-architecture --trials 2
+pnpm eval:agents --arm v1-live --label baseline
+pnpm eval:agents --arm v2-no-rule-citation --label version-b
+pnpm eval:delta --a baseline --b version-b
+pnpm eval:benchmark --label baseline
+```
+
+`eval:repeat` is the same runner with nothing preset, for a repeated series of
+one configuration — it needs the level spelled out:
+
+```sh
+pnpm eval:repeat --kind agent --suite architecture-reviewer --arm v1-live \
+  --trials 2 --label baseline
+```
+
+Flags: `--kind skill|agent|workflow` · `--suite` · `--case` · `--arm` ·
+`--trials N` · `--label <series>` · `--model` · `--budget <usd>` ·
+`--timeout <ms>` · `--list`.
+
+`--budget` is a hard stop, not an estimate: the runner adds up what each session
+actually cost and refuses to start the next one past the cap. `--list` spends
+nothing and is the right first command in an unfamiliar suite.
+
+### Evidence, not prose
+
+A verdict is graded against the **trajectory** — the tool calls the session
+made, the files it read, the subagents it dispatched, the skills it activated.
+"I had the architecture-reviewer look at this" is a sentence; a
+`Task(subagent_type: architecture-reviewer)` is a dispatch, and only the second
+one passes a `kind: 'agent'` expectation. `kind: 'text'` exists for artefacts
+whose whole output is prose, and it is the weakest evidence there is: a case
+built only out of text patterns is a case the base model passes without the
+skill.
+
+`allowedTools` does **not** restrain a session — measured: a run listing only
+`Read`/`Grep`/`Glob` still reached for `Bash`, burned every turn shelling around
+the fixture and ended in `error_max_turns` with nothing graded. `disallowedTools`
+is the half that blocks. Every suite here sets both.
+
+### Control arms and what a delta means
+
+An arm marked `control` is **supposed to miss** — `without-skill` measures what
+the base model does on its own, and `v2-no-rule-citation` is a deliberate
+degradation. Their misses are the measurement and never fail the run; only a
+non-control arm's miss, or a session that produced nothing, sets a non-zero exit
+code.
+
+Read a delta **per expectation**, never as one score. "The score dropped" is not
+a finding. "`cites-a-rule` went 5/5 → 0/5 and nothing else moved" is — and if
+the change is diffuse instead, you are reading model variance, not your edit.
+
+One trial is an anecdote. `--trials 2` is the cheap minimum and only 0/2 and 2/2
+are readable; a 1/2 says the expectation is unstable and nothing more.
+
+### Auth
+
+`eval.ts` calls the Claude Agent SDK, which uses the Claude login already on
+this machine. There is no `ANTHROPIC_API_KEY` in this path and no key to put in
+CI — which is also why the model-run levels are not a fork-safe CI gate, and why
+only `eval:quality` blocks there.
+
+---
+
+## The A/B fixture harness — `run.ts`
 
 Answers one question per run: **does attaching a skill change what the reviewer
 finds?** It runs the same agent over the same diff twice — once with the skill

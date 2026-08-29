@@ -52,6 +52,30 @@ permissions:
   contents: read
 
 jobs:
+  # Free, deterministic, needs no key and no secrets — so it runs on every PR
+  # including a fork's, and it is the ONLY eval job allowed to block. The model
+  # runs below spend money and vary between runs; a gate that is red for reasons
+  # nobody controls stops being read.
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: evals/package-lock.json
+
+      - run: npm ci
+        working-directory: evals
+
+      # Static structure of every skill and agent: frontmatter, name-matches-
+      # directory, internal links, stub bodies. Coverage gaps are warnings and
+      # are printed, not failed — see evals/quality.test.ts.
+      - run: npm run eval:quality
+        working-directory: evals
+
   # Which suites does this change actually need? A changed skill with no evals
   # is named and skipped, never failed.
   scope:
@@ -71,7 +95,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
   eval:
-    needs: scope
+    needs: [scope, quality]
     if: needs.scope.outputs.suites != '[]'
     runs-on: ubuntu-latest
     # A sweep is a handful of sequential LLM calls; anything past this is a
