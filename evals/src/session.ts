@@ -63,9 +63,12 @@ function record(block: { name: string; input: unknown }, into: Trajectory): void
   if ((block.name === 'Grep' || block.name === 'Glob') && typeof input.path === 'string') {
     into.reads.push(input.path);
   }
-  if (block.name === 'Task' && typeof input.subagent_type === 'string') {
-    into.agents.push(input.subagent_type);
-  }
+  // The subagent tool is `Agent` in this harness and `Task` in others, and the
+  // key naming the agent has moved too. Measured: a `dispatch` case scored 0
+  // while the trajectory plainly showed an `Agent` call — a false negative in
+  // the grader, which is the worst kind, because it reads as a routing bug in
+  // the thing under test. Record the whole input and let the grader match.
+  if (block.name === 'Task' || block.name === 'Agent') into.agents.push(JSON.stringify(input));
   // The Skill tool's argument key is not pinned by the SDK's public types, so
   // record the whole input and let the grader match a name inside it. A missed
   // activation must not look like a design decision.
@@ -85,7 +88,10 @@ export async function runSession(opts: SessionOptions): Promise<Trajectory> {
   };
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 300_000);
+  // 300 s was too tight: a control arm explores more than a treatment arm — 26
+  // turns against 10 on the same case — and one aborted mid-review, which is
+  // recorded as a failed session and reads like a model failure.
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 600_000);
   try {
     const stream = query({
       prompt: opts.prompt,

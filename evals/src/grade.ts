@@ -32,8 +32,11 @@ function evidenceFor(exp: Expectation, t: Trajectory): string | null {
       const re = new RegExp(exp.path, 'i');
       return t.reads.find((p) => re.test(p)) ?? null;
     }
-    case 'agent':
-      return t.agents.find((a) => a === exp.agent) ?? null;
+    case 'agent': {
+      const re = new RegExp(exp.agent, 'i');
+      const hit = t.agents.find((a) => re.test(a));
+      return hit ? hit.slice(0, 160) : null;
+    }
     case 'skill': {
       const re = new RegExp(exp.skill, 'i');
       return t.skills.find((s) => re.test(s)) ?? null;

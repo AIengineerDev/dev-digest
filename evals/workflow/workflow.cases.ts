@@ -18,7 +18,7 @@ import type { EvalCase } from '../src/case.js';
  * so the block list is what keeps a routing case from editing the working tree.
  * `Task` and `Skill` stay: they are the evidence these cases are looking for.
  */
-const READ_ONLY = ['Read', 'Grep', 'Glob', 'Task', 'Skill'];
+const READ_ONLY = ['Read', 'Grep', 'Glob', 'Task', 'Agent', 'Skill'];
 const NO_ESCAPE = ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch'];
 
 export const cases: EvalCase[] = [
