@@ -46,9 +46,9 @@ what you write:
 | --- | --- | --- | --- |
 | server hermetic — pure unit | `server/test/<topic>.test.ts` | `server/test/grounding.test.ts` | no DB, no network, no clock, no filesystem |
 | server hermetic — route | `server/test/<topic>.test.ts` | `server/test/routes-smoke.test.ts` | `buildApp({ config, db, overrides })` + `app.inject()`, mocks injected through `overrides`; Postgres connects lazily, so no-DB routes need no Docker |
-| server hermetic — contract | `server/test/<topic>.test.ts` | `server/test/contracts.test.ts` | parses fixtures through the `@devdigest/shared` Zod schemas |
+| server hermetic — contract | `server/test/<topic>.test.ts` | `server/test/contracts.test.ts` | parses fixtures through the `@app/shared` Zod schemas |
 | server integration | **`server/test/<topic>.it.test.ts`** | `server/test/reviews.it.test.ts` | real Postgres via testcontainers (`./helpers/pg.js`), `seed()`, mocked LLM/git/GitHub |
-| client component | `<Component>/<Component>.test.tsx`, beside the component | `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingCard/FindingCard.test.tsx` | jsdom, `fetch` mocked, `afterEach(cleanup)`, typed fixture from `@devdigest/shared`, render inside `NextIntlClientProvider` with the real `messages/en/*.json`; add a `QueryClientProvider` when the tree uses a data hook |
+| client component | `<Component>/<Component>.test.tsx`, beside the component | `client/src/app/repos/[repoId]/pulls/[number]/_components/FindingCard/FindingCard.test.tsx` | jsdom, `fetch` mocked, `afterEach(cleanup)`, typed fixture from `@app/shared`, render inside `NextIntlClientProvider` with the real `messages/en/*.json`; add a `QueryClientProvider` when the tree uses a data hook |
 | client pure helper | `helpers.test.ts` beside the helper, or `src/lib/<topic>.test.ts` | `client/src/lib/format.test.ts` | no render |
 | reviewer-core | `reviewer-core/test/<topic>.test.ts` | `reviewer-core/test/run.test.ts`, `prompt.test.ts` | pure engine: stubbed model, no DB, no GitHub, no filesystem |
 | e2e | `e2e/specs/NN-name.flow.json` | `e2e/specs/04-pr-findings.flow.json` | deterministic locators only — `wait --url` / `wait --text` **are** the assertions; a `label` on every step; never the AI `chat` command |
@@ -140,7 +140,7 @@ typology is about deliberate omission, so state what you omitted.
 - **Do not touch:** `server/clones/**` (a full copy of this repo lives there —
   exclude it from every grep), `**/src/vendor/**`, `server/src/db/migrations/**`,
   `**/node_modules/**`, lockfiles.
-- **Never `docker compose down -v`** — it destroys the `devdigest_pgdata` volume
+- **Never `docker compose down -v`** — it destroys the named Postgres data volume
   and every imported repo and review with it.
 - **No git state changes** — no `commit`, `push`, `checkout`, `stash`, `reset`.
   Reading history is fine.

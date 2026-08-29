@@ -1,79 +1,81 @@
-# `dependency-checker` — як міряються числа
+# `dependency-checker` — how the numbers are measured
 
-Це не файл джерел, як `onion-architecture/README.md`. Тут — **звідки береться
-кожне число** у звіті і чому саме так, бо половина помилок у dependency-аудиті
-це не хибний висновок, а правильний висновок про не ту величину.
+This is not a sources file like `onion-architecture/README.md`. It records
+**where every number in the report comes from**, and why, because half the
+mistakes in a dependency audit are not a wrong conclusion — they are a correct
+conclusion about the wrong quantity.
 
-Зібрано 2026-08-27 на macOS (darwin arm64).
+Measured 2026-08-27 on macOS (darwin arm64).
 
 ---
 
-## 1. Що вимірює `survey.sh`
+## 1. What `survey.sh` measures
 
-| Секція | Джерело числа | Чого воно **не** означає |
+| Section | Where the number comes from | What it does **not** mean |
 | --- | --- | --- |
-| 1. Packages | `package.json` + `du -sh <pkg>/node_modules` | Розмір на диску ≠ розмір, який доїжджає до користувача |
-| 2. Declared in more than one | діапазони з `package.json` | Діапазон ≠ те, що встановлено |
-| 3. Installed drift | `node_modules/<name>/package.json` → `version` | Тільки прямі залежності; транзитивні не обходяться |
-| 4. Heaviest | `du -sk` по каталогах пакетів | Включає тести, мапи, README, нативні бінарники |
-| 5. Cross-package edges | `compilerOptions.paths` кожного `tsconfig.json` | Не npm-граф; npm про ці ребра не знає |
+| 1. Packages | `package.json` + `du -sh <pkg>/node_modules` | Size on disk ≠ size that reaches a user |
+| 2. Declared in more than one | Ranges from `package.json` | A range ≠ what is installed |
+| 3. Installed drift | `node_modules/<name>/package.json` → `version` | Direct dependencies only; transitive trees are not walked |
+| 4. Heaviest | `du -sk` over package directories | Includes tests, source maps, READMEs, native binaries |
+| 5. Cross-package edges | `compilerOptions.paths` in each `tsconfig.json` | Not the npm graph; npm knows nothing about these edges |
 
-`du` рахує **на диску**, з урахуванням блоків файлової системи, тож сума топу
-не дорівнює загальному розміру. Це нормально і в звіті не пояснюється — важлива
-відносна вага, а не бухгалтерія байтів.
+`du` counts **on disk**, in filesystem blocks, so the top-N figures do not sum to
+the total. That is expected and the report does not explain it — what matters is
+relative weight, not byte-level accounting.
 
-## 2. Чому глоб саме такий
+## 2. Why the glob is written that way
 
 ```sh
 du -sk "$p"/node_modules/*/ "$p"/node_modules/@*/*/ | grep -vE 'node_modules/@[^/]+/$'
 ```
 
-Перший глоб не бачить scoped-пакетів (`@next/swc-...`), другий бачить тільки їх.
-Але перший **також** матчить сам каталог скоупу (`@next/`), і без `grep -v`
-кожен scoped-пакет рахується двічі — один раз як скоуп, один раз як пакет. У
-першій версії скрипта саме так і було: `@next/` і `@next/swc-darwin-arm64/`
-стояли поруч з однаковими 124 MB.
+The first glob does not see scoped packages (`@next/swc-...`); the second sees
+only those. But the first **also** matches the scope directory itself (`@next/`),
+and without the `grep -v` every scoped package is counted twice — once as the
+scope, once as the package. The first version of the script did exactly that:
+`@next/` and `@next/swc-darwin-arm64/` sat side by side at an identical 124 MB.
 
-## 3. Чого скрипт не робить навмисно
+## 3. What the script deliberately does not do
 
-- **Не ставить залежності й не ходить у мережу.** Аудит не має права змінити
-  жоден lockfile. `npm outdated` і `npm audit` вимагають мережі — якщо вони
-  потрібні, це окремий, явно названий крок.
-- **Не рахує транзитивні дерева.** Шість незалежних lockfile'ів, три менеджери;
-  єдиний чесний спосіб — питати кожен менеджер окремо (`pnpm why`, `npm ls`), і
-  це робиться точково під конкретне питання, а не масово.
-- **Не міряє бандл.** Це єдине число, що справді відповідає на «скільки важить»
-  для `client`, і воно потребує білда Next.js. Поки його не поміряли, звіт
-  зобовʼязаний сказати, що не поміряли.
-- **Не чіпає `server/clones/**`.** Там повна копія цього ж репозиторію разом з
-  її `node_modules`; будь-яке сканування без виключення подвоює всі числа.
+- **It does not install anything and it does not use the network.** An audit has
+  no right to modify a lockfile. `npm outdated` and `npm audit` need the network;
+  if you want them, that is a separate, explicitly named step.
+- **It does not count transitive trees.** Six independent lockfiles, three
+  package managers; the only honest way is to ask each manager separately
+  (`pnpm why`, `npm ls`), and that is done per question, not in bulk.
+- **It does not measure the bundle.** That is the one number that genuinely
+  answers "how heavy is this" for a frontend package, and it needs a real
+  production build. Until it has been measured, the report is obliged to say it
+  has not been measured.
+- **It skips cloned repositories checked out inside the workspace.** A full copy
+  of a repository carries its own `node_modules`; scanning without excluding it
+  doubles every number.
 
-## 4. Що вимірювання показало першого разу
+## 4. What the first measurement found
 
-Три речі, які варто знати ще до першого запуску:
+Three things worth knowing before the first run:
 
-1. **`zod` роздвоївся.** `server`, `client`, `reviewer-core` — `^3.24.1`
-   (3.25.76 на диску), `mcp` — `^4.0.0` (4.4.3 на диску). При цьому `mcp`
-   аліасить `@devdigest/shared` у `server/src/vendor/shared`, тобто tsc тягне у
-   програму `mcp` файли, написані під Zod 3, і резолвить їхній `zod` у Zod 4.
-   `cd mcp && npm run typecheck` **проходить** — перевірено 2026-08-27. Це
-   прихована небезпека, а не поломка, і рівно той випадок, заради якого секція 3
-   існує.
-2. **`client` важить 670 MB на диску, і майже все це не їде до користувача:**
-   `next` 152 MB + `@next/swc-darwin-arm64` 124 MB — це компілятор. Звіт, який
-   подасть 670 MB як «вага клієнта», буде технічно правдивим і повністю
-   безкорисним.
-3. **`reviewer-core` має власний аліас `zod` → `./node_modules/zod`** у своєму
-   `tsconfig.json`. Це не декоративно: пакет споживається як джерело, і без
-   аліаса його `zod` резолвиться в `node_modules` споживача.
+1. **`zod` had split in two.** Three packages were on `^3.24.1` (3.25.76 on
+   disk) while a fourth was on `^4.0.0` (4.4.3 on disk). That fourth package also
+   path-aliases `@app/shared` into another package's source tree, so tsc pulls
+   files written against Zod 3 into a program that resolves `zod` to Zod 4.
+   `npm run typecheck` **passes** — verified 2026-08-27. This is a hidden hazard
+   rather than a break, and exactly the case section 3 exists for.
+2. **The frontend package weighed 670 MB on disk, and almost none of it reaches a
+   user:** `next` 152 MB + `@next/swc-darwin-arm64` 124 MB is the compiler. A
+   report that presents 670 MB as "the weight of the client" is technically true
+   and completely useless.
+3. **One package carried its own `zod` alias** → `./node_modules/zod` in its
+   `tsconfig.json`. That is not decorative: the package is consumed as source,
+   and without the alias its `zod` resolves into the consumer's `node_modules`.
 
-## 5. Межа з іншими скілами
+## 5. The boundary with neighbouring skills
 
-- `onion-architecture` — напрямок імпортів **всередині** `server/src`. Цей скіл
-  туди не заходить.
-- `frontend-ui-architecture` — куди кладеться файл у `client/`.
-- Цей скіл — тільки зовнішні пакети: що встановлено, скільки важить, де версії
-  розходяться і що з цим робити.
+- `onion-architecture` — import direction **inside** the backend source tree.
+  This skill does not go there.
+- `frontend-ui-architecture` — where a file belongs in the frontend.
+- This skill — external packages only: what is installed, what it weighs, where
+  versions diverge, and what to do about it.
 
-Дублювати зміст сусіднього скіла не можна: кожен прилінкований скіл — це токени
-в кожному прогоні.
+Duplicating a neighbouring skill's content is not allowed: every linked skill
+costs tokens on every run.

@@ -25,7 +25,7 @@ otherwise.
 
 **Packages consume each other as TypeScript source, through tsconfig path
 aliases.** That is the edge npm cannot see and the one that makes version drift
-dangerous: when `mcp` aliases `@devdigest/shared` to `server/src/vendor/shared`,
+dangerous: when `mcp` aliases `@app/shared` to `server/src/vendor/shared`,
 tsc pulls those files into **mcp's** program and resolves their bare imports
 against **mcp's** `node_modules`. Two packages at different major versions of a
 shared library are fine until one of them reads the other's source.
@@ -33,8 +33,8 @@ shared library are fine until one of them reads the other's source.
 ## Step 1 — measure
 
 ```sh
-.claude/skills/dependency-checker/scripts/survey.sh          # markdown to stdout
-.claude/skills/dependency-checker/scripts/survey.sh --top 20 # deeper size lists
+"$CLAUDE_PLUGIN_ROOT"/skills/dependency-checker/scripts/survey.sh          # markdown to stdout
+"$CLAUDE_PLUGIN_ROOT"/skills/dependency-checker/scripts/survey.sh --top 20 # deeper size lists
 ```
 
 Read-only: no install, no network, no lockfile writes. It excludes
@@ -103,7 +103,7 @@ In order of how much they cost:
 4. **A dependency one package has and a sibling doing the same job does not.**
 
 `vendor/**` is not a dependency and never appears in a lockfile. The two copies
-of `@devdigest/shared` are vendored source and have already drifted; that is a
+of `@app/shared` are vendored source and have already drifted; that is a
 contract problem, not a dependency problem, and it belongs in a different report.
 
 ## Step 5 — prioritise

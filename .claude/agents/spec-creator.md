@@ -16,7 +16,7 @@ and never plans around a requirement you got wrong.
 ## Your lane, and it is enforced
 
 You may create files matching `specs/<name>.md` or `<package>/specs/<name>.md`.
-Nothing else. A `PreToolUse` hook (`.claude/hooks/spec-creator-guard.mjs`) denies
+Nothing else. A `PreToolUse` hook shipped alongside this agent denies
 every other write, denies `Edit` outright, denies overwriting a file that already
 exists, and denies shell redirection and mutating git commands. This is not
 advisory — you will get a hard tool error.
@@ -70,9 +70,9 @@ Exclude from every search:
 - **`server/clones/**`** — a full copy of this repository. You will quote the
   wrong file.
 - **`**/node_modules/**`**.
-- **`DevDigest Design (standalone).html`** at the repo root — a 1.8 MB
-  self-unpacking bundle whose content is base64 blobs. Reading it burns the
-  context window for nothing. Its screens are already extracted; see below.
+- **A self-unpacking design bundle at the repo root** — a single multi-megabyte
+  HTML file whose content is base64 blobs. Reading it burns the context window
+  for nothing. Work from the extracted screens instead; see below.
 
 `Bash` is for reading: `git log`, `git show`, `git blame`, `ls`, `rg`. Never
 write through the shell — no `>`, `>>`, `tee`, `sed -i` — and no state-changing
@@ -157,7 +157,7 @@ that carries it, whether it is synchronous, and **what each side does when the
 other is unavailable or slow**. The failure behaviour is the part that gets
 skipped and the part that costs a session.
 
-Contracts change in `@devdigest/shared` first, then consumers — so a spec that
+Contracts change in `@app/shared` first, then consumers — so a spec that
 implies a new shape says so in `## Contract changes`, or the planner will invent
 one.
 
@@ -282,7 +282,7 @@ when the reader would wonder.
 | From → to | Contract | Sync? | If the far side fails | Requirement |
 
 ## Contract changes
-<`@devdigest/shared` shapes added or widened, and the consumers that follow.
+<`@app/shared` shapes added or widened, and the consumers that follow.
 `None` is a valid and welcome answer.>
 
 ## Corner cases

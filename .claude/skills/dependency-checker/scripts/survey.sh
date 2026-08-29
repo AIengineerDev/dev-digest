@@ -5,13 +5,17 @@
 # nothing about install size or version drift is guessable, and a plausible
 # wrong number is worse than no number.
 #
-#   .claude/skills/dependency-checker/scripts/survey.sh [--top N]
+#   "$CLAUDE_PLUGIN_ROOT"/skills/dependency-checker/scripts/survey.sh [--top N]
 #
 # Reads only. Needs python3 and du; no npm/pnpm install and no network.
 set -euo pipefail
 
 TOP="${2:-12}"
-root="$(cd "$(dirname "$0")/../../../.." && pwd)"
+# The project being surveyed is the one the session is working in — NOT the
+# directory this script lives in. Walking up from $0 finds the repository only
+# when the skill is run from a checkout; once installed as a plugin the same
+# walk lands inside the plugin cache and the survey measures itself.
+root="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$root"
 
 # server/clones/ is a full copy of this repository, including its node_modules.
