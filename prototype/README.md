@@ -23,6 +23,30 @@ that specification gets implemented from. It demonstrates:
 - dark-first theming with a light option, resolving correctly in all three
   viewer states (system, explicit dark, explicit light)
 
+## Running it locally
+
+```bash
+node prototype/dev.mjs                     # http://localhost:4300/prototype/
+node prototype/dev.mjs --port 5000
+node prototype/dev.mjs --base /dev-digest  # rehearse the deployed subpath
+node prototype/dev.mjs --no-reload         # serve byte-for-byte what deploys
+```
+
+Node standard library only — no install, no lockfile, no package manager. Edits
+to `index.html` reload the open page; nothing needs restarting.
+
+The server and the `pages` workflow both call `scripts/build-pages.mjs`, so the
+layout you browse locally is the layout that ships. `--base` matters more than it
+looks: the deployed site lives under `/dev-digest/`, and a link that resolves at
+the root can still 404 one directory down. That is the usual way a Pages deploy
+fails after a green build.
+
+To produce the deployable output without serving it:
+
+```bash
+node scripts/build-pages.mjs        # writes ./_site (gitignored)
+```
+
 ## What it is not
 
 **Not the site.** `specs/16` specifies `site/` as a separate pnpm Next.js package

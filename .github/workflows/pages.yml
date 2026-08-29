@@ -37,49 +37,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Same assembler the local dev server uses (prototype/dev.mjs), so the
+      # layout cannot drift between what you see locally and what ships.
       - name: Assemble the site
-        run: |
-          set -euo pipefail
-          mkdir -p _site/prototype
-          cp -R prototype/index.html _site/prototype/
-          touch _site/.nojekyll
-
-          # Placeholder root. Replaced by the `site/` export when it ships;
-          # until then the root has to lead somewhere rather than 404.
-          cat > _site/index.html <<'HTML'
-          <!doctype html>
-          <html lang="en">
-          <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <meta name="color-scheme" content="dark light">
-          <title>dev-digest</title>
-          <style>
-            :root { --bg:#0F1419; --fg:#E1E7ED; --dim:#96A3B0; --accent:#D6A241; }
-            @media (prefers-color-scheme: light) {
-              :root { --bg:#EEF1F3; --fg:#141C24; --dim:#4F5D6A; --accent:#8A5D0C; }
-            }
-            body { margin:0; min-height:100vh; display:grid; place-content:center;
-                   gap:14px; background:var(--bg); color:var(--fg);
-                   font:400 15px/1.6 ui-sans-serif, system-ui, sans-serif; padding:32px; }
-            h1 { margin:0; font-size:20px; font-weight:600; letter-spacing:-.01em; }
-            p { margin:0; color:var(--dim); max-width:52ch; }
-            a { color:var(--accent); }
-          </style>
-          </head>
-          <body>
-            <h1>dev-digest</h1>
-            <p>The artefact catalog is not built yet. The design prototype it will be
-               implemented from is at <a href="./prototype/">/prototype/</a>.</p>
-          </body>
-          </html>
-          HTML
+        run: node scripts/build-pages.mjs --out _site
 
       - name: Check what is about to ship
         run: |
           set -euo pipefail
-          test -f _site/.nojekyll        || { echo "missing .nojekyll"; exit 1; }
-          test -f _site/prototype/index.html || { echo "prototype missing"; exit 1; }
+          test -f _site/.nojekyll             || { echo "missing .nojekyll"; exit 1; }
+          test -f _site/index.html            || { echo "root page missing"; exit 1; }
+          test -f _site/prototype/index.html  || { echo "prototype missing"; exit 1; }
           grep -q "<!doctype html>" _site/prototype/index.html \
             || { echo "prototype/index.html is not a standalone document"; exit 1; }
           find _site -type f | sed 's/^/  /'
