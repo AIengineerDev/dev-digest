@@ -16,7 +16,25 @@ on:
   push:
     branches: [main]
     paths:
+      # Every source scripts/build-catalog.mjs reads. The catalog is generated
+      # at deploy time and never committed, so it cannot go stale — as long as a
+      # change to any of these actually fires this workflow.
+      # `scripts/check-pages-trigger.mjs` fails the build if this list falls
+      # behind the generator's declared SOURCES.
       - "prototype/**"
+      - "scripts/build-pages.mjs"
+      - "scripts/build-catalog.mjs"
+      - "scripts/check-pages-trigger.mjs"
+      - ".claude/skills/**"
+      - ".claude/agents/**"
+      - ".claude/hooks/**"
+      - ".claude/settings.json"
+      - ".claude-plugin/**"
+      - "plugins/**"
+      - "mcp/src/tools/**"
+      - "mcp/src/server.ts"
+      - "skills/**"
+      - "evals/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -39,6 +57,9 @@ jobs:
 
       # Same assembler the local dev server uses (prototype/dev.mjs), so the
       # layout cannot drift between what you see locally and what ships.
+      - name: Check the deploy trigger still covers every catalog source
+        run: node scripts/check-pages-trigger.mjs
+
       - name: Assemble the site
         run: node scripts/build-pages.mjs --out _site
 

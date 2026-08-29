@@ -32,6 +32,24 @@ const rel = (p) => relative(ROOT, p).split("\\").join("/");
 /* Minimum expected count per class. A glob that matches fewer than this means a
    directory moved and the index would silently shrink — see R16. Raise these
    when a class genuinely grows; never lower one to make a red build green. */
+/* The roots this generator reads. Exported because two other things must agree
+   with it: the Pages deploy trigger (a source that changes but does not fire the
+   workflow leaves a stale site) and anyone adding a new artefact class. Keep it
+   in sync with the readers below — `scripts/check-pages-trigger.mjs` fails the
+   build if the workflow stops covering one. */
+export const SOURCES = [
+  ".claude/skills",
+  ".claude/agents",
+  ".claude/hooks",
+  ".claude/settings.json",
+  ".claude-plugin",
+  "plugins",
+  "mcp/src/tools",
+  "mcp/src/server.ts",
+  "skills",
+  "evals",
+]
+
 const MINIMUMS = { skill: 5, agent: 6, hook: 1, "mcp-tool": 5, "product-skill": 1 };
 
 /* Module-level, and therefore reset at the start of every buildCatalog() call:
