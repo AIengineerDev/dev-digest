@@ -1,0 +1,11 @@
+{
+  "name": "architecture-review",
+  "displayName": "Architecture Review",
+  "version": "1.0.0",
+  "description": "A read-only reviewer that judges a change against the layering and placement rules the paved path defines, and reports findings with file-and-line evidence. It never fixes anything.",
+  "author": { "name": "Alex Lavrenin" },
+  "keywords": ["review", "architecture", "layering"],
+  "dependencies": [
+    { "name": "engineering-paved-path", "version": "^1.0" }
+  ]
+}

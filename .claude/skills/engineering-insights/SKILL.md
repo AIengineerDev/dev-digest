@@ -1,6 +1,6 @@
 ---
 name: engineering-insights
-description: Read and record durable engineering insights in the right module's INSIGHTS.md. Use at the START of a non-trivial task in dev-digest — before touching code — to recall what was already tried in the module being changed, and at the END of one to append what was learned. Also triggers on "record insights", "run engineering insights", "what do we already know about X", or a finished change under server/, client/, reviewer-core/, or e2e/.
+description: Read and record durable engineering insights in the right module's INSIGHTS.md. Use at the START of a non-trivial task in this repository — before touching code — to recall what was already tried in the module being changed, and at the END of one to append what was learned. Also triggers on "record insights", "run engineering insights", "what do we already know about X", or a finished change under server/, client/, reviewer-core/, or e2e/.
 version: 1.0.0
 ---
 

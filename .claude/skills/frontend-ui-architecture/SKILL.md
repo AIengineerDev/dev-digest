@@ -35,7 +35,7 @@ Every table below is this rule applied to a specific kind of file.
 | A literal that appears twice, or any magic value | `constants.ts` beside its consumer | same as helpers |
 | Inline style objects | `styles.ts` beside the component | — |
 | A user-facing string | `messages/<locale>/*.json` (`next-intl`) | — |
-| An API payload type | nowhere — import from `@devdigest/shared` | — |
+| An API payload type | nowhere — import from `@app/shared` | — |
 
 The promotion threshold is **the second route**, not the second import. Two
 components inside one route folder sharing a helper is still local code.
@@ -237,7 +237,7 @@ Check the change against these, in order:
    route actually imports it.
 3. No `export *` was added.
 4. No `useEffect` was added that does not touch an external system.
-5. No API type was redeclared that `@devdigest/shared` already exports.
+5. No API type was redeclared that `@app/shared` already exports.
 6. Every new data-consuming component renders a loading and an error state.
 7. No new `layout.tsx` that only one page uses.
 8. Nothing the user clicks to choose a destination was built as a `router.push`

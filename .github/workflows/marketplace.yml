@@ -12,6 +12,11 @@ on:
     paths:
       - ".claude-plugin/**"
       - "plugins/**"
+      # Plugin directories hold symlinks, so the bodies live here. Without this
+      # line a skill edit ships to every user without passing the gate.
+      - ".claude/skills/**"
+      - ".claude/agents/**"
+      - ".claude/hooks/**"
       - "scripts/marketplace-verify.mjs"
       - ".github/workflows/marketplace.yml"
   push:
@@ -19,6 +24,9 @@ on:
     paths:
       - ".claude-plugin/**"
       - "plugins/**"
+      - ".claude/skills/**"
+      - ".claude/agents/**"
+      - ".claude/hooks/**"
   workflow_dispatch:
 
 jobs:

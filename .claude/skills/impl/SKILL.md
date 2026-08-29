@@ -22,7 +22,7 @@ Two facts shape every rule below:
   file below is what lets a fresh chat pick up.
 
 The agents carry their own rules. Do not restate them here or in task strings —
-`.claude/agents/README.md` is the map.
+The agent set's own README is the map.
 
 ## This skill starts from a plan
 
@@ -93,7 +93,7 @@ Spawn **`implementer`** with the plan path.
 **Single mode:** one agent, the plan path.
 
 **Tracks mode:** first confirm the plan's pre-fan-out work has landed — contracts
-in `@devdigest/shared` always come first, and two agents editing a contract in
+in `@app/shared` always come first, and two agents editing a contract in
 parallel is the one failure this repo does not absorb, because
 `check-shared.sh --fix` mirrors with `--delete` and the loser's edit disappears.
 Then spawn **one implementer per track, all in a single message** so they run

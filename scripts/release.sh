@@ -51,6 +51,38 @@ fail() { printf '\033[31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 [ -f .claude-plugin/marketplace.json ] \
   || fail "no .claude-plugin/marketplace.json — nothing to release"
 
+# ── 1b. Per-plugin version lines make a single marketplace tag wrong ─────────
+# Claude Code resolves a dependency's version from git tags named
+# `{plugin-name}--v{version}` — the name prefix is precisely what lets one
+# repository host several plugins on independent version lines. A single
+# `marketplace-vX.Y.Z` tag satisfies no constraint and silently leaves every
+# `dependencies` range unresolvable. Refuse rather than publish a tag that lies.
+PLUGIN_COUNT="$(node -e '
+  const fs = require("fs")
+  const mk = JSON.parse(fs.readFileSync(".claude-plugin/marketplace.json", "utf8"))
+  console.log((mk.plugins || []).length)
+')"
+if [ "$PLUGIN_COUNT" -gt 1 ]; then
+  cat >&2 <<MSG
+
+This marketplace publishes $PLUGIN_COUNT plugins, each with its own version line.
+A single marketplace-wide tag cannot express that, and dependency ranges such as
+"^1.0" resolve against per-plugin tags only.
+
+Release one plugin at a time instead:
+
+    cd plugins/<name> && claude plugin tag --push
+
+which validates the plugin, checks that plugin.json and the marketplace entry
+agree on the version, and creates {plugin-name}--v{version}.
+
+This script is still correct for a single-plugin marketplace and is kept for
+that case. Reworking it for the multi-plugin flow is tracked in
+specs/17-plugin-structure.md (R9).
+MSG
+  exit 2
+fi
+
 # ── 2. Releasing from a dirty or diverged tree ships something nobody read ───
 step "Checking the working tree"
 [ -z "$(git status --porcelain)" ] || fail "working tree is dirty — commit or stash first"

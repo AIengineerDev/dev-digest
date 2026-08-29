@@ -23,7 +23,7 @@ That is the whole architecture. Everything below is this sentence applied.
 ```
   routes.ts        driving adapter — HTTP, Zod schemas, status codes
   ├── service.ts   application — use cases, orchestration, transactions
-  │   └── helpers.ts · constants.ts · @devdigest/shared   domain — pure rules, types, PORTS
+  │   └── helpers.ts · constants.ts · @app/shared   domain — pure rules, types, PORTS
   ├── repository.ts        driven adapter — Drizzle, SQL, table rows
   └── src/adapters/**      driven adapters — GitHub, git, LLM, secrets
 
@@ -39,16 +39,16 @@ layers", and the one most often got wrong.
 
 | You are adding | It goes in | It may import |
 | --- | --- | --- |
-| An HTTP endpoint | `modules/<m>/routes.ts` | its service, `@devdigest/shared` |
+| An HTTP endpoint | `modules/<m>/routes.ts` | its service, `@app/shared` |
 | A use case: several steps, several collaborators | `modules/<m>/service.ts` | repositories, container ports, helpers |
-| A SQL read or write | `modules/<m>/repository.ts` or `repository/<x>.repo.ts` | `db/**`, `@devdigest/shared` |
-| A pure rule or transformation | `modules/<m>/helpers.ts` | `@devdigest/shared`, constants — **nothing else** |
+| A SQL read or write | `modules/<m>/repository.ts` or `repository/<x>.repo.ts` | `db/**`, `@app/shared` |
+| A pure rule or transformation | `modules/<m>/helpers.ts` | `@app/shared`, constants — **nothing else** |
 | A magic value or default | `modules/<m>/constants.ts` | nothing |
-| Talking to a new external system | port in `@devdigest/shared` + impl in `src/adapters/<name>/` | whatever it needs |
+| Talking to a new external system | port in `@app/shared` + impl in `src/adapters/<name>/` | whatever it needs |
 | Wiring an adapter | `src/platform/container.ts` | everything — this is the only such file |
 | A cross-cutting mechanism (jobs, SSE, errors, config) | `src/platform/` | ports, not modules |
 
-Anything shared by two modules goes to `@devdigest/shared`, `modules/_shared/`,
+Anything shared by two modules goes to `@app/shared`, `modules/_shared/`,
 or through the container. Never import another module's internals.
 
 ## When a module needs a service
@@ -72,7 +72,7 @@ modules here are deliberately two-layer on this basis: `polling`, `pulls`,
 
 A new external dependency becomes a **port** when the core needs to name it and
 tests need to replace it. The port is a TypeScript interface in
-`@devdigest/shared`; the implementation is a class in `src/adapters/<name>/`;
+`@app/shared`; the implementation is a class in `src/adapters/<name>/`;
 the container constructs it; everyone else receives the interface.
 
 It stays an ordinary module — no port — when it is a stateless function with no
@@ -124,14 +124,14 @@ Translate at the boundary, in this direction:
    `src/platform/errors.ts`. A `constraint violation` string must not escape it.
 2. `service.ts` throws domain errors and knows nothing about HTTP.
 3. `routes.ts` is the only layer that names status codes. Zod schemas from
-   `@devdigest/shared` reject invalid input with `422` before a handler runs —
+   `@app/shared` reject invalid input with `422` before a handler runs —
    never hand-roll `Schema.parse(req.body)`.
 
 ## What this skill does not do
 
 - No DDD aggregates, value objects, or rich domain models. Our data is Drizzle
   rows and Zod types; the anemic model is a deliberate fit for this domain.
-- No restructuring of `@devdigest/shared`. Note that it currently holds two
+- No restructuring of `@app/shared`. Note that it currently holds two
   different things — DTO contracts and port interfaces. That is accepted, not
   overlooked.
 - Nothing about `reviewer-core`: it is already a pure engine with no I/O.
@@ -193,7 +193,7 @@ from the baseline in the same commit.
 
 1. `pnpm arch` passes.
 2. No new file imports across a layer boundary or into another module's internals.
-3. Any new external system is a port in `@devdigest/shared`, constructed only in
+3. Any new external system is a port in `@app/shared`, constructed only in
    `container.ts`.
 4. No service was added that only forwards to a repository.
 5. Any new blocking adapter's timeout is strictly below `DEFAULT_JOB_TIMEOUT`

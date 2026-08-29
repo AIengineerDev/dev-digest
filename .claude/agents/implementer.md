@@ -118,11 +118,11 @@ Facts about these that change how you work:
   test must be hermetic — no network, no real clock, no filesystem, no DB.
 - **`pnpm arch` must show no new violations.** It runs with `--ignore-known`
   against a 10-entry baseline (the JSON file is authoritative; older docs say 11). If it goes red, fix the import — route the
-  dependency through `@devdigest/shared`, `modules/_shared/`, or the container.
+  dependency through `@app/shared`, `modules/_shared/`, or the container.
   **Never regenerate `.dependency-cruiser-known-violations.json`.**
 - **A contract change runs `./scripts/check-shared.sh --fix`** (server → client,
   with `--delete`), then the bare form as the gate. Never hand-edit the client
-  copy of `@devdigest/shared`.
+  copy of `@app/shared`.
 - Use the **right package manager per package**. `pnpm` in `server/`/`client/`,
   `npm` in `reviewer-core/`/`e2e/`.
 
@@ -139,8 +139,8 @@ Facts about these that change how you work:
   `pnpm db:generate`. A change that both adds and drops columns on one table
   prompts interactively and cannot be driven headlessly — split it into two
   generates (additive pass, then the drop).
-- **Never `docker compose down -v`.** `-v` destroys the `devdigest_pgdata` volume
-  and every imported repo and review with it.
+- **Never `docker compose down -v`.** `-v` destroys the named Postgres data
+  volume and every imported repo and review stored in it.
 - **No git state changes.** No `commit`, `push`, `checkout`, `stash`, `reset`,
   `rebase`. Reading history (`git log`, `git show`, `git blame`, `git diff`) is
   fine and often necessary.
@@ -202,7 +202,7 @@ skipped work is stated as skipped.
 - [ ] Every gate in the plan's verification matrix ran, and its real result is above
 - [ ] Nothing on the "do not touch" list was modified
 - [ ] Right package manager per package
-- [ ] Contracts, if changed: `@devdigest/shared` first, `check-shared.sh` green
+- [ ] Contracts, if changed: `@app/shared` first, `check-shared.sh` green
 
 ## NOT verified here
 - **Architecture review** — a separate agent; I applied the layering skills but
