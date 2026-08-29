@@ -5,13 +5,13 @@
 **Spec:** specs/15-export-to-ci.md
 **Mode:** single implementer
 **Worktree:** /Users/alexlavre/Documents/my-dev-digest/devdigest-ci (`feat/export-to-ci`)
-**PR topology:** A = phases 1–2 (`agent-runner`), merges first. C = phases 3–7.
+**PR topology:** A = phases 1–2 (`agent-runner`), merges first — **open as #22, based on `w8`**. C = phases 3–7.
 
 | Stage | State | Artifact / note |
 | --- | --- | --- |
 | build | done (PR A) | Phases 1–2 landed: `agent-runner/` package, ncc bundle 952kB. Phases 3–7 resume after A merges |
 | verify | done (PR A) | 25 met · 1 partly met · 0 not met · 2 not checkable |
-| review | round 1 of ≤2 | architecture-reviewer + /security-review on `agent-runner/` |
+| review | done, round 1 closed | architecture: no findings. security: 3 candidates, all below cutoff, 0 survived |
 | accept | pending | |
 | ship | pending | |
 
@@ -37,6 +37,18 @@ pass 1 named these precisely, and **nobody in this chain will write them** —
   environment. Structural verification only.
 
 ## Open findings
+
+None. The fix loop closed in round 1 with no remediation work.
+
+Two items deliberately carried forward rather than fixed in PR A:
+
+- **Low-severity hardening** — a `^[a-z0-9][a-z0-9-]*$` slug check plus `realpath`
+  containment in `loadSkill` (`agent-runner/src/review.ts:43`). Not a vulnerability
+  today because fork PRs skip and the remaining actor already has repo write access;
+  becomes one the moment anything emits `pull_request_target`, which the spec forbids.
+- **Docs gap for PR C, phase 6** — R6 tells the user to make the check required in
+  branch protection but never to protect `.devdigest/**` with CODEOWNERS. The export
+  wizard's Configure step should say so.
 
 ## Human decisions
 
