@@ -339,6 +339,9 @@ export type IndexStatus = z.infer<typeof IndexStatus>;
 export const RunRequest = z.object({
   agentId: z.string().optional(),
   all: z.boolean().optional(),
+  /** Multi-agent subset selection; takes precedence over `agentId`/`all`. Capped
+   *  as a cost fuse, not a UI limit — see the picker's own client-side cap. */
+  agentIds: z.array(z.string()).min(1).max(8).optional(),
 });
 export type RunRequest = z.infer<typeof RunRequest>;
 

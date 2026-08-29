@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { Button, Dropdown, type DropdownItemDef } from "@devdigest/ui";
 import { useAgents } from "../../../../../../../lib/hooks/agents";
 import { useRunReview } from "../../../../../../../lib/hooks/reviews";
+import { AgentPickerPopover } from "./AgentPickerPopover";
 import { DROPDOWN_WIDTH } from "./constants";
 
 export function RunReviewDropdown({
@@ -100,20 +101,31 @@ export function RunReviewDropdown({
   ];
 
   return (
-    <Dropdown
-      width={DROPDOWN_WIDTH}
-      align="right"
-      items={items}
-      trigger={
-        <span
-          title={warnMerged ? t("runReview.mergedTooltip") : undefined}
-          style={warnMerged ? { opacity: 0.6 } : undefined}
-        >
-          <Button kind={kind} size={size} iconRight="ChevronDown" icon="Sparkles" loading={run.isPending}>
-            {run.isPending ? t("runReview.running") : t("runReview.runReview")}
-          </Button>
-        </span>
-      }
-    />
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {/* PICK AGENTS TO RUN (R1) — a sibling popover, not an extension of this
+         Dropdown; see AgentPickerPopover's own doc comment for why. The
+         existing "Run all" / per-agent items below are untouched. */}
+      <AgentPickerPopover
+        prId={prId}
+        onRunStart={onRunStart}
+        onRunsStarted={onRunsStarted}
+        onRunSettled={onRunSettled}
+      />
+      <Dropdown
+        width={DROPDOWN_WIDTH}
+        align="right"
+        items={items}
+        trigger={
+          <span
+            title={warnMerged ? t("runReview.mergedTooltip") : undefined}
+            style={warnMerged ? { opacity: 0.6 } : undefined}
+          >
+            <Button kind={kind} size={size} iconRight="ChevronDown" icon="Sparkles" loading={run.isPending}>
+              {run.isPending ? t("runReview.running") : t("runReview.runReview")}
+            </Button>
+          </span>
+        }
+      />
+    </div>
   );
 }

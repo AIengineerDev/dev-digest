@@ -41,7 +41,11 @@
     "mergedWarning": "Already merged — review is informational",
     "mergedTooltip": "This PR is already merged; running a review won’t affect the merged code.",
     "noAgents": "No agents yet — create one",
-    "agentsLoadError": "Could not load agents — retry"
+    "agentsLoadError": "Could not load agents — retry",
+    "pickAgents": "Pick agents",
+    "pickAgentsHeading": "Pick agents to run",
+    "clear": "Clear",
+    "runMultiAgent": "Run multi-agent review ({count})"
   },
   "runStatus": {
     "elapsed": "Running · {count} agent(s)",
