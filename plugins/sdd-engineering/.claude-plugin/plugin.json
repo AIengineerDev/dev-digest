@@ -1,13 +1,26 @@
 {
   "name": "sdd-engineering",
   "displayName": "SDD Engineering",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Spec-driven development as a chain of specialised agents: write the specification, plan against the real repository, build it phase by phase, verify every stated requirement, then document what shipped. Human-gated at every stage.",
-  "author": { "name": "Alex Lavrenin" },
-  "keywords": ["spec-driven-development", "planning", "implementation", "verification"],
+  "author": {
+    "name": "Alex Lavrenin"
+  },
+  "keywords": [
+    "spec-driven-development",
+    "planning",
+    "implementation",
+    "verification"
+  ],
   "hooks": "./hooks/hooks.json",
   "dependencies": [
-    { "name": "engineering-paved-path", "version": "^1.0" },
-    { "name": "architecture-review", "version": "^1.0" }
+    {
+      "name": "engineering-paved-path",
+      "version": "^1.0"
+    },
+    {
+      "name": "architecture-review",
+      "version": "^1.0"
+    }
   ]
 }
