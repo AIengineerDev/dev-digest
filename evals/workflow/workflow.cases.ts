@@ -49,6 +49,27 @@ export const cases: EvalCase[] = [
     ],
   },
   {
+    /**
+     * KNOWN ISSUE, measured 2026-08-29: this session activates the skill (the
+     * evidence lands in the first turns) and then spends the rest of a
+     * ten-minute wall trying to write INSIGHTS.md, which it cannot — `Write` is
+     * blocked — and is killed by the timeout. The run is recorded as a failed
+     * session, so the case is red even when its expectation passed.
+     *
+     * Do NOT "fix" it by telling the prompt not to write: that was tried and
+     * made it worse. Adding "you have no write access, quote the entry
+     * instead" dropped `insights-activated` from 1/1 to 0/1 — the skill's
+     * purpose IS to write the entry, so forbidding the write suppressed the
+     * activation being measured, and the session aborted anyway. The case now
+     * measured nothing at all.
+     *
+     * The real fix is in the harness, not the prompt: an activation case is
+     * answered in its first turns, so it wants a short per-case deadline and a
+     * verdict on the evidence collected before it, rather than a session-level
+     * ok/failed. Left failing on purpose until that exists — a red case with a
+     * written reason is honest; a green one bought by breaking the measurement
+     * is not.
+     */
     id: 'activation-positive',
     title: 'A finished, non-obvious debugging result wakes engineering-insights',
     prompt: [
