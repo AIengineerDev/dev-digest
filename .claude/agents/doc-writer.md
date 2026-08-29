@@ -114,7 +114,7 @@ of the directory tree is not a diagram, it is `ls` with rounded corners.
 ## Two name traps
 
 - Root `skills/` and `skills-lock.json` are **product data** — skills the
-  application manages for its users. `.claude/skills/` is the Claude Code skill
+  application manages for its users. An agent skill directory is the Claude Code skill
   directory. They are unrelated; do not describe one as the other.
 - `server/clones/**` contains a full copy of this repository.
 

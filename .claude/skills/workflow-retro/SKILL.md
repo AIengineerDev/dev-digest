@@ -45,16 +45,16 @@ figures on the one surface people will quote later.
 
 If a finding would help someone changing `server/`, it belongs to
 `engineering-insights` and you should say so rather than writing it here. If it
-would help someone changing `.claude/agents/*.md` or `.claude/skills/*`, it
+would help someone changing an agent prompt or a skill, it
 is yours.
 
 ## Step 1 — measure
 
 ```
-node .claude/skills/workflow-retro/measure.mjs              # this session
-node .claude/skills/workflow-retro/measure.mjs --session <id>
-node .claude/skills/workflow-retro/measure.mjs --all        # every session, for trends
-node .claude/skills/workflow-retro/measure.mjs --json
+node "$CLAUDE_PLUGIN_ROOT"/skills/workflow-retro/measure.mjs              # this session
+node "$CLAUDE_PLUGIN_ROOT"/skills/workflow-retro/measure.mjs --session <id>
+node "$CLAUDE_PLUGIN_ROOT"/skills/workflow-retro/measure.mjs --all        # every session, for trends
+node "$CLAUDE_PLUGIN_ROOT"/skills/workflow-retro/measure.mjs --json
 ```
 
 Paste its `## Measured` output into the retro **verbatim**. Do not round, retype

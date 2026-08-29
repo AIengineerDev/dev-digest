@@ -1,194 +1,194 @@
-# `pr-self-review` — план скіла
+# `pr-self-review` — the plan for the skill
 
-Статус: **план**. Сам скіл не написаний, нічого не виконується.
+Status: **plan**. The skill itself is not written and nothing here runs.
 
-Мета: перед відкриттям PR перевірити всі локальні зміни власними скілами,
-маршрутизуючи файли diff до відповідних правил, і **заблокувати** просування,
-якщо є хоч один critical finding.
+Goal: before opening a PR, check every local change against this repository's own
+skills, routing the files in the diff to the matching rules, and **block**
+progress if a single critical finding exists.
 
 ---
 
-## 1. Одне обмеження, яке визначає всю конструкцію
+## 1. The one constraint that determines the whole design
 
-**Скіл не може нічого заборонити.** Скіл — це інструкції для агента: він
-переконує, але не зупиняє. Заборонити мерж може лише те, що виконується поза
-розмовою:
+**A skill cannot forbid anything.** A skill is instructions for an agent: it
+persuades, it does not stop. Only something that runs outside the conversation
+can block a merge:
 
-| Хочемо заборонити | Хто це реально може | Чи є в нас зараз |
+| What we want to forbid | Who can actually do it | Do we have it today |
 | --- | --- | --- |
-| Створити коміт | git-хук `pre-commit` | ні |
-| Запушити гілку | git-хук `pre-push` | ні |
-| Змерджити PR | GitHub branch protection + required check | **наполовину** — checks є, protection ні |
+| Creating a commit | `pre-commit` git hook | no |
+| Pushing a branch | `pre-push` git hook | no |
+| Merging a PR | GitHub branch protection + a required check | **half** — checks exist, protection does not |
 
-Заміряно 2026-08-09: `.github/` у репозиторії немає жодного, хоча
-[`TESTING.md`](../../../TESTING.md) описує п'ять workflow-ів як наявні — тобто
-документація описувала CI, якого не існувало. Remote при цьому справжній
-(`github.com/AIengineerDev/dev-digest`).
+Measured 2026-08-09: the repository had no `.github/` at all, while
+[`TESTING.md`](../../../TESTING.md) described five workflows as existing — the
+documentation described CI that did not exist. The remote was real.
 
-**Оновлено 2026-08-10.** Рішення §8.1 виконано: у репозиторії тепер є чотири
-workflow-и — `client.yml` (typecheck + lint + test), `server-unit.yml`
-(typecheck на ubuntu+windows, `arch`, герметичні тести), `server-integration.yml`
-(`*.it.test.ts` на справжньому Postgres), `reviewer-core.yml`. П'ятий,
-`e2e-web.yml`, свідомо відкладено: він потребує піднятого стека й
-`agent-browser`, і зламаний workflow гірший за відсутній.
+**Updated 2026-08-10.** The §8.1 decision was carried out: there are now four
+workflows — `client.yml` (typecheck + lint + test), `server-unit.yml` (typecheck
+on ubuntu and windows, `arch`, hermetic tests), `server-integration.yml`
+(`*.it.test.ts` against a real Postgres) and `reviewer-core.yml`. A fifth,
+`e2e-web.yml`, was deliberately deferred: it needs a running stack and a browser
+driver, and a broken workflow is worse than a missing one.
 
-Що це змінює для шару 3: **required checks тепер існують**, і залишився один
-крок, якого не зробити з репозиторію — увімкнути branch protection у
-налаштуваннях GitHub і позначити ці джоби обов'язковими. Доти «заборонити
-мержити» все ще означає «наполегливо не радити».
+What this changes for layer 3: **required checks now exist**, and one step
+remains that cannot be done from the repository — enabling branch protection in
+the GitHub settings and marking those jobs required. Until then, "forbid merging"
+still means "advise strongly against".
 
-Тому план складається з **трьох шарів**, і скіл — тільки середній:
+So the plan has **three layers**, and the skill is only the middle one:
 
 ```
-1. pre-push git hook     детерміновані ворота, ~30 c, без LLM  → блокує push
-2. pr-self-review skill  судження за нашими скілами            → рекомендує
-3. CI + branch protection  єдине, що GitHub поважає при мержі  → блокує merge
+1. pre-push git hook       deterministic gates, ~30 s, no LLM  → blocks the push
+2. pr-self-review skill    judgement against our own skills    → recommends
+3. CI + branch protection  the only thing GitHub respects      → blocks the merge
 ```
 
-Шар 1 і 2 — «перед відкриттям PR», як і просив. Шар 3 обов'язковий, якщо слово
-«заборонити» має означати заборону, а не попередження. **Це рішення для тебе**
-(див. §8).
+Layers 1 and 2 are "before opening a PR", as asked. Layer 3 is mandatory if the
+word "forbid" is to mean forbid rather than warn. **That is a decision for you**
+(see §8).
 
-## 1-bis. Дві пастки, які ламають саме цю конструкцію
+## 1-bis. Two traps that break this construction specifically
 
-Виявлені при звірці з чек-лістом анти-патернів скілів. Обидві б'ють точно по
-тому, що описано вище, тож фіксую їх до написання, а не після.
+Found while checking against the skill anti-pattern checklist. Both hit exactly
+what is described above, so they are recorded before writing rather than after.
 
-**Автовиклик не працює в headless.** У `claude -p` скіл **не активується сам** за
-описом. А шар 1 — це git-хук, тобто саме headless. Якщо хук покладеться на те,
-що агент «побачить» скіл — не побачить, і хук мовчки нічого не перевірить, що
-гірше за відсутній хук. Наслідок для §5: хук викликає **або** чистий
-`scripts/pr-gates.sh` без жодного агента (переважний варіант — ворота §4a і так
-детерміновані), **або** `claude -p` з **явним** викликом скіла в промпті. Ніколи
-не покладатись на автоматичний підбір.
+**Auto-invocation does not work headless.** Under `claude -p` a skill is **not**
+activated on its own from its description. And layer 1 is a git hook — that is
+precisely headless. If the hook relies on the agent "noticing" the skill, it will
+not, and the hook will silently check nothing, which is worse than no hook.
+Consequence for §5: the hook calls **either** a plain `scripts/pr-gates.sh` with
+no agent at all (the preferred option — the §4a gates are deterministic anyway),
+**or** `claude -p` with an **explicit** skill invocation in the prompt. Never rely
+on automatic selection.
 
-**Скіл із побічними ефектами не має підбиратись автоматично.** Якщо скіл колись
-навчиться комітити, пушити, відкривати PR чи змінювати baseline — у фронтматері
-мусить стояти `disable-model-invocation: true`, щоб він викликався лише рукою.
-У v1 скіл тільки читає й звітує, тож прапорець не потрібен; він стає
-обов'язковим тієї миті, коли з'явиться «створити PR автоматично» з §9.
+**A skill with side effects must not be auto-selected.** If the skill ever learns
+to commit, push, open a PR or change a baseline, its frontmatter must carry
+`disable-model-invocation: true` so it is only ever invoked by hand. In v1 the
+skill only reads and reports, so the flag is unnecessary; it becomes mandatory
+the moment "open the PR automatically" from §9 appears.
 
-## 2. Що саме перевіряти — джерело diff
+## 2. What exactly to check — the source of the diff
 
-Скіл дивиться на **всі відкриті зміни**, а не на коміти:
+The skill looks at **all open changes**, not at commits:
 
 ```sh
-git diff --merge-base origin/main    # робоче дерево + індекс проти точки розгалуження
-git status --short                   # + нові файли, яких немає в diff
+git diff --merge-base origin/main    # working tree + index against the fork point
+git status --short                   # plus new files, which are not in the diff
 ```
 
-Merge-base, а не `origin/main` напряму, інакше чужі коміти з main їдуть у наш
-звіт. Незакомічені файли включаємо — ідея саме в перевірці до коміту.
+Merge-base rather than `origin/main` directly, or other people's commits from
+main end up in our report. Uncommitted files are included — the whole point is to
+check before committing.
 
-Судимо **тільки змінені рядки**. Це критично: у сервері вже є
-11 зафіксованих порушень архітектури в baseline, і скіл, який щоразу
-доповідає про них, за два запуски навчить ігнорувати себе.
+Judge **only the changed lines**. This is critical: the backend already carries
+11 recorded architecture violations in its baseline, and a skill that reports
+them on every run will teach you to ignore it within two runs.
 
-## 3. Маршрутизація: файл diff → скіл
+## 3. Routing: a file in the diff → a skill
 
-Ядро задачі. Один прохід по списку змінених шляхів, кожен файл отримує набір
-скілів; кожен скіл запускається **один раз** на своєму підмножині файлів.
+The core of the task. One pass over the changed paths; each file gets a set of
+skills, and each skill runs **once** over its own subset.
 
-| Шлях у diff | Скіл / перевірка |
+| Path in the diff | Skill / check |
 | --- | --- |
 | `client/src/**` | `frontend-ui-architecture` |
 | `server/src/**` | `onion-architecture` |
-| `server/src/db/migrations/**` | окрема гілка — див. нижче |
-| `**/vendor/shared/**` | `scripts/check-shared.sh` + правило «контракт першим» |
-| `reviewer-core/**` | поки нічого свого — тільки типовий/тестовий шар |
-| `e2e/**` | `e2e/README.md` як довідка |
-| `*.md`, `INSIGHTS.md`, `specs/` | пропустити судження, перевірити лише посилання |
-| `**/node_modules/**`, `server/clones/**`, `**/vendor/ui/**` | **ніколи** |
+| `server/src/db/migrations/**` | a separate branch — see below |
+| `**/vendor/shared/**` | `scripts/check-shared.sh` + the "contract first" rule |
+| `reviewer-core/**` | nothing of our own yet — types and tests only |
+| `e2e/**` | its README as reference |
+| `*.md`, `INSIGHTS.md`, `specs/` | skip judgement, check links only |
+| `**/node_modules/**`, cloned repositories, `**/vendor/ui/**` | **never** |
 
-Правила маршрутизації, які варто зафіксувати явно:
+Routing rules worth writing down explicitly:
 
-- **Порожня множина — валідний результат.** PR, що чіпає лише `docs/`, не
-  повинен запускати жодного архітектурного скіла.
-- **Файл може потрапити у два скіли** (напр. зміна контракту зачіпає і клієнт, і
-  сервер) — це нормально, дедуплікуємо findings за `file:line + rule`.
-- Міграції — окремий випадок: правило «ніколи не редагуй наявну міграцію»
-  (`server/AGENTS.md`) перевіряється діффом, а не судженням: змінений **існуючий**
-  файл у `migrations/` = critical, новий файл = ок.
+- **An empty set is a valid result.** A PR touching only `docs/` should run no
+  architecture skill at all.
+- **A file can land in two skills** (a contract change touches both client and
+  server) — that is fine; deduplicate findings by `file:line + rule`.
+- Migrations are a special case: the rule "never edit an existing migration" is
+  checked by diff, not by judgement — a modified **existing** file under
+  `migrations/` is critical, a new file is fine.
 
-**Оновлено 2026-08-10 — інвентар скілів змінився, маршрутизація має це знати:**
+**Updated 2026-08-10 — the skill inventory changed, and routing has to know:**
 
-- `frontend-ui-architecture` тепер **v1.1.0** і покриває не лише розміщення
-  файлів, а й маршрути: коли секція заробляє `layout.tsx`, оверлеї як стан
-  замість parallel/intercepting routes, `Link` проти `router.push`, заборона на
-  `middleware.ts`. Практично це означає, що зміни під `client/src/app/**` тепер
-  мають **два** приводи для findings, а не один, і що diff, який додає папку в
-  `app/`, зобов'язаний пройти цей скіл.
-- `.claude/skills/react-component-quality/` — **не скіл**, а запарковане
-  дослідження без `SKILL.md`. Маршрутизатор не повинен його підхоплювати ні за
-  яких умов; якщо колись з'явиться `SKILL.md`, він отримає власний рядок у
-  таблиці вище.
-- Правило для маршрутизатора загалом: **джерело істини — наявність `SKILL.md`**,
-  а не назва папки в `.claude/skills/`. Інакше перша ж папка з чернеткою почне
-  впливати на вердикт.
+- `frontend-ui-architecture` is now **v1.1.0** and covers routing as well as file
+  placement: when a section earns a `layout.tsx`, overlays as state rather than
+  parallel/intercepting routes, `Link` versus `router.push`, the ban on
+  `middleware.ts`. In practice, changes under `client/src/app/**` now have **two**
+  grounds for findings rather than one, and a diff that adds a folder under
+  `app/` must pass this skill.
+- `react-component-quality` is **not a skill** — it is parked research with no
+  `SKILL.md`. The router must never pick it up under any condition; if a
+  `SKILL.md` ever appears, it earns its own row in the table above.
+- The general rule for the router: **the source of truth is the presence of a
+  `SKILL.md`**, not the name of a folder. Otherwise the first folder holding a
+  draft starts influencing the verdict.
 
-## 4. Що таке «critical» — має бути визначено, а не відчуто
+## 4. What "critical" means — it has to be defined, not felt
 
-Інакше кожен запуск дає різну відповідь. Пропоную два класи.
+Otherwise every run gives a different answer. Two classes are proposed.
 
-### 4a. Детерміновані ворота — critical за визначенням
+### 4a. Deterministic gates — critical by definition
 
-Без LLM, без інтерпретації. Червоне — значить червоне:
+No LLM, no interpretation. Red means red:
 
-| Перевірка | Команда | Чому critical |
+| Check | Command | Why critical |
 | --- | --- | --- |
-| Типи | `pnpm typecheck` у зачеплених пакетах | зламана збірка |
-| Тести | `pnpm test` у зачеплених пакетах | зламана поведінка |
-| Архітектура | `pnpm arch` (лише **нові** порушення) | пробита межа шарів |
-| Контракти | `./scripts/check-shared.sh` | клієнт і сервер розійшлись |
-| Міграції | diff по вже застосованих файлах | переписана історія БД |
-| Секрети | пошук ключів/токенів у diff | витік |
+| Types | `pnpm typecheck` in the affected packages | broken build |
+| Tests | `pnpm test` in the affected packages | broken behaviour |
+| Architecture | `pnpm arch` (**new** violations only) | a layer boundary was crossed |
+| Contracts | `./scripts/check-shared.sh` | client and server diverged |
+| Migrations | diff over already-applied files | database history rewritten |
+| Secrets | scan the diff for keys and tokens | a leak |
 
-Ці шість — і є шар 1 (pre-push hook). Вони дешеві, детерміновані і ловлять
-найдорожчі помилки без жодного токена.
+These six are layer 1 (the pre-push hook). They are cheap, deterministic, and
+catch the most expensive mistakes without spending a single token.
 
-**Оновлено 2026-08-10 — сьомі ворота, але поки не critical.** У клієнті
-з'явився ESLint (`pnpm lint`, flat config з `react-hooks` + `jsx-a11y`). Він
-**не** може бути воротами сьогодні: усі правила навмисно знижені до `warn`, тож
-команда завжди повертає 0 (зараз 35 попереджень). Правильне місце для нього в
-цій конструкції — не серед §4a, а як **лічильник у звіті §6**: показувати
-дельту попереджень, які diff додав. Правило стає воротами тієї миті, коли його
-підвищать до `error`, і саме тоді його треба перенести в таблицю вище. Те саме
-стосується `pnpm arch`: воротами є `pnpm arch` (лише нові порушення), ніколи
-`arch:all`.
+**Updated 2026-08-10 — a seventh gate, but not critical yet.** The client gained
+ESLint (`pnpm lint`, flat config with `react-hooks` and `jsx-a11y`). It **cannot**
+be a gate today: every rule is deliberately downgraded to `warn`, so the command
+always returns 0 (35 warnings at the time). Its correct place in this design is
+not among §4a but as a **counter in the §6 report**: show the delta of warnings
+the diff added. It becomes a gate the moment the rules are raised to `error`, and
+that is when it moves into the table above. The same applies to the architecture
+gate: the gate is "new violations only", never the full run.
 
-### 4b. Findings за скілами — потребують рубрики
+### 4b. Findings from skills — these need a rubric
 
-Тут судження, тому рівень має спиратись на **наслідок**, а не на «наскільки
-негарно»:
+This is judgement, so the level must rest on **consequence**, not on how ugly
+something looks:
 
-- **critical** — змінює поведінку на неправильну, втрачає дані, ламає контракт
-  або обходить межу безпеки. Приклад із реального аудиту: `delete` без
-  транзакції перед `insert`; падіння запиту, відрендерене як порожній стан.
-- **warning** — правило скіла порушене без негайної шкоди: сервіс імпортує
-  `fastify`, новий `export *`, компонент піднято в `src/components/` без
-  другого споживача.
-- **note** — стилістика й дрібниці. Ніколи не блокує.
+- **critical** — changes behaviour to something wrong, loses data, breaks a
+  contract, or bypasses a security boundary. A real example from an audit: a
+  `delete` without a transaction before an `insert`; a failed request rendered as
+  an empty state.
+- **warning** — a skill rule is broken with no immediate harm: a service imports
+  `fastify`, a new `export *`, a component promoted to a shared folder with no
+  second consumer.
+- **note** — style and small things. Never blocks.
 
-**Правило проти інфляції:** critical мусить мати сценарій відмови у форматі
-«вхід → неправильний вихід». Не можеш його написати — це warning. Без цього
-пункту скіл через місяць блокуватиме кожен PR і його вимкнуть.
+**The anti-inflation rule:** a critical must come with a failure scenario in the
+form "input → wrong output". If you cannot write one, it is a warning. Without
+this clause the skill will be blocking every PR within a month and someone will
+turn it off.
 
-## 5. Порядок виконання
+## 5. Order of execution
 
-Дешеве й детерміноване — першим. Немає сенсу палити токени на файл, який не
-компілюється.
+Cheap and deterministic first. There is no sense burning tokens on a file that
+does not compile.
 
-1. **Зібрати diff**, класифікувати файли (§3). Порожньо → вихід «нічого перевіряти».
-2. **Ворота 4a** на зачеплених пакетах. Будь-яке падіння → зупинка, звіт, вихід
-   з ненульовим кодом. Далі не йдемо.
-3. **Маршрутизовані скіли** на своїх підмножинах, паралельно.
-4. **Дедуплікація й класифікація** findings за §4b.
-5. **Верифікація critical'ів.** Кожен critical перевіряється ще раз — окремим
-   проходом, який намагається його **спростувати**. Не підтверджено → знижуємо
-   до warning. Це головний запобіжник проти хибних блокувань.
-6. **Звіт + вердикт.**
+1. **Collect the diff**, classify the files (§3). Empty → exit with "nothing to check".
+2. **Gates 4a** on the affected packages. Any failure → stop, report, exit non-zero. Go no further.
+3. **Routed skills** over their subsets, in parallel.
+4. **Deduplicate and classify** findings per §4b.
+5. **Verify the criticals.** Each critical is checked again, by a separate pass
+   that tries to **refute** it. Not confirmed → downgrade to warning. This is the
+   main safeguard against false blocks.
+6. **Report and verdict.**
 
-## 6. Вердикт і як він виглядає
+## 6. The verdict, and what it looks like
 
 ```
 PR self-review — 12 files (client 7, server 5)
@@ -208,245 +208,245 @@ BLOCKED — 1 critical finding
 Override: PR_SELF_REVIEW=off git push   (recorded in the PR body)
 ```
 
-Три принципи виводу:
+Three principles for the output:
 
-- **Вердикт першим рядком.** Не змушувати читати, щоб дізнатись, чи можна далі.
-- **Кожен critical — з дією**, а не лише з діагнозом.
-- **Обхід має існувати і лишати слід.** Ворота без аварійного виходу
-  обходять цілком (`--no-verify`), і тоді ти не дізнаєшся про це взагалі. Хай
-  обхід буде явним і потрапляє в тіло PR.
+- **The verdict is the first line.** Do not make anyone read to find out whether
+  they can proceed.
+- **Every critical comes with an action**, not only a diagnosis.
+- **An override must exist and must leave a trace.** A gate with no emergency
+  exit gets bypassed entirely (`--no-verify`), and then you never hear about it.
+  Make the override explicit and put it in the PR body.
 
-## 7. Чого скіл не робить
+## 7. What the skill does not do
 
-- **Не дублює `/code-review` і `/security-review`.** Вони вже є в цій сесії й
-  шукають баги та вразливості широко. Наш скіл перевіряє **відповідність нашим
-  власним правилам** — тим, що записані в `frontend-ui-architecture` і
-  `onion-architecture`. Перетин зводимо до нуля: якщо finding не спирається на
-  рядок з нашого скіла або на ворота §4a — він не наш.
-- **Не переписує код.** Звіт і вердикт; правки — окремим кроком за рішенням людини.
-- **Не судить незмінені рядки** (§2).
-- **Не відкриває PR.** Він виконується *перед* цим; створення PR лишається
-  ручним.
+- **It does not duplicate general code review or security review.** Those already
+  exist and look for bugs and vulnerabilities broadly. This skill checks
+  **conformance to our own rules** — the ones written in
+  `frontend-ui-architecture` and `onion-architecture`. Overlap is driven to zero:
+  if a finding does not rest on a line from one of our skills or on a §4a gate,
+  it is not ours.
+- **It does not rewrite code.** Report and verdict; fixes are a separate step, on
+  a human decision.
+- **It does not judge unchanged lines** (§2).
+- **It does not open the PR.** It runs *before* that; creating the PR stays manual.
 
-## 8. Рішення, потрібні до написання
+## 8. Decisions needed before writing
 
-1. ~~**Чи створюємо `.github/workflows/`?**~~ **Вирішено й зроблено
-   2026-08-10** — чотири з п'яти workflow-ів існують (див. §1). Питання, що
-   лишилось замість цього: **хто вмикає branch protection на GitHub і які саме
-   джоби робить обов'язковими.** Це налаштування репозиторію, а не файл, тож
-   зробити його з коду неможливо — потрібен доступ власника. Мій дефолт:
-   обов'язкові `client / check`, `server-unit / typecheck`, `server-unit / arch`,
-   `server-unit / test`; `server-integration` спершу необов'язковий, бо він
-   найдорожчий і найновіший.
-2. **Чи ставимо `pre-push` хук усім?** Хуки не переносяться через `git clone`.
-   Варіанти: `core.hooksPath` у репо (працює після одного `git config`), husky
-   (ще одна залежність), або хук Claude Code в `.claude/settings.json` — але
-   останній спрацює лише коли пушить агент, не людина. Мій дефолт —
-   `core.hooksPath` + рядок у `README`.
-3. **Чи блокують warning'и?** Мій дефолт — ні, блокує лише critical, як ти й
-   сформулював. Але тоді потрібен ліміт на кількість warning'ів у PR, інакше
-   вони накопичуються назавжди.
-4. **Що робити з baseline архітектури?** Зараз **10** відомих порушень
-   ігноруються (було 11 — `pulls/routes.ts → db/schema.ts` виправлено
-   2026-08-10 і знято з baseline). Якщо PR чіпає файл із baseline і **не**
-   виправляє його — мовчимо чи нагадуємо один раз? Мій дефолт — нагадуємо як
-   note, не блокуємо. Додаткове правило, яке варто зафіксувати одразу:
-   **зростання baseline — це critical.** Файл `.dependency-cruiser-known-violations.json`
-   існує, щоб храповик затягувався; PR, що додає до нього запис, знімає гейт, а
-   не проходить його.
+1. ~~**Do we create `.github/workflows/`?**~~ **Decided and done 2026-08-10** —
+   four of five workflows exist (see §1). The question that replaces it: **who
+   enables branch protection on GitHub, and which jobs become required.** That is
+   a repository setting rather than a file, so it cannot be done from code — it
+   needs owner access. Default: require `client / check`, `server-unit /
+   typecheck`, `server-unit / arch`, `server-unit / test`; leave
+   `server-integration` optional at first, because it is the most expensive and
+   the newest.
+2. **Do we install the `pre-push` hook for everyone?** Hooks do not travel through
+   `git clone`. Options: `core.hooksPath` committed in the repo (works after one
+   `git config`), husky (another dependency), or a Claude Code hook in settings —
+   but that last one fires only when an agent pushes, not a person. Default:
+   `core.hooksPath` plus a line in the README.
+3. **Do warnings block?** Default: no, only criticals block, as you framed it.
+   But then a cap on the number of warnings per PR is needed, or they accumulate
+   forever.
+4. **What do we do about the architecture baseline?** **10** known violations are
+   currently ignored (it was 11 — one was fixed on 2026-08-10 and removed from
+   the baseline). If a PR touches a file in the baseline and does **not** fix it,
+   do we stay silent or remind once? Default: remind as a note, do not block. One
+   more rule worth fixing immediately: **growth of the baseline is critical.** The
+   known-violations file exists so the ratchet tightens; a PR that adds an entry
+   to it removes the gate rather than passing it.
 
-## 9. Обсяг v1 і що далі
+## 9. The scope of v1, and what comes after
 
-**v1** — те, що дає 90% користі за день роботи: збір diff, маршрутизація (§3),
-ворота 4a, два наші скіли, класифікація, вердикт. Виконується вручну (`/pr-self-review`)
-і з `pre-push`.
+**v1** — what gives 90% of the value for a day's work: collect the diff, routing
+(§3), the 4a gates, our two skills, classification, verdict. Invoked by hand and
+from `pre-push`.
 
-**Далі, окремими кроками:** CI-workflow як обов'язкова перевірка · автоматичне
-підтягування шаблону тіла PR зі звіту · трекінг warning-боргу між PR ·
-підключення `reviewer-core` як движка замість прямого судження (у нас же є
-власний рушій рев'ю — логічно згодом їсти власну їжу).
+**Later, as separate steps:** the CI workflow as a required check · pulling the
+PR body template from the report automatically · tracking warning debt across PRs
+· using our own review engine instead of direct judgement (we have a review
+engine — eating our own cooking is the logical end state).
 
-## 10. Що зробить його практичним, а не формальним
+## 10. What will make it practical rather than ceremonial
 
-Десять доповнень: шість із першого проходу (10a–10f) і чотири, дописані
-2026-08-10 (10g–10j). Перше — не косметика: без нього скіл лишається чистим
-податком.
+Ten additions: six from the first pass (10a–10f) and four written on 2026-08-10
+(10g–10j). The first is not cosmetic — without it the skill is a pure tax.
 
-### 10a. Чистий прохід має щось віддавати — чернетка тіла PR
+### 10a. A clean run has to give something back — a draft PR body
 
-Зараз конструкція асиметрична: якщо є проблеми — скіл корисний, якщо немає —
-ти витратив хвилину й отримав «OK». Люди перестають запускати те, що в
-типовому випадку не дає нічого.
+The design is currently asymmetric: if there are problems, the skill is useful;
+if there are none, you spent a minute and got "OK". People stop running the thing
+that gives them nothing in the typical case.
 
-Тому на **виході завжди** — готове тіло PR, зібране з даних, які скіл і так має:
-перелік зачеплених пакетів, що змінилось по модулях, які ворота пройдено з
-якими числами (`server 116+34, client 61`), які скіли відпрацювали, і секція
-findings. Це рівно те, чого вимагає наша конвенція PR («що змінено + як
-перевірено»), і воно тепер пишеться саме.
+So the output is **always** a ready PR body, assembled from data the skill
+already has: which packages were touched, what changed per module, which gates
+passed and with what numbers, which skills ran, and a findings section. This is
+exactly what our PR convention asks for ("what changed + how tested"), and now it
+writes itself.
 
-Побічний ефект, який мені подобається більше за основний: тіло PR стає
-**машинно перевіреним**. «Протестовано» перестає бути обіцянкою в текстовому
-полі.
+The side effect I like more than the main one: the PR body becomes
+**machine-checked**. "Tested" stops being a promise in a text field.
 
-### 10b. Скіл, який ніколи нічого не знайшов, невідрізнити від зламаного
+### 10b. A skill that never found anything is indistinguishable from a broken one
 
-Потрібен фікстурний самотест: набір відомо-поганих діффів, на яких скіл
-**мусить** дати конкретні findings. У нас уже є ідеальний матеріал — стан репо
-до вчорашніх правок:
+It needs a fixture self-test: a set of known-bad diffs on which the skill **must**
+produce specific findings. We already have perfect material — the state of the
+repo before yesterday's fixes:
 
-| Фікстура | Очікуваний finding |
+| Fixture | Expected finding |
 | --- | --- |
-| `productionize.ts` з розбіжним enum | critical, `contract-drift` |
-| `setSkills` без транзакції | critical, `multi-write-without-transaction` |
-| `RunReviewDropdown` до правки | critical, `failure-rendered-as-empty` |
-| нова `routes.ts` з імпортом `db/schema` | critical, `routes-no-db` |
-| новий `export *` | warning |
+| a script with a divergent enum | critical, `contract-drift` |
+| a multi-write helper with no transaction | critical, `multi-write-without-transaction` |
+| a dropdown component before the fix | critical, `failure-rendered-as-empty` |
+| a new `routes.ts` importing `db/schema` | critical, `routes-no-db` |
+| a new `export *` | warning |
 
-Зелений самотест — умова, за якої «0 findings» на реальному PR щось означає.
-Ганяти в CI разом із рештою.
+A green self-test is the condition under which "0 findings" on a real PR means
+anything. Run it in CI with the rest.
 
-### 10c. Цикл «запустив → полагодив → запустив», а не одноразова перевірка
+### 10c. A run → fix → run loop, not a one-shot check
 
-Самоперевірка ітеративна за природою. Другий запуск має дивитись **дельту від
-попереднього**, а не переглядати все заново: кешувати за хешем diff, переносити
-підтверджені findings, показувати `3 fixed · 1 new · 2 unchanged`.
+Self-review is iterative by nature. The second run should look at the **delta
+from the previous one** rather than re-examining everything: cache by diff hash,
+carry confirmed findings forward, show `3 fixed · 1 new · 2 unchanged`.
 
-Разом із цим — бюджет часу як явна вимога: ворота ≤ 30 с, весь прохід ≤ 2 хв.
-Що не влазить — виноситься в CI. Скіл, який думає п'ять хвилин, обходять
-через `--no-verify`, і ти про це не дізнаєшся.
+Along with that, a time budget as an explicit requirement: gates ≤ 30 s, the
+whole pass ≤ 2 min. What does not fit moves to CI. A skill that thinks for five
+minutes gets bypassed with `--no-verify`, and you never find out.
 
-### 10d. Хибні спрацювання мають бути дешевими для придушення й дорогими для приховування
+### 10d. False positives must be cheap to suppress and expensive to hide
 
-Придушення inline, але **з обов'язковою причиною**:
+Suppression inline, but **with a mandatory reason**:
 
 ```ts
 // pr-review-ignore: routes-no-db — read-only health probe, no service exists yet
 ```
 
-Без причини — не приймається (це перевіряється тривіально). Кожне придушення
-й кожен `PR_SELF_REVIEW=off` збираються; коли одне правило придушили тричі —
-воно погане, і це привід переглянути скіл, а не людину. Без цього контуру
-рубрика §4b старіє мовчки.
+No reason, not accepted — that is trivially checkable. Every suppression and
+every override is collected; when one rule has been suppressed three times, the
+rule is bad, and that is grounds to revisit the skill rather than the person.
+Without this loop the §4b rubric ages silently.
 
-### 10e. Великий diff: чесність замість тиші
+### 10e. A large diff: honesty rather than silence
 
-Наш поточний робочий diff — 37 файлів, 819 вставок; це вже поза одним
-комфортним проходом. Ліміт має бути явним: розбиваємо по модулях, кожен судимо
-окремо, і якщо щось не потрапило в огляд — **пишемо це у звіті першим рядком**.
-Мовчазне обрізання читається як «все чисто», і це найгірший з можливих
-результатів.
+The working diff at the time was 37 files and 819 insertions; that is already
+past one comfortable pass. The limit has to be explicit: split by module, judge
+each separately, and if anything did not make it into the review, **say so in the
+first line of the report**. Silent truncation reads as "all clear", which is the
+worst possible outcome.
 
-### 10f. Перевірки, які може зробити тільки наш скіл
+### 10f. Checks only our skill can make
 
-Загальні лінтери цього не вміють — а це саме те, чим ми відрізняємось від
-`/code-review`:
+General linters cannot do these — and this is exactly what distinguishes us from
+a general code review:
 
-- **Свіжість документації.** Новий ендпоінт у `routes.ts`, якого немає в
-  API-мапі `server/README.md` → warning. Нова конвенція в коді без рядка в
-  `AGENTS.md` → note. Саме такий дрейф ми вчора й розгрібали.
-- **Тест там, де його вимагає `TESTING.md`.** Новий роут, новий контракт,
-  нова міграція без відповідного тесту → warning. Не «покриття», а типологія.
-- **Втручання в baseline.** `.dependency-cruiser-known-violations.json`
-  перегенеровано, а кількість порушень не зменшилась → **critical**. Це єдиний
-  спосіб «полагодити» `pnpm arch`, не полагодивши нічого, і скіл мусить його
-  бачити.
-- **Контракт першим.** Зміна в `vendor/shared` разом зі змінами в клієнті, але
-  без серверної частини — порушення порядку, warning.
-- **Запис, який описує вже полагоджене.** Додано 2026-08-10 після того, як за
-  один аудит знайшлося три артефакти, що брешуть: кореневий `INSIGHTS.md`
-  описував форк `@devdigest/shared` як живий (копії ідентичні), `SKILL.md`
-  перелічував чотири `export *` (їх нуль), `TESTING.md` описував п'ять
-  workflow-ів як наявні (не було жодного). Це не «несвіжа документація» з
-  першого пункту — там запис **відстає** від коду, а тут він **заперечує** його.
-  Правило: PR, що закриває пункт зі `specs/`, мусить у тому ж комітi оновити
-  запис, який стверджував проблему. Агент читає такий запис як поточний намір і
-  діє за ним — тому це warning, а не note.
+- **Documentation freshness.** A new endpoint in `routes.ts` that is missing from
+  the API map in the backend README → warning. A new convention in code with no
+  line in the agent guide → note. That is exactly the drift we were clearing up.
+- **A test where the testing guide requires one.** A new route, a new contract, a
+  new migration with no corresponding test → warning. Not "coverage", but
+  typology.
+- **Tampering with the baseline.** The known-violations file regenerated while
+  the violation count did not fall → **critical**. That is the only way to "fix"
+  the architecture gate without fixing anything, and the skill has to see it.
+- **Contract first.** A change in the shared contracts together with client
+  changes but without the server side — the order was broken, warning.
+- **A record that describes something already fixed.** Added 2026-08-10, after a
+  single audit found three artefacts that lied: the root `INSIGHTS.md` described
+  a fork of the shared package as live (the copies were identical), a `SKILL.md`
+  listed four `export *` (there were none), and `TESTING.md` described five
+  workflows as existing (there were none). This is not "stale documentation" from
+  the first bullet — there the record **lags** the code, here it **contradicts**
+  it. The rule: a PR that closes an item from `specs/` must update, in the same
+  commit, the record that asserted the problem. An agent reads such a record as
+  current intent and acts on it — which is why this is a warning, not a note.
 
 ---
 
-**Додано 2026-08-10 — чотири пункти, які виросли з реальних спостережень цієї
-сесії, а не з міркувань про правильне.**
+**Added 2026-08-10 — four items that grew out of real observations in that
+session rather than out of reasoning about what is correct.**
 
-### 10g. Пропущені ворота — це не пройдені ворота
+### 10g. A skipped gate is not a passed gate
 
-Найтихіший спосіб отримати брехливе «OK». `pnpm test` на сервері повертає 0 і
-тоді, коли третина набору не виконалась: **12 із 36 тестових файлів**
-самопропускаються без Docker (`const d = hasDocker ? describe : describe.skip`,
-описано і в `TESTING.md`). На машині без запущеного Docker вердикт «tests OK»
-означає «герметичні тести пройшли, жоден DB-backed не запускався» — тобто рівно
-той клас помилок, заради якого інтеграційний лейн і існує, ніхто не перевірив.
+The quietest way to get a lying "OK". The backend's `pnpm test` returns 0 even
+when a third of the suite did not run: **12 of 36 test files** skip themselves
+without Docker (`const d = hasDocker ? describe : describe.skip`, documented in
+`TESTING.md`). On a machine with no Docker running, a verdict of "tests OK" means
+"the hermetic tests passed, no DB-backed test ran" — which is precisely the class
+of error the integration lane exists for, unchecked.
 
-Тому у звіті §6 ворота мають мати **три** стани, а не два: `OK` / `FAILED` /
-`SKIPPED — <причина>`. І `SKIPPED` серед critical-воріт зобов'язаний
-опускати загальний вердикт до `INCONCLUSIVE`, а не до `PASS`. Це той самий
-принцип, що й у 10e, але 10e стосується обрізаного diff, а не воріт, які
-самі себе вимкнули.
+So in the §6 report a gate must have **three** states, not two: `OK` / `FAILED` /
+`SKIPPED — <reason>`. And a `SKIPPED` among the critical gates is obliged to drop
+the overall verdict to `INCONCLUSIVE`, not to `PASS`. This is the same principle
+as 10e, but 10e is about a truncated diff rather than a gate that switched itself
+off.
 
-Той самий контур на майбутнє: `pnpm lint` сьогодні завжди зелений (усі правила
-`warn`) — звіт не має права подавати це як пройдений гейт.
+The same loop, for the future: `pnpm lint` is always green today (every rule is
+`warn`) — the report has no right to present that as a passed gate.
 
-### 10h. Вердикт має бути підписаний версіями скілів
+### 10h. The verdict must be signed with skill versions
 
-Скіли версіоновані (`frontend-ui-architecture@1.1.0`, `onion-architecture@1.0.0`)
-і вже змінювались: v1.1.0 додав правила маршрутизації, яких у v1.0.0 не було.
-Отже два прогони на **однаковому** diff можуть законно дати різні findings — і
-без підпису це виглядає як нестабільність скіла, а не як зміну правил.
+Skills are versioned and have already changed: v1.1.0 added routing rules that
+v1.0.0 did not have. So two runs over the **same** diff can legitimately produce
+different findings — and without a signature that looks like instability in the
+skill rather than a change of rules.
 
-Звіт має закінчуватись рядком на кшталт
-`judged by: frontend-ui-architecture@1.1.0 · onion-architecture@1.0.0 · gates@<sha скрипта>`.
+The report should end with a line such as
+`judged by: frontend-ui-architecture@1.1.0 · onion-architecture@1.0.0 · gates@<script sha>`.
 
-**Це також виправляє помилку в 10c:** кеш дельти, ключований лише за хешем
-diff, після підвищення версії скіла тихо перевикористає findings, отримані за
-старими правилами. Ключ мусить бути `(diff hash, набір версій скілів, sha
-pr-gates.sh)`. Інакше єдиний випадок, коли дельта найпотрібніша — «правило
-змінилось, що тепер?» — обслуговується найгірше.
+**This also fixes a mistake in 10c:** a delta cache keyed only on the diff hash
+will silently reuse findings produced under the old rules after a skill version
+bump. The key must be `(diff hash, the set of skill versions, sha of
+pr-gates.sh)`. Otherwise the one case where the delta matters most — "the rule
+changed, what now?" — is served worst.
 
-### 10i. PR, що змінює скіл, судить сам себе новою лінійкою
+### 10i. A PR that changes a skill judges itself with the new ruler
 
-Окремий випадок, який ламає інтуїцію: якщо diff чіпає
-`.claude/skills/**/SKILL.md`, то findings цього ж прогону вироблені **вже
-зміненими** правилами. Мінімум — сказати це першим рядком. Крім того, дві
-дешеві детерміновані перевірки, які тут напрошуються:
+A special case that breaks intuition: if the diff touches a `SKILL.md`, the
+findings of that same run were produced by the **already changed** rules. At
+minimum, say so in the first line. Beyond that, two cheap deterministic checks
+suggest themselves:
 
-- `SKILL.md` змінено, а `version:` у фронтматері — ні → warning. Без цього
-  10h-підпис бреше, бо дві різні лінійки називаються однаково.
-- `SKILL.md` змінено без рядка в таблиці Version history → note.
+- `SKILL.md` changed but `version:` in the frontmatter did not → warning. Without
+  this the 10h signature lies, because two different rulers carry the same name.
+- `SKILL.md` changed with no row added to the version history table → note.
 
-І практичне: правило зі скіла, видалене цим же PR, не має породжувати findings
-у цьому ж прогоні. Сьогоднішній приклад — стала згадка про чотири `export *`,
-яких у коді вже немає: скіл, що досі її містить, згенерував би фантомний
-finding на файлі, який ніхто не ламав.
+And a practical one: a rule deleted from a skill by this very PR must not produce
+findings in the same run. The example from that day was a stale mention of four
+`export *` that no longer existed in the code: a skill still containing it would
+have generated a phantom finding on a file nobody broke.
 
-### 10j. Кожен critical мусить нести команду відтворення
+### 10j. Every critical must carry a reproduction command
 
-§6 вимагає, щоб finding мав дію. Цього замало: людина спершу хоче **побачити**
-проблему, а не повірити в неї. Тому поруч із дією — рівно одна команда, яку
-можна вставити в термінал:
+§6 requires a finding to have an action. That is not enough: a person wants to
+**see** the problem before believing in it. So alongside the action, exactly one
+command that can be pasted into a terminal:
 
 ```
 server/src/modules/pulls/routes.ts:238   transaction-in-route
   repro:  pnpm arch:all | grep routes-no-db
-  fix:    винести транзакцію в service.ts
+  fix:    move the transaction into service.ts
 ```
 
-Це дешево (ворота §4a і так виконуються командами) і дає побічний ефект:
-finding, для якого неможливо написати команду відтворення, майже завжди
-виявляється судженням, що видає себе за факт — тобто кандидатом у warning за
-правилом проти інфляції з §4b.
+This is cheap — the §4a gates are commands anyway — and it has a side effect: a
+finding for which no reproduction command can be written almost always turns out
+to be judgement posing as fact, which makes it a candidate for warning under the
+anti-inflation rule in §4b.
 
-## 11. Файли, які з'являться
+## 11. The files that will appear
 
 ```
 .claude/skills/pr-self-review/
-  SKILL.md          сам скіл: маршрутизація, рубрика, порядок, формат звіту
-  README.md         джерела + обґрунтування рівнів
-scripts/pr-gates.sh          ворота §4a, без LLM, придатні і для хука, і для CI
-.githooks/pre-push           викликає pr-gates.sh
-.github/workflows/*.yml      ✅ вже існують (2026-08-10) — лишається лише
-                             викликати з них pr-gates.sh замість дубльованих
-                             кроків, коли скрипт з'явиться
+  SKILL.md          the skill itself: routing, rubric, order, report format
+  README.md         sources plus the rationale for the levels
+scripts/pr-gates.sh          the §4a gates, no LLM, usable by both the hook and CI
+.githooks/pre-push           calls pr-gates.sh
+.github/workflows/*.yml      ✅ already exist (2026-08-10) — all that remains is
+                             calling pr-gates.sh from them instead of duplicated
+                             steps, once the script exists
 ```
 
-Ключове в цій розкладці: **ворота живуть у скрипті, а не в скілі**. Один і той
-самий `pr-gates.sh` виконує хук, CI і скіл — інакше три копії правил розійдуться
-рівно так само, як розійшлись дві копії `@devdigest/shared`.
+The key point in this layout: **the gates live in a script, not in the skill.**
+The same `pr-gates.sh` runs from the hook, from CI and from the skill — otherwise
+three copies of the rules diverge exactly the way two vendored copies of a shared
+package once did.

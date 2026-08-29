@@ -1,107 +1,111 @@
-# `onion-architecture` — план скіла
+# `onion-architecture` — the plan the skill was built from
 
-Статус: **план, не скіл.** Нічого в `server/` не змінено. Джерела —
-[`README.md`](README.md) у цій же папці.
+Status: **historical.** This was the design document written before the skill
+existed; the skill has since shipped and is the authority. Kept because it
+records the measurements and the reasoning, which `SKILL.md` deliberately does
+not repeat. Sources: [`README.md`](README.md) in this folder.
 
 ---
 
-## 1. Головне, що дав замір: онія тут уже майже є
+## 1. What the measurement showed: the onion is already here
 
-Перш ніж проєктувати скіл, я заміряв `server/src`. Висновок сильніший, ніж
-очікував: **бекенд уже побудований за онією — просто це ніде не записано і ніщо
-цього не тримає.**
+Before designing the skill I measured the backend source tree. The conclusion was
+stronger than expected: **the backend is already built as an onion — it is simply
+written down nowhere and nothing holds it in place.**
 
-Що вже правильно:
+What was already right:
 
-| Факт | Де видно |
+| Fact | Where it shows |
 | --- | --- |
-| **Порти лежать у центрі, а не в інфраструктурі** | `AuthProvider`, `SecretsProvider`, `GitHubClient`, `GitClient`, `CodeIndex`, `Embedder`, `LLMProvider` — інтерфейси в `@devdigest/shared`, не в `adapters/` |
-| **Адаптери реалізують порти на краю** | `src/adapters/{github,git,llm,embedder,codeindex,secrets,auth}/` |
-| **Є композиційний корінь** | `src/platform/container.ts` — єдине місце, де конкретика зустрічає інтерфейс |
-| **Сервіси залежать від інтерфейсів** | жоден `service.ts` / `repository.ts` не імпортує `fastify` |
-| **Тести підміняють край, не нутрощі** | `src/adapters/mocks.ts` + `ContainerOverrides` |
+| **Ports sit in the centre, not in infrastructure** | `AuthProvider`, `SecretsProvider`, `GitHubClient`, `GitClient`, `CodeIndex`, `Embedder`, `LLMProvider` — interfaces in the shared contracts package, not in `adapters/` |
+| **Adapters implement ports at the edge** | `src/adapters/{github,git,llm,embedder,codeindex,secrets,auth}/` |
+| **There is a composition root** | `src/platform/container.ts` — the one place where a concrete class meets an interface |
+| **Services depend on interfaces** | no `service.ts` or `repository.ts` imports `fastify` |
+| **Tests substitute the edge, not the internals** | `src/adapters/mocks.ts` + `ContainerOverrides` |
 
-Тобто скіл **не приносить нову архітектуру**. Він називає наявну, дає їй правила
-й — головне — вмикає примус. Це принципово: скіл, який вимагає рефакторингу всього
-бекенду, ніхто не виконуватиме.
+So the skill **does not introduce a new architecture**. It names the existing one,
+gives it rules and — most importantly — turns on enforcement. That matters: a
+skill demanding a rewrite of the whole backend is a skill nobody will follow.
 
-## 2. Що заміряно як відхилення
+## 2. The deviations that were measured
 
-| Відхилення | Масштаб | Чому це проблема онії |
+| Deviation | Scale | Why it breaks the onion |
 | --- | --- | --- |
-| Модулі без сервісного шару: `routes.ts` імпортує `db/schema` напряму | **4 з 8**: `polling`, `pulls`, `settings`, `workspace` | Зовнішній шар (HTTP) залазить у найдальший внутрішній (persistence), оминаючи домен |
-| Асиметрія шарів | 8 × `routes.ts`, але 4 × `service.ts` і 4 × `repository.ts` | Половина модулів дволанкова, половина триланкова — правила немає |
-| Логіка поза шарами | `reviews/run-executor.ts`, `reviews/diff-loader.ts`, `repos/helpers.ts` імпортують `db` | Файл із роллю «хелпер» тримає доступ до даних |
-| **`dependency-cruiser` у залежностях, але не налаштований** | нема конфіга, нема скрипта | Інструмент примусу вже оплачено і не використовується |
+| Modules with no service layer: `routes.ts` imports `db/schema` directly | **4 of 8**: `polling`, `pulls`, `settings`, `workspace` | The outermost layer (HTTP) reaches into the innermost (persistence), bypassing the domain |
+| Asymmetric layers | 8 × `routes.ts`, but 4 × `service.ts` and 4 × `repository.ts` | Half the modules are two-tier, half three-tier — there is no rule |
+| Logic outside the layers | `reviews/run-executor.ts`, `reviews/diff-loader.ts`, `repos/helpers.ts` import `db` | A file whose role is "helper" holds data access |
+| **`dependency-cruiser` installed but not configured** | no config, no script | The enforcement tool is already paid for and unused |
 
-Останній рядок — найцінніший. Правило, яке не перевіряється, деградує за
-два спринти; у нас **уже стоїть** інструмент, який його перевірить.
+The last row is the most valuable. A rule that is not checked degrades within two
+sprints, and the tool that would check it **is already installed**.
 
-## 3. Шари: як онія лягає на наші папки
+## 3. Layers: how the onion maps onto the existing folders
 
-Не вводимо нових назв там, де вже є свої. Відображення:
+No new names where names already exist. The mapping:
 
 ```
         ┌─────────────────────────────────────────┐
-        │  routes.ts        HTTP-адаптер (driving)│  ← Zod-схеми, коди статусів
+        │  routes.ts        HTTP adapter (driving)│  ← Zod schemas, status codes
         │  ┌───────────────────────────────────┐  │
-        │  │  service.ts     Application       │  │  ← сценарії, оркестрація, транзакції
+        │  │  service.ts     Application       │  │  ← use cases, orchestration, transactions
         │  │  ┌─────────────────────────────┐  │  │
-        │  │  │  helpers.ts + constants.ts  │  │  │  ← Domain: чисті правила
-        │  │  │  @devdigest/shared          │  │  │  ← Domain: типи + ПОРТИ
+        │  │  │  helpers.ts + constants.ts  │  │  │  ← Domain: pure rules
+        │  │  │  shared contracts package   │  │  │  ← Domain: types + PORTS
         │  │  └─────────────────────────────┘  │  │
         │  └───────────────────────────────────┘  │
-        │  repository.ts    persistence-адаптер   │  ← Drizzle, SQL, рядки таблиць
-        │  adapters/**      driven-адаптери       │  ← GitHub, git, LLM, secrets
+        │  repository.ts    persistence adapter   │  ← Drizzle, SQL, table rows
+        │  adapters/**      driven adapters       │  ← GitHub, git, LLM, secrets
         └─────────────────────────────────────────┘
-                platform/container.ts — композиційний корінь
+                platform/container.ts — the composition root
 ```
 
-Ключове, що скіл має вбити в голову: **`repository.ts` — це край, а не низ.**
-У класичній шаруватій схемі БД знизу і від неї все залежить; в онії вона такий
-самий зовнішній адаптер, як GitHub API. Саме тут онія відрізняється від
-«трьох шарів», і саме це найчастіше розуміють неправильно.
+The thing the skill has to drive home: **`repository.ts` is an edge, not a
+bottom.** In classic layering the database sits at the bottom and everything
+depends on it; in the onion it is an external adapter exactly like a third-party
+API. This is where the onion differs from "three layers", and it is the part most
+often misunderstood.
 
-## 4. Правило залежностей — одне речення, яке форсить скіл
+## 4. The dependency rule — the one sentence the skill enforces
 
-> Імпорт іде тільки всередину. `routes` → `service` → `repository`/адаптери.
-> Ніколи навпаки, ніколи через шар.
+> Imports point inward only. `routes` → `service` → `repository`/adapters.
+> Never the other way, never skipping a layer.
 
-З нього виводяться перевірні заборони:
+The checkable prohibitions follow from it:
 
-1. `routes.ts` **не імпортує** `db/**` — тільки `service`.
-2. `service.ts` **не імпортує** `fastify` і не знає про HTTP-коди.
-3. `repository.ts` **не імпортує** `service.ts` сусіда й не викликає адаптери.
-4. `helpers.ts` — чистий: без `db`, без адаптерів, без I/O.
-5. Модуль **не імпортує** внутрішні файли іншого модуля — тільки його публічний вхід.
-6. Конкретні класи адаптерів інстанціює **лише** `platform/container.ts`.
-7. Порт (інтерфейс) живе в `@devdigest/shared`, реалізація — в `adapters/`. Не навпаки.
+1. `routes.ts` **does not import** `db/**` — only `service`.
+2. `service.ts` **does not import** `fastify` and knows nothing about HTTP codes.
+3. `repository.ts` **does not import** a sibling's `service.ts` and does not call adapters.
+4. `helpers.ts` is pure: no `db`, no adapters, no I/O.
+5. A module **does not import** another module's internal files — only its public entry point.
+6. Concrete adapter classes are instantiated **only** in `platform/container.ts`.
+7. A port (interface) lives in the shared contracts package, the implementation in `adapters/`. Not the reverse.
 
-## 5. Структура скіла
+## 5. The shape of the skill
 
-`SKILL.md`, англійською, приблизно 180–200 рядків, `version: 1.0.0` — форма та
-сама, що в `frontend-ui-architecture`, щоб два скіли читались однаково.
+`SKILL.md`, in English, roughly 180–200 lines, `version: 1.0.0` — the same shape
+as `frontend-ui-architecture`, so the two read alike.
 
-| § | Зміст | Навіщо |
+| § | Content | Why |
 | --- | --- | --- |
-| 1 | **Правило залежностей** одним абзацом + діаграма шарів | Єдине, що треба запам'ятати |
-| 2 | **Таблиця «що я додаю → в який файл»** | Робоча частина; аналог таблиці розміщення у фронтовому скілі |
-| 3 | **Що належить кожному шару** — і, окремою колонкою, що йому заборонено | Заборони агенти дотримують краще, ніж дозволи |
-| 4 | **Порти й адаптери**: коли нова залежність стає портом, а коли лишається деталлю сервісу | Найчастіше питання при новій інтеграції |
-| 5 | **Транзакції**: `service` володіє межею транзакції, `repository` приймає `tx` | Інакше транзакція протікає в HTTP-шар |
-| 6 | **Помилки**: `repository` перекладає помилки БД у доменні; HTTP-коди тільки в `routes` | `platform/errors.ts` уже існує — спираємось на нього |
-| 7 | **Коли онія зайва** (див. §7 нижче) | Без цього скіл почне плодити порожні шари |
-| 8 | **Known deviations** — 4 модулі без сервісу, поіменно | Чесність; інакше агент вважає їх зразком |
-| 9 | **Чекліст перед завершенням** — 6–7 пунктів | Те, що реально виконується |
+| 1 | **The dependency rule** in one paragraph plus a layer diagram | The one thing to remember |
+| 2 | **A "what I am adding → which file" table** | The working part; the analogue of the placement table in the frontend skill |
+| 3 | **What belongs to each layer** — and, in its own column, what is forbidden to it | Agents follow prohibitions better than permissions |
+| 4 | **Ports and adapters**: when a new dependency becomes a port and when it stays a detail of a service | The most frequent question on a new integration |
+| 5 | **Transactions**: the service owns the boundary, the repository accepts `tx` | Otherwise the transaction leaks into the HTTP layer |
+| 6 | **Errors**: the repository translates database errors into domain errors; HTTP codes only in `routes` | `platform/errors.ts` already exists — build on it |
+| 7 | **When the onion is unnecessary** (see §7 below) | Without it the skill starts breeding empty layers |
+| 8 | **Known deviations** — the 4 service-less modules, by name | Honesty; otherwise an agent treats them as the model |
+| 9 | **A closing checklist** — 6–7 items | The part that actually gets followed |
 
-Додатково в папці: `README.md` (джерела) і `dependency-cruiser.cjs` — конфіг з §6.
+Also in the folder: `README.md` (sources) and the dependency-cruiser config from §6.
 
-## 6. Примус, а не побажання
+## 6. Enforcement, not aspiration
 
-Найважливіша частина плану. Скіл дає правила, конфіг їх тримає.
+The most important part of the plan. The skill states the rules; the config holds
+them.
 
-Створити `server/.dependency-cruiser.cjs` із `forbidden`-правилами під §4 і
-додати скрипт `pnpm arch` (і в CI поруч із `typecheck`). Ескіз:
+Create `.dependency-cruiser.cjs` with `forbidden` rules matching §4 and add an
+`arch` script (and put it in CI next to `typecheck`). Sketch:
 
 ```js
 forbidden: [
@@ -123,55 +127,58 @@ forbidden: [
 ]
 ```
 
-**Порядок запуску має значення.** Спершу ганяємо конфіг на поточному коді й
-дивимось реальну кількість порушень. Якщо їх багато — частина правил стартує з
-`severity: 'warn'`, інакше `pnpm arch` червоний з першого дня і його вимкнуть.
-Числа підставляємо після заміру, не вгадуємо.
+**The order of operations matters.** Run the config against the current code
+first and see the real violation count. If there are many, some rules start at
+`severity: 'warn'`, otherwise the gate is red from day one and someone turns it
+off. The numbers go in after measuring, not before.
 
-## 7. Захист від переускладнення — обов'язкова частина
+## 7. Protection against overengineering — a required section
 
-Найпоширеніша поразка онії — порожні шари: сервіс, який одним рядком делегує в
-репозиторій. Критика ([Rentea](https://victorrentea.ro/blog/overengineering-in-onion-hexagonal-architectures/),
+The most common way the onion fails is empty layers: a service that delegates to
+a repository in one line. The criticism
+([Rentea](https://victorrentea.ro/blog/overengineering-in-onion-hexagonal-architectures/),
 [Three Dots Labs](https://threedots.tech/episode/is-clean-architecture-overengineering/))
-збігається в одному: онія платить за складність домену, а не за кількість папок.
+agrees on one point: the onion pays for domain complexity, not for folder count.
 
-Скіл має явно дозволити CRUD-модулю лишатись дволанковим (`routes` + `repository`),
-доки в ньому нема правил. Пропоную критерій, який агент може перевірити:
+The skill must explicitly permit a CRUD module to stay two-tier
+(`routes` + `repository`) for as long as it holds no rules. The proposed
+criterion, which an agent can check:
 
-> Сервіс з'являється тоді, коли операція робить **більше ніж один** із:
-> звертання до другого репозиторію · виклик адаптера · застосування правила,
-> що не є валідацією форми · керування транзакцією.
-> Інакше `routes` → `repository` — це закінчена архітектура, а не борг.
+> A service appears when an operation does **more than one** of:
+> touching a second repository · calling an adapter · applying a rule that is not
+> shape validation · managing a transaction.
+> Otherwise `routes` → `repository` is a finished architecture, not debt.
 
-Це також автоматично виправдовує 4 наявні дволанкові модулі замість того, щоб
-записувати їх у борг, — але тільки після перевірки кожного за критерієм (§9).
+This also justifies the four existing two-tier modules rather than recording them
+as debt — but only after checking each one against the criterion (§9).
 
-## 8. Чого скіл не робить
+## 8. What the skill does not do
 
-Скоуп тримаємо вузьким, інакше він конфліктуватиме з наявними файлами:
+The scope stays narrow, or it will conflict with files that already exist:
 
-- Не вводить DDD-агрегати, value objects і rich domain model. У нас дані —
-  рядки Drizzle і Zod-типи; анемічна модель тут свідомий вибір.
-- Не переписує `@devdigest/shared`. Контракти змінюються за наявним правилом
-  (спершу контракт, потім споживачі).
-- Не чіпає `reviewer-core` — він і так чистий рушій без I/O.
-- Не дублює `server/AGENTS.md` (команди, Zod-схеми на роутах, міграції) і не
-  дублює `engineering-insights`.
+- No DDD aggregates, value objects or rich domain model. The data here is Drizzle
+  rows and Zod types; the anemic model is a deliberate choice.
+- It does not rewrite the shared contracts package. Contracts change under the
+  existing rule (contract first, then consumers).
+- It does not touch the pure engine package — that is already I/O-free.
+- It does not duplicate the backend's own agent guide (commands, route schemas,
+  migrations) and does not duplicate `engineering-insights`.
 
-## 9. Що зробити до написання — і питання до тебе
+## 9. To do before writing — and the questions that need a decision
 
-Механічне, зроблю сам:
+Mechanical, done first:
 
-1. Прогнати чернетку конфіга dependency-cruiser і отримати справжнє число порушень.
-2. Перевірити кожен із 4 дволанкових модулів за критерієм §7: борг це чи норма.
-3. Звірити, чи `platform/errors.ts` уже дає доменні типи помилок для §6.
+1. Run the draft dependency-cruiser config and get the real violation count.
+2. Check each of the 4 two-tier modules against the §7 criterion: debt or normal.
+3. Confirm whether `platform/errors.ts` already provides the domain error types §6 needs.
 
-Питання, де твоє рішення змінює зміст скіла:
+Questions where the answer changes what the skill says:
 
-- **Чи форсимо сервісний шар у всіх модулях?** Мій дефолт — ні, критерій §7.
-  Якщо хочеш однорідність — це рефакторинг 4 модулів, окремим завданням.
-- **`pnpm arch` у CI одразу як `error`, чи спершу `warn` на місяць?**
-  Мій дефолт — нові правила `error`, історичні порушення `warn` до розчистки.
-- **Чи виносимо порти з `@devdigest/shared` в окремий `ports.ts`?** Зараз вони
-  перемішані з DTO-контрактами. Мій дефолт — лишити, але записати в скілі, що
-  `shared` тримає дві різні речі.
+- **Do we force a service layer in every module?** Default: no, use the §7
+  criterion. Wanting uniformity means refactoring 4 modules, as a separate task.
+- **Does the architecture gate enter CI as `error` immediately, or as `warn` for
+  a month?** Default: new rules `error`, historical violations `warn` until
+  cleared.
+- **Do we split ports out of the shared contracts package into their own
+  `ports.ts`?** They are currently mixed in with DTO contracts. Default: leave
+  them, but record in the skill that the package holds two different things.

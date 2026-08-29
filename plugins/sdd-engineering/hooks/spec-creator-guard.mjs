@@ -1,0 +1,1 @@
+../../../.claude/hooks/spec-creator-guard.mjs

@@ -102,7 +102,7 @@ Read-only, with the right package manager:
 
 Forbidden, without exception: `check-shared.sh --fix`, `pnpm db:generate`,
 `db:migrate`, `db:seed`, any `docker compose` command (`down -v` destroys the
-`devdigest_pgdata` volume and every imported repo with it), any install, any git
+named Postgres data volume and every imported repo with it), any install, any git
 state change.
 
 **Report a red gate as red.** A failing gate is evidence for a `not met`; it is

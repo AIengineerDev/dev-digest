@@ -1,0 +1,8 @@
+{
+  "name": "research-tools",
+  "displayName": "Research Tools",
+  "version": "1.0.0",
+  "description": "An agent that answers a research question with evidence — from inside the repository or from the web — and reports back without editing anything.",
+  "author": { "name": "Alex Lavrenin" },
+  "keywords": ["research", "investigation"]
+}
