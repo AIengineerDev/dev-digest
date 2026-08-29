@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | build | done | Phases 1–10 + final gate. server 487 tests, client 343, build green |
 | verify | done | 28 met · 1 partly met · 0 not met · 0 not checkable |
-| review | round 1 fixed, re-review running | 4 findings fixed, gates green. Re-review + security pending |
+| review | **done, loop closed in round 2** | r1: 4 found, 4 fixed. r2: 1 found, 1 fixed. Security: 0 findings |
 | accept | pending | |
 | ship | pending | |
 
@@ -19,7 +19,7 @@
 
 ## Open findings
 
-**Round 1 — four items, all confirmed, all four fixed. Re-review pending.**
+**Round 1 — four items, all confirmed, all four fixed and re-reviewed clean.**
 
 1. **`AgentTabs` imports `FindingCard` from a sibling route's private `_components/`**
    (`.../multi-agent/[multiAgentRunId]/_components/AgentTabs/AgentTabs.tsx:10`). Medium.
@@ -48,6 +48,28 @@ Carried from the implementer as product calls, not defects:
 - **`FindingCard` now has two route consumers** without being promoted to
   `client/src/components/`. `frontend-ui-architecture`'s threshold says promote;
   Phase 8's file list did not authorise it. Flagged rather than done silently.
+
+## Round 2 — carried in
+
+5. **`MultiAgentRunView` has no route `response` schema** (`server/src/modules/reviews/routes.ts:119-126`).
+   Low. Fix round 1 declared response schemas for `LatestMultiAgentRun` and
+   `AgentEstimate` but not for the third new contract, so that route validates
+   `params` only and the type annotation vanishes at runtime. A gap created *by*
+   the fix, which is what a re-review exists to catch.
+
+**Fixed in round 2.** `server/src/modules/reviews/routes.ts:121` now declares
+`response: { 200: MultiAgentRunView }`. The it-test ran for real against
+testcontainers Postgres (5/5), so the schema was exercised against a live payload.
+
+**Security review: no HIGH or MEDIUM findings.** Eight lower-confidence candidates
+were listed and dismissed with reasons. One is recorded here rather than fixed:
+`reviewsForRunIds` (`server/src/modules/reviews/repository/review.repo.ts:77-92`)
+carries no `workspace_id` predicate. Not attacker-reachable — its only caller feeds
+run ids already filtered by workspace and group in the preceding statement — so it
+is defence-in-depth, not a finding. Worth a hardening comment if that file gains a
+second caller.
+
+**The fix loop closed.** No findings remain open.
 
 ## Human decisions
 

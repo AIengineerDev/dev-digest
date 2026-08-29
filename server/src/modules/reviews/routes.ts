@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { RunRequest, PrIntentRecord, LatestMultiAgentRun, AgentEstimate } from '@devdigest/shared';
+import { RunRequest, PrIntentRecord, LatestMultiAgentRun, AgentEstimate, MultiAgentRunView } from '@devdigest/shared';
 import type { RunEvent } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
@@ -118,7 +118,7 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
   // ---- A multi-agent run's results: member runs + grouped findings --------
   app.get(
     '/pulls/:id/multi-agent-runs/:multiAgentRunId',
-    { schema: { params: MultiAgentRunParams } },
+    { schema: { params: MultiAgentRunParams, response: { 200: MultiAgentRunView } } },
     async (req) => {
       const { workspaceId } = await getContext(container, req);
       return service.multiAgentRun(workspaceId, req.params.id, req.params.multiAgentRunId);
