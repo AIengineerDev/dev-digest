@@ -12,12 +12,42 @@ If a curated file answers the question, cite it instead of re-deriving from code
 
 ## After finishing
 
-Run the `engineering-insights` skill at the end of any non-trivial task. It
+Run the `sdd-engineering:engineering-insights` skill at the end of any
+non-trivial task. It
 records what was learned into the `INSIGHTS.md` of the module you touched, after
 checking that a similar entry isn't already there. **Do not skip this step.**
 
 Skip only the writing, and only when nothing non-obvious came up — a typo or a
 routine change is not an insight, and noise costs more than silence.
+
+## Agents and skills come from a plugin, not from this repository
+
+The SDD chain, the shared engineering skills and the architecture reviewer are
+**installed**, not checked in. They live in
+[`AIengineerDev/dev-digest-ai-marketplace`](https://github.com/AIengineerDev/dev-digest-ai-marketplace)
+and are enabled for this project through `.claude/settings.json`.
+
+```
+/plugin marketplace add AIengineerDev/dev-digest-ai-marketplace
+/plugin install sdd-engineering@dev-digest-ai-marketplace --scope project
+```
+
+That pulls in `engineering-paved-path`, `research-tools` and
+`architecture-review` as dependencies. Components are namespaced by their
+plugin — `sdd-engineering:run-plan`, `engineering-paved-path:onion-architecture`.
+
+**Do not add a local copy of anything the plugin provides.** Two copies of an
+agent means a session can use either one and the trace will not say which, and
+the copies drift the way vendored trees always do. If a rule needs changing,
+change it in the marketplace and release a version.
+
+What is still local, and why:
+
+| Path | Why it is not in a plugin |
+| --- | --- |
+| `.claude/agents/test-writer.md` | deliberately out of the `run-plan` chain; no consumer outside this repo yet |
+| `.claude/skills/pr-self-review/` | a plan, not a skill — no `SKILL.md`, so nothing loads it |
+| `.claude/skills/react-component-quality/` | parked research, same reason |
 
 ## Stack
 
@@ -131,7 +161,8 @@ gap as a warning, and a skill that never gets one keeps that warning forever.
   package's `specs/` instead. Specs are authored by the `spec-creator` agent, which
   only ever **creates** them: a revision is a new numbered file, never an edit.
 - Run `spec-creator` then `implementation-planner` by hand, one at a time, then
-  `/impl <plan path>` to drive build → verify → review → accept → ship. It is
+  `/sdd-engineering:run-plan <plan path>` to drive build → verify → review →
+  accept → ship. It is
   stage-at-a-time and resumable from `plans/*.run.md`.
 - Read `plans/` for how an agreed spec gets built — phases or parallel tracks,
   with the gate commands that prove each one. `plans/NN-*.plan.md` matches
@@ -153,10 +184,11 @@ gap as a warning, and a skill that never gets one keeps that warning forever.
 - Read `e2e/README.md` before writing or debugging a browser flow.
 - Read `mcp/AGENTS.md` before adding or changing an MCP tool — the token budget
   it has to stay under is not inferable from the code.
-- `/workflow-retro` is a **human-invoked** retrospective on a multi-agent run: it measures
+- `/sdd-engineering:workflow-retro` is a **human-invoked** retrospective on a multi-agent run: it measures
   what the session cost and proposes prompt changes, with durable findings in
   `docs/retro/ledger.md`. No agent or skill may launch it — offer it, never run
-  it. `/workflow-retro deep` widens the scope to every session, for trends.
+  it. `/sdd-engineering:workflow-retro deep` widens the scope to every session, for trends.
 - Read `INSIGHTS.md` at repo root for decisions that span more than one package.
-- Use the `engineering-insights` skill to read or record an insight — it maps a
+- Use the `sdd-engineering:engineering-insights` skill to read or record an
+  insight — it maps a
   touched path to the right `INSIGHTS.md` and holds the format and quality bar.

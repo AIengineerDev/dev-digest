@@ -1,15 +1,8 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/spec-creator-guard.mjs\""
-          }
-        ]
-      }
-    ]
+  "enabledPlugins": {
+    "sdd-engineering@dev-digest-ai-marketplace": true,
+    "engineering-paved-path@dev-digest-ai-marketplace": true,
+    "research-tools@dev-digest-ai-marketplace": true,
+    "architecture-review@dev-digest-ai-marketplace": true
   }
 }
