@@ -142,6 +142,19 @@ reference in every route.
 
 ## Codebase Patterns
 
+- **2026-08-28** — `multi_agent_runs` is in the schema and the barrel but is
+  **structurally unusable**: it holds `{id, workspace_id, pr_id, ran_at}` and
+  **no `agent_runs` row can point at it** — there is no `multi_agent_run_id`
+  column on `agent_runs`, and no FK in the other direction either. Reading
+  `schema/runs.ts` and concluding run grouping is available is the trap; any
+  work that groups the N runs of one fan-out has to add the column and a
+  migration first. Nullable and never backfilled when it is added: every
+  existing row is a legitimate single run, and inventing a group for it would
+  make the history lie. Related but different from the 2026-08-11 root entry on
+  "the latest review is one agent's opinion" — that one is about *reading*
+  multi-agent results, this is about their not being grouped at all.
+  `src/db/schema/runs.ts:54-63` · `src/modules/reviews/run-executor.ts:74`
+
 - **2026-08-26** — When a cache table's primary key includes a value expected
   to drift out from under a READ (here: `onboarding_tours`'s key includes
   `indexed_sha`/`indexer_version`, and a resync changes them), the write path's
