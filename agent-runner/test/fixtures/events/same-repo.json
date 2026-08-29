@@ -1,0 +1,14 @@
+{
+  "pull_request": {
+    "number": 42,
+    "title": "Fix the thing",
+    "head": {
+      "ref": "fix/the-thing",
+      "repo": { "full_name": "acme/widgets" }
+    },
+    "base": {
+      "ref": "main",
+      "repo": { "full_name": "acme/widgets" }
+    }
+  }
+}

@@ -382,6 +382,25 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## Tool & Library Notes
 
+- **2026-08-29** — A package that reaches `@devdigest/reviewer-core` through a
+  `tsconfig.json` path alias (consumed as TypeScript source, same arrangement
+  as `@devdigest/shared`) pulls **reviewer-core's own runtime dependencies**
+  into its type-check too — `tsc` follows the aliased `.ts` files and their
+  imports, so `agent-runner`'s `npm run typecheck` failed with
+  `Cannot find module 'openai'` until `reviewer-core/node_modules` existed,
+  even though `agent-runner` itself never imports `openai`. `npm install` in
+  the sibling package is a real prerequisite, not an optional nicety — and
+  running it there touches that package's own `package-lock.json` with a
+  trivial `"peer": true` normalization npm adds on an existing lockfile;
+  revert that diff (`git checkout -- reviewer-core/package-lock.json`) rather
+  than let an unrelated task's typecheck fixup ship as a change to a
+  different package. Separately, `@vercel/ncc build` resolved both the
+  `@devdigest/shared` and `@devdigest/reviewer-core` path aliases without any
+  ncc-specific alias config or build-time copy — the risk flagged in
+  `plans/15-export-to-ci.plan.md` ("Risks and unknowns") did not materialize;
+  the bundled output was confirmed to contain zero `vendor/shared` path
+  strings. `agent-runner/tsconfig.json:16-24`
+
 - **2026-08-17** — A subagent's write access **can** be fenced to a path
   mechanically, and `.claude/agents/README.md` recorded the opposite as an open
   question. `settings.json` permission *rules* cannot scope a grant per agent,
