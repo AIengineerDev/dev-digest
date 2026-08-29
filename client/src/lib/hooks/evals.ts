@@ -177,8 +177,13 @@ export function useUpdateEvalCase() {
       expected_output?: unknown;
       notes?: string | null;
     }) => api.put<EvalCase>(`/eval-cases/${caseId}`, patch),
-    onSuccess: (_d, { agentId }) =>
-      qc.invalidateQueries({ queryKey: ["eval-cases", agentId] }),
+    onSuccess: (_d, { agentId }) => {
+      qc.invalidateQueries({ queryKey: ["eval-cases", agentId] });
+      // The Skills page reads a DIFFERENT key: `/skills/:id/eval-cases` returns
+      // the sets of every agent linking the skill (spec 13, R14). Without this
+      // the row it shows is the pre-edit one.
+      qc.invalidateQueries({ queryKey: ["skill-eval-cases"] });
+    },
   });
 }
 
@@ -192,6 +197,11 @@ export function useDeleteEvalCase() {
     onSuccess: (_d, { agentId }) => {
       qc.invalidateQueries({ queryKey: ["eval-cases", agentId] });
       qc.invalidateQueries({ queryKey: ["eval-runs", agentId] });
+      // Same key the create path already invalidates. Without it the deleted
+      // row stays on the Skills page, and the next click on it asks the server
+      // to delete a row that is already gone — which answers, correctly,
+      // "eval case not found", so a delete that WORKED reports as a failure.
+      qc.invalidateQueries({ queryKey: ["skill-eval-cases"] });
     },
   });
 }
