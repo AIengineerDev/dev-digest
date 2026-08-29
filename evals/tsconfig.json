@@ -35,6 +35,17 @@
   "include": [
     "run.ts",
     "delta.ts",
-    "src/**/*.ts"
+    "eval.ts",
+    "series.ts",
+    "quality.test.ts",
+    "src/**/*.ts",
+    "skills/**/*.ts",
+    "agents/**/*.ts",
+    "workflow/**/*.ts"
+  ],
+  "exclude": [
+    "**/fixtures/**",
+    "node_modules",
+    "results"
   ]
 }

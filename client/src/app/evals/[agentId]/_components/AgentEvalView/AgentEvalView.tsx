@@ -21,7 +21,7 @@ import {
   SectionLabel,
   Skeleton,
 } from "@devdigest/ui";
-import { useAgentEvalRuns, useRunEvals } from "@/lib/hooks";
+import { useAgentEvalCases, useAgentEvalRuns, useRunEvals } from "@/lib/hooks";
 import { CompareModal } from "@/components/EvalCompare";
 import { MiniBar } from "./MiniBar";
 import { regressionAlert, trendOf } from "./helpers";
@@ -35,6 +35,9 @@ export function AgentEvalView({ agentId }: { agentId: string }) {
   const t = useTranslations("eval");
   const router = useRouter();
   const runs = useAgentEvalRuns(agentId);
+  // Needed only to say how many cases a partial run is missing — the number
+  // that makes "partial" actionable instead of mysterious.
+  const cases = useAgentEvalCases(agentId);
   const run = useRunEvals();
   const [compareOpen, setCompareOpen] = React.useState(false);
   // Selection is by `ran_at` because that IS the run's identity here — the rows
@@ -47,10 +50,16 @@ export function AgentEvalView({ agentId }: { agentId: string }) {
   if (runs.isError) return <ErrorState title={t("dashboard.loadFailed")} body={String(runs.error)} />;
 
   const groups = runs.data ?? [];
-  // A partial group's metrics are means over a subset — never the headline.
+  // A partial group's metrics are means over a subset — never the headline, and
+  // never a trend point. But "no complete run" is not "never evaluated":
+  // `complete` compares each past run against the CURRENT case count, so adding
+  // one case marks every run in the history partial at once. Saying "never
+  // evaluated" on a page whose own subtitle counts 19 runs is the one thing
+  // this screen must not do.
   const complete = groups.filter((g) => g.complete);
   const latest = complete[0] ?? null;
   const previous = complete[1] ?? null;
+  const newest = groups[0] ?? null;
   const alert = regressionAlert(latest, previous);
   const chosen = groups.filter((g) => picked.includes(g.ran_at));
   const pctOf = (v: number) => Math.round(v * 100);
@@ -95,8 +104,16 @@ export function AgentEvalView({ agentId }: { agentId: string }) {
       {latest === null ? (
         <EmptyState
           icon="FlaskConical"
-          title={t("agent.neverRun")}
-          body={t("agent.neverRunBody")}
+          title={newest === null ? t("agent.neverRun") : t("agent.partial")}
+          body={
+            newest === null
+              ? t("agent.neverRunBody")
+              : t("agent.partialBody", {
+                  runs: groups.length,
+                  total: cases.data?.length ?? newest.cases_total,
+                  covered: newest.cases_total,
+                })
+          }
         />
       ) : (
         <>

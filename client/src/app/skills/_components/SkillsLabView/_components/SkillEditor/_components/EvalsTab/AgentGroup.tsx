@@ -27,17 +27,33 @@ export function AgentGroup({
   const run = useRunEvals();
   const [creating, setCreating] = React.useState(false);
   const [editing, setEditing] = React.useState<EvalCase | null>(null);
-  // Only a finished run may be the headline — a partial one reports means over
-  // a subset and reads better than it is.
-  const latest = (runs.data ?? []).find((g) => g.complete) ?? null;
+  // Only a finished run may be the HEADLINE — a partial one reports means over
+  // a subset and reads better than it is. But a partial run is still a run:
+  // falling back to null made the badge say "never run" for an agent with 19
+  // of them, because `complete` compares each past run against the CURRENT
+  // case count, so adding one case blanks the whole history.
+  const groups = runs.data ?? [];
+  const complete = groups.find((g) => g.complete) ?? null;
+  const latest = complete ?? groups[0] ?? null;
+  const partial = latest !== null && complete === null;
 
   return (
     <div style={s.group}>
       <div style={s.groupHead}>
         <span style={s.groupName}>{name}</span>
         {latest ? (
-          <Badge color={latest.passed === latest.cases_total ? "var(--ok)" : "var(--warn)"}>
-            {t("evals.passing", { passed: latest.passed, total: latest.cases_total })}
+          <Badge
+            color={
+              partial
+                ? "var(--text-muted)"
+                : latest.passed === latest.cases_total
+                  ? "var(--ok)"
+                  : "var(--warn)"
+            }
+          >
+            {partial
+              ? t("evals.partial", { covered: latest.cases_total, total: cases.length })
+              : t("evals.passing", { passed: latest.passed, total: latest.cases_total })}
           </Badge>
         ) : (
           <Badge color="var(--text-muted)">{t("evals.neverRun")}</Badge>

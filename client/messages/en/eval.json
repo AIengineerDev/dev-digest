@@ -105,6 +105,8 @@
     "running": "Running…",
     "neverRun": "This agent has never been evaluated",
     "neverRunBody": "Run the set once to get a baseline — a single run is a point, not a trend.",
+    "partial": "No complete run yet",
+    "partialBody": "{runs} run(s) recorded, but none covers all {total} cases — the newest covers {covered}. Cases added since a run leave it partial. Run the set again for a headline number.",
     "trend": "Metric trend",
     "recentRuns": "Recent runs",
     "alert": {

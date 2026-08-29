@@ -35,6 +35,8 @@ Drizzle ORM + Postgres (pgvector) · Zod · Vitest · agent-browser (e2e)
 | Engine          | `cd reviewer-core && npm test \| npm run typecheck`        |
 | E2E (hermetic)  | `cd e2e && npm run e2e:hermetic`                            |
 | MCP server      | `cd mcp && npm test \| npm run typecheck`                   |
+| Evals (free)    | `cd evals && pnpm eval:quality`                             |
+| Evals (spends)  | `cd evals && pnpm eval:skills \| eval:agents \| eval:workflow` |
 
 Flags for `dev.sh`: `--no-seed` · `--no-client` · `--db-only` · `--help`.
 
@@ -56,6 +58,7 @@ pull up Postgres via testcontainers. While iterating, scope it:
 | `reviewer-core/`            | Pure engine: diff + repo map → prompt → LLM → findings    |
 | `e2e/`                      | Deterministic browser flows, no LLM                       |
 | `mcp/`                      | `devdigest-mcp` — the reviewers as MCP tools over stdio    |
+| `evals/`                    | Two harnesses: `run.ts` (A/B fixtures, needs a key) · `eval.ts` (live sessions, your Claude login) |
 | `server/src/vendor/shared/` | `@devdigest/shared` — Zod contracts for every package     |
 | `client/src/vendor/ui/`     | `@devdigest/ui` — vendored UI primitives                  |
 
@@ -78,6 +81,26 @@ pull up Postgres via testcontainers. While iterating, scope it:
   Postgres). Everything else must stay hermetic.
 - Secrets live in `~/.devdigest/secrets.json` (mode 0600) with `process.env` as
   fallback — never in git or the database.
+
+## After changing a skill, an agent, or this file
+
+These artefacts have no type checker and no test suite of their own — a broken
+skill description or a renamed agent fails silently, at routing time, in someone
+else's session. `evals/` is what catches that. Run the row that matches what you
+touched, from `evals/` (see `evals/README.md` for the two harnesses and why
+`eval:quality` is the only one safe to block CI on):
+
+| You changed | Minimum check |
+| --- | --- |
+| `.claude/skills/**` | `pnpm eval:quality`, plus that skill's own eval if it has one (`evals/skills/<name>/`) |
+| `.claude/agents/**` | `pnpm eval:quality`, plus `pnpm eval:agents --suite <name>` and the workflow case that dispatches it |
+| `AGENTS.md` / `CLAUDE.md` / routing rules | `pnpm eval:workflow` — this file IS the thing under test |
+| an eval case, a fixture, or a grader | re-run the baseline series and re-label it; a scorer change invalidates every number recorded before it |
+
+`pnpm eval:quality` is free and takes ~100 ms. The model levels spend real money
+and authenticate with your Claude login, so they run on request, not on every
+commit. A new skill should arrive with its cases — `eval:quality` reports the
+gap as a warning, and a skill that never gets one keeps that warning forever.
 
 ## Gotchas
 
