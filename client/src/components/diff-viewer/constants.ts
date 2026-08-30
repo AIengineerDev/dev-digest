@@ -23,6 +23,6 @@ export const SEVERITY_COLOR_FALLBACK = "var(--text-muted)";
  * Revealing the stale findings expands every file that carries one, so the page
  * keeps growing under a scroll that has already run — the target ends up above
  * or below the viewport. Same reason the Findings tab re-aims at a revealed
- * card (`FindingCard/constants.ts`).
+ * card (`components/finding-card/constants.ts`).
  */
 export const REVEAL_RETRY_DELAYS_MS = [120, 600] as const;

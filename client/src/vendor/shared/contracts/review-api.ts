@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Finding, Verdict } from './findings.js';
 import { DerivedIntent, SmartDiff } from './brief.js';
+import { RunSummary } from './trace.js';
 
 /**
  * A2 — Review-Core API surface contracts. These extend the core
@@ -55,8 +56,76 @@ export const ReviewRunResponse = z.object({
   pr_id: z.string(),
   runs: z.array(ReviewRunTarget),
   reviews: z.array(ReviewRecord),
+  /** Shared group id when this POST fanned out to more than one agent; null on
+   *  a single-agent run — never invented for one. */
+  multi_agent_run_id: z.string().nullable(),
 });
 export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;
+
+/**
+ * One agent's take on a grouped finding location. `finding: null` means this
+ * agent ran over the location and did not flag it — a claim the server stands
+ * behind, not an inference the client draws from an absence.
+ */
+export const FindingGroupTake = z.object({
+  agent_id: z.string(),
+  agent_name: z.string().nullable(),
+  finding: FindingRecord.nullable(),
+});
+export type FindingGroupTake = z.infer<typeof FindingGroupTake>;
+
+/**
+ * Findings from a multi-agent run, grouped by file + overlapping line range.
+ * `takes` covers every agent in the run, including silent ones. `conflict` is
+ * true when at least one agent flagged the location and at least one did not.
+ */
+export const FindingGroup = z.object({
+  key: z.string(),
+  file: z.string(),
+  anchor_start: z.number().int(),
+  anchor_end: z.number().int(),
+  title: z.string(),
+  takes: z.array(FindingGroupTake),
+  conflict: z.boolean(),
+});
+export type FindingGroup = z.infer<typeof FindingGroup>;
+
+/**
+ * Served by `GET /pulls/:id/multi-agent-runs/:multiAgentRunId`. No `pr_id`:
+ * the route is nested under the PR, so the path already carries it.
+ */
+export const MultiAgentRunView = z.object({
+  runs: z.array(RunSummary),
+  groups: z.array(FindingGroup),
+});
+export type MultiAgentRunView = z.infer<typeof MultiAgentRunView>;
+
+/**
+ * Served by `GET /repos/:id/multi-agent-runs/latest` — the repo's most recent
+ * group, or `null` when it has none (a state, not an error). camelCase because
+ * that is what the query already returns
+ * (`repository/run.repo.ts:115-132`); do not "normalise" it to snake_case
+ * without changing the reader in the same commit.
+ */
+export const LatestMultiAgentRun = z.object({
+  id: z.string(),
+  prId: z.string(),
+  prNumber: z.number().int(),
+});
+export type LatestMultiAgentRun = z.infer<typeof LatestMultiAgentRun>;
+
+/**
+ * Served by `GET /agents/estimates` — one row per agent that has at least one
+ * `done` run. `null` (never `0`) where a metric has no history: an absence and
+ * a zero are different claims (R9). Not `.int()` on the duration: the median of
+ * an even-sized sample is a mean of two values (`run.repo.ts:161-166`).
+ */
+export const AgentEstimate = z.object({
+  agent_id: z.string(),
+  median_duration_ms: z.number().nullable(),
+  median_cost_usd: z.number().nullable(),
+});
+export type AgentEstimate = z.infer<typeof AgentEstimate>;
 
 /** Derived intent persisted for a PR (the DerivedIntent plus the pr_id it scopes). */
 export const PrIntentRecord = DerivedIntent.extend({ pr_id: z.string() });
