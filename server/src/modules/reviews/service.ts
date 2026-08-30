@@ -235,7 +235,12 @@ export class ReviewService {
     // (still executing, or failed before writing one) — so `takes` covers
     // every agent in the run, silent ones included (C3).
     const byRunId = new Map(reviewRows.map((r) => [r.review.runId, r]));
-    const perAgent = runs.map((run) => {
+    // Only a finished run can hold an opinion. `finding: null` means "this agent
+    // ran over this location and did not flag it" (`specs/14:134`) — a claim a
+    // crashed or in-flight run never made. Counting it as one turned `conflict`
+    // true for every group in the run the moment a single agent errored.
+    const completed = runs.filter((run) => run.status === 'done');
+    const perAgent = completed.map((run) => {
       const row = run.run_id ? byRunId.get(run.run_id) : undefined;
       return {
         // Falls back to the run id (never empty, never shared between two
