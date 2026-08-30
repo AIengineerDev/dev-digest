@@ -187,6 +187,30 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Doesn't Work
 
+- **2026-08-29** — An eval case asked **inside a fixture that demonstrates the
+  answer** measures the fixture, not the skill. The `new-port` case ("where does
+  a new external dependency go?") scored **3/3 in both arms** on
+  `claude-sonnet-5` — with the `onion-architecture` skill and without it —
+  because the fixture ships a `src/platform/container.ts` showing the pattern,
+  and a model that reads it answers correctly with nothing attached. The
+  discriminator has to be a rule the skill states that the tree does **not**
+  exhibit: rewritten to ask whether a pure, credential-free diff parser should
+  become a port (the skill says no; "wrap it for testability" is the reflex
+  answer without it). Before trusting a case, run the control — an expectation
+  both arms pass is decoration.
+  `evals/skills/onion-architecture/onion-architecture.cases.ts`
+
+- **2026-08-29** — Do not fix a long-running activation eval by telling the
+  prompt not to do the thing the skill exists to do. The `activation-positive`
+  case activates `engineering-insights`, then burns a ten-minute wall trying to
+  write `INSIGHTS.md` with `Write` blocked, and dies on the timeout. Adding "you
+  have no write access, quote the entry instead" dropped `insights-activated`
+  from **1/1 to 0/1** and the session aborted anyway — forbidding the write
+  suppressed the activation being measured, so the case stopped measuring
+  anything and stayed red. An activation case is answered in its first turns and
+  wants a **short per-case deadline with a verdict on the evidence collected
+  before it**, not a prompt edit. `evals/workflow/workflow.cases.ts`
+
 - **2026-08-29** — A build step that reads `design-mocks/` passes locally and
   fails in **every** CI checkout: the directory is gitignored (`.gitignore:22`,
   rationale at `:17-21` — it is unpacked from a 1.7 MB base64 bundle that does
@@ -389,6 +413,20 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## Tool & Library Notes
 
+- **2026-08-29** — Two `@anthropic-ai/claude-agent-sdk` session options do not
+  do what their names suggest, and both were measured, not read.
+  **`allowedTools` does not restrain anything.** A session configured with only
+  `['Read','Grep','Glob']` still called `Bash` and `Agent`, spent all 24 turns
+  shelling around the fixture and ended in `error_max_turns` with nothing
+  graded — a sandbox failure that reads as a failure of the thing under test.
+  `disallowedTools` is the half that blocks; set both.
+  **Omitting `systemPrompt` is not "the default prompt", it is a different
+  prompt** — the Claude Code preset applies only when you pass
+  `{type:'preset',preset:'claude_code'}`. A control arm that omits it while the
+  treatment appends a skill body to the preset differs in *two* variables, and
+  the delta stops being about the skill. Always send the preset on both sides;
+  put the body in `append`. `evals/src/session.ts` (`runSession`)
+
 - **2026-08-17** — A subagent's write access **can** be fenced to a path
   mechanically, and `.claude/agents/README.md` recorded the opposite as an open
   question. `settings.json` permission *rules* cannot scope a grant per agent,
@@ -499,6 +537,17 @@ input but left responses unchecked, so contract drift surfaced in the browser.
   before debugging either side. `server/src/vendor/shared/adapters.ts:48`
 
 ## Recurring Errors & Fixes
+
+- **2026-08-29** — A grader that hard-codes a tool **name** produces a false
+  negative that reads as a bug in the thing under test. The `dispatch` workflow
+  case scored 0 while its own trajectory showed an `Agent` call as the session's
+  first act: the recorder pulled `subagent_type` off a tool named `Task`, and
+  this harness emits **`Agent`**. The report said "the harness did not dispatch",
+  which points the fix at `AGENTS.md` instead of at the grader. Record the whole
+  tool input and match by pattern for any tool whose name or argument key is not
+  pinned by the SDK's public types — `Task`/`Agent` and `Skill` are all in that
+  class. Rule of thumb: when a case fails, read the trajectory before believing
+  the verdict. `evals/src/session.ts` (`record`) · `evals/src/grade.ts`
 
 - **2026-08-27** — An eval scorecard that matches each expectation against the
   findings **independently** lies in both directions, and it lies quietly. Score

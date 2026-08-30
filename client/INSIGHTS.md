@@ -401,6 +401,33 @@ to display data already sitting in memory.
 
 ## Recurring Errors & Fixes
 
+- **2026-08-29** — `EvalRunGroup.complete` is `rows >= the agent's CURRENT case
+  count`, so **adding one case retroactively marks every run in the history
+  partial**. Three screens read `find(g => g.complete) ?? null` and rendered that
+  as never-run: the agent dashboard printed "This agent has never been evaluated"
+  directly under its own subtitle counting 19 runs, and the Skills tab showed
+  "never run" on a set that had just finished. The rule is right — a partial
+  group's metrics are means over a subset and must not be a headline or a trend
+  point — but "no complete run" and "never evaluated" are different claims and
+  only one of them may use the empty state. Reserve never-run for
+  `groups.length === 0` and show coverage ("covers 7 of 8") otherwise.
+  `client/src/app/evals/[agentId]/_components/AgentEvalView/AgentEvalView.tsx` ·
+  `.../SkillEditor/_components/EvalsTab/AgentGroup.tsx` ·
+  `server/src/modules/eval/service.ts:434`
+
+- **2026-08-29** — The eval case list is read under **two different React Query
+  keys**, and mutating under one leaves the other stale: agent screens use
+  `["eval-cases", agentId]`, the Skills tab uses `["skill-eval-cases", skillId]`
+  because `GET /skills/:id/eval-cases` returns the sets of every agent linking
+  that skill (spec 13, R14). `useCreateManualEvalCase` invalidated both; delete,
+  update and the two run mutations invalidated only the first. The delete case is
+  the one that hurts: the row stayed on screen, the next click asked the server
+  to delete a row already gone, and the honest `404 eval case not found` made a
+  **successful destructive action report as a failure** — so the natural response
+  is to try again, after the run history is already deleted. When one resource has
+  two cache keys, every mutation invalidates both.
+  `client/src/lib/hooks/evals.ts` (`useDeleteEvalCase`, `useRunEvals`)
+
 - **2026-08-26** — A test for a **fallback branch** whose fixture value is a key
   of the very map it claims to fall back from is unfalsifiable: it exercises the
   happy path under the fallback's name, passes forever, and would keep passing if
