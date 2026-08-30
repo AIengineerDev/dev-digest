@@ -1,6 +1,7 @@
 # Worktree fan-out — two features, three PRs
 
-**2026-08-29 21:00Z → 2026-08-30 00:36Z · 3h 35m wall clock · ~1.96M subagent tokens · 21 agents**
+**Fan-out: 2026-08-29 21:00Z → 2026-08-30 00:36Z · 3h 35m wall clock · 1,960,647 subagent tokens · 21 agents**
+**Demo enablement afterwards: ~1h, no subagents — done directly.**
 
 ## What shipped
 
@@ -102,3 +103,48 @@ The implementers caught all three and reported rather than followed.
 - **No tests on PR A or PR C.** Binding constraint from plan 15; A9 and A12 stay
   unproven, along with any real OpenRouter or GitHub call.
 - The retry fix on PR B was verified by code-tracing, not a live click.
+
+## After the fan-out — getting it runnable, and what that found
+
+The build was finished; making it *run* was a separate hour, and it surfaced
+things no gate had.
+
+**A defect only the running app revealed.** The first live multi-agent run
+returned 5 groups and 5 conflicts — every one false. `groupFindings` received
+every run, so an agent that crashed became a take with `finding: null`, and
+`conflict` is `flagged && silent`. One agent erroring turned the whole
+"Where agents disagree" panel into noise.
+`specs/14-multi-agent-review.md:134` defines `null` as *"this agent ran over
+this location and did not flag it"* — a claim a crashed run never made. Only
+completed runs are grouped now: **5 groups, 1 real conflict.** This is exactly
+what the skipped `accept` stage (verification against the spec, not the plan)
+exists to catch.
+
+**Two config faults that predate this work.** `client/.env` pointed the browser
+at port 3002 while the API serves 3001, so every client-side fetch failed
+silently — that is why the repo picker looked empty and the PR list looked
+unsynced. And a `dev.sh` was running from a *different worktree*, respawning
+servers on the wrong branch.
+
+**Two screens the mock showed and no branch had.** `CI Runs` and `Memory` were
+nav entries in `design-mocks/src/23-screen_cizruns.jsx` with tables behind them
+that nothing ever wrote. `ci_runs` now ingests the repositories' own GitHub
+Actions history — 100 runs on first sync — which redefines the screen from
+"agent reviews in CI" to "CI for your repos"; the subtitle says so. `Memory`
+ships read-only over the RAG store and states in its empty state that nothing
+writes it yet, rather than leaving a reader guessing.
+
+**Process notes worth keeping:** running `pnpm build` while `next dev` is live
+clobbers the dev server's chunk cache (`Cannot find module './5585.js'`); and a
+stray `prettier --write` with the wrong config rewrote a whole file from single
+to double quotes — 89 lines of churn, reverted and re-applied as 6.
+
+## Deliverables
+
+| | Where |
+| --- | --- |
+| PR — Multi-Agent Review | [#23](https://github.com/AIengineerDev/dev-digest/pull/23) |
+| PR — Export to CI (product) | [#24](https://github.com/AIengineerDev/dev-digest/pull/24) |
+| PR — `agent-runner` (technical, merges first) | [#22](https://github.com/AIengineerDev/dev-digest/pull/22) |
+| Everything running together | branch `w8` |
+| This summary | `docs/retro/2026-08-29-worktree-fanout-summary.md` |
