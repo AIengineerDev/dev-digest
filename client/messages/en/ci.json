@@ -123,10 +123,10 @@
   },
   "ciRuns": {
     "title": "CI Runs",
-    "subtitle": "Agent reviews executed inside CI · not local runs",
+    "subtitle": "CI workflows and agent reviews that ran on your repositories",
     "autoRefresh": "auto-refresh on",
     "empty": "No CI runs yet",
-    "emptyBody": "Once you export an agent to CI, every automated review it runs shows up here.",
+    "emptyBody": "Sync to pull your repositories' GitHub Actions history, or export an agent to CI and its reviews will appear here too.",
     "loadError": "Could not load CI runs",
     "loadErrorBody": "The list could not be fetched. Retry, or check the API is running.",
     "col": {
@@ -136,13 +136,18 @@
       "source": "Source",
       "findings": "Findings",
       "cost": "Cost",
-      "status": "Status"
+      "status": "Status",
+      "repo": "Repository"
     },
     "status": {
       "succeeded": "Succeeded",
       "noFindings": "No findings",
       "failed": "Failed",
-      "running": "Running"
-    }
+      "running": "Running",
+      "cancelled": "Cancelled",
+      "queued": "Queued"
+    },
+    "sync": "Sync from GitHub",
+    "syncing": "Syncing…"
   }
 }

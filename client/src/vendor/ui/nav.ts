@@ -48,6 +48,7 @@ export const NAV: NavGroup[] = [
   {
     section: "GLOBAL",
     items: [
+      { key: "memory", label: "Memory", icon: "Database", href: "/memory" },
       { key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/repos/:repoId/multi-agent" },
       { key: "agent-performance", label: "Agent Performance", icon: "Activity", href: "/agent-performance", gKey: "f" },
       { key: "ci-runs", label: "CI Runs", icon: "Workflow", href: "/ci-runs" },

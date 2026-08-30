@@ -51,4 +51,15 @@ export default async function ciRoutes(appBase: FastifyInstance) {
     const { workspaceId } = await getContext(app.container, req);
     return service.listRuns(workspaceId);
   });
+
+  /**
+   * Pull each repository's GitHub Actions history into `ci_runs`.
+   *
+   * A POST because it writes and costs API calls — the screen triggers it, it
+   * is never a side effect of reading.
+   */
+  app.post('/ci-runs/sync', async (req): Promise<{ inserted: number; skipped: string[] }> => {
+    const { workspaceId } = await getContext(app.container, req);
+    return service.syncWorkflowRuns(workspaceId);
+  });
 }

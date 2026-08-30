@@ -6,7 +6,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { CiExport, CiExportInputBody, CiFile, CiInstallation, CiRun } from "@devdigest/shared";
+import type {
+  CiExport,
+  CiExportInputBody,
+  CiFile,
+  CiInstallation,
+  CiRun,
+  MemoryEntry,
+} from "@devdigest/shared";
 
 /** This agent's `ci_installations` rows — the CI tab's list (R1). */
 export function useCiInstallations(agentId?: string | null) {
@@ -64,5 +71,28 @@ export function useCiRuns() {
     queryKey: ["ci-runs"],
     queryFn: () => api.get<CiRun[]>("/ci-runs"),
     refetchInterval: 30_000,
+  });
+}
+
+/**
+ * Pull each repository's GitHub Actions history into `ci_runs`.
+ *
+ * A mutation, not a refetch: it writes rows and spends GitHub API calls, so it
+ * happens when someone asks for it. Invalidates the list on success so the new
+ * rows appear without a reload.
+ */
+export function useSyncCiRuns() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ inserted: number; skipped: string[] }>("/ci-runs/sync", {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ci-runs"] }),
+  });
+}
+
+/** Everything this workspace has learned — the Memory screen. */
+export function useMemory() {
+  return useQuery({
+    queryKey: ["memory"],
+    queryFn: () => api.get<MemoryEntry[]>("/memory"),
   });
 }

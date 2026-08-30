@@ -164,6 +164,31 @@ export interface GitHubClient {
   getIssue(repo: RepoRef, n: number): Promise<IssueMeta>;
   /** GET /user — for "posting as @user". */
   currentLogin(): Promise<string>;
+  /**
+   * Recent GitHub Actions workflow runs for a repository, newest first.
+   *
+   * Read-only and unrelated to the runs DevDigest itself starts — this is the
+   * repository's own CI, which the `CI Runs` screen lists alongside (and
+   * distinguished from) reviews an exported agent ran.
+   */
+  listWorkflowRuns(repo: RepoRef, limit?: number): Promise<WorkflowRun[]>;
+}
+
+/** One GitHub Actions workflow run, flattened to what the CI Runs screen shows. */
+export interface WorkflowRun {
+  /** GitHub's own run id — the idempotency key for ingestion. */
+  externalId: string;
+  workflowName: string;
+  /** `pull_request`, `push`, `schedule`, … */
+  event: string;
+  /** `success` | `failure` | `cancelled` | … ; null while still in progress. */
+  conclusion: string | null;
+  status: string;
+  prNumber: number | null;
+  htmlUrl: string;
+  runStartedAt: string | null;
+  /** Wall-clock seconds, when both timestamps are present. */
+  durationS: number | null;
 }
 
 // ---------- Git (simple-git, heavy) ----------

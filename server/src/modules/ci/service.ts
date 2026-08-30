@@ -197,6 +197,45 @@ export class CiService {
     const rows = await this.repo.listRuns(workspaceId);
     return rows.map((r) => ({ ...r, ran_at: r.ran_at ? r.ran_at.toISOString() : null }));
   }
+
+  /**
+   * Pull each repository's own GitHub Actions history into `ci_runs`.
+   *
+   * One repo failing does not fail the sync — a repo whose token cannot see
+   * Actions, or which has none, is skipped and reported rather than aborting
+   * the others. The count returned is rows actually inserted, so a second call
+   * over the same window returns 0 and that is success, not a no-op bug.
+   */
+  async syncWorkflowRuns(workspaceId: string): Promise<{ inserted: number; skipped: string[] }> {
+    const repos = await this.repo.listRepos(workspaceId);
+    const github = await this.container.github();
+
+    let inserted = 0;
+    const skipped: string[] = [];
+
+    for (const repo of repos) {
+      try {
+        const runs = await github.listWorkflowRuns({ owner: repo.owner, name: repo.name }, 50);
+        inserted += await this.repo.ingestWorkflowRuns(
+          repo.id,
+          runs.map((r) => ({
+            externalId: r.externalId,
+            workflowName: r.workflowName,
+            // `conclusion` is null while a run is still going; `status` carries
+            // "in_progress"/"queued" then, and that is what should show.
+            status: r.conclusion ?? r.status,
+            prNumber: r.prNumber,
+            htmlUrl: r.htmlUrl,
+            ranAt: r.runStartedAt ? new Date(r.runStartedAt) : null,
+          })),
+        );
+      } catch {
+        skipped.push(repo.fullName);
+      }
+    }
+
+    return { inserted, skipped };
+  }
 }
 
 /**

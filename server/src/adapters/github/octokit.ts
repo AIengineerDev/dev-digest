@@ -11,6 +11,7 @@ import type {
   OpenPrPayload,
   CommitFilesPayload,
   IssueMeta,
+  WorkflowRun,
 } from '@devdigest/shared';
 import { withRetry, withTimeout } from '../../platform/resilience.js';
 
@@ -368,5 +369,40 @@ export class OctokitGitHubClient implements GitHubClient {
       withTimeout(this.octokit.rest.users.getAuthenticated(), TIMEOUT),
     );
     return res.data.login;
+  }
+
+  /**
+   * The repository's own Actions runs. `pull_requests` is empty on a run
+   * triggered from a fork, so the PR number is best-effort and nullable
+   * rather than derived from the branch name.
+   */
+  async listWorkflowRuns(repo: RepoRef, limit = 50): Promise<WorkflowRun[]> {
+    const res = await withRetry(() =>
+      withTimeout(
+        this.octokit.rest.actions.listWorkflowRunsForRepo({
+          owner: repo.owner,
+          repo: repo.name,
+          per_page: Math.min(limit, 100),
+        }),
+        TIMEOUT,
+      ),
+    );
+    return res.data.workflow_runs.map((r) => {
+      const started = r.run_started_at ?? r.created_at ?? null;
+      const ended = r.updated_at ?? null;
+      const durationS =
+        started && ended ? Math.max(0, Math.round((Date.parse(ended) - Date.parse(started)) / 1000)) : null;
+      return {
+        externalId: String(r.id),
+        workflowName: r.name ?? 'workflow',
+        event: r.event,
+        conclusion: r.conclusion ?? null,
+        status: r.status ?? 'unknown',
+        prNumber: r.pull_requests?.[0]?.number ?? null,
+        htmlUrl: r.html_url,
+        runStartedAt: started,
+        durationS,
+      };
+    });
   }
 }

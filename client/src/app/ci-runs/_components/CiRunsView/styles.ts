@@ -24,7 +24,7 @@ export const s = {
     overflowX: "auto",
     background: "var(--bg-elevated)",
   } as CSSProperties,
-  grid: "140px minmax(220px, 1fr) 150px 120px 110px 80px 110px",
+  grid: "150px 90px minmax(140px, 1fr) 190px 120px 90px 80px 110px",
   headRow: {
     padding: "10px 16px",
     background: "var(--bg-surface)",

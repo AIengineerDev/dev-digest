@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '../../db/client.js';
 import * as t from '../../db/schema.js';
 
@@ -16,6 +16,7 @@ export type CiRunRow = {
   github_url: string | null;
   source: string | null;
   agent: string | null;
+  repo: string | null;
 };
 
 /**
@@ -63,11 +64,11 @@ export class CiRepository {
   /**
    * Every CI run in the workspace, newest first.
    *
-   * The workspace predicate rides on `agents` because `ci_runs` carries no
-   * workspace of its own — it reaches one only through its installation. The
-   * joins are inner on purpose: a run whose installation was deleted
-   * (`on delete set null`) can no longer be attributed to a workspace, and
-   * showing it to whoever asks first is worse than not showing it at all.
+   * A row reaches a workspace by one of two paths and never both: an ingested
+   * Actions run carries `repo_id`, while a run an exported agent reported back
+   * carries an installation. Both joins are therefore LEFT, and the workspace
+   * predicate is the OR of the two — an inner join on either would silently
+   * drop the other kind.
    */
   async listRuns(workspaceId: string): Promise<CiRunRow[]> {
     return this.db
@@ -81,12 +82,81 @@ export class CiRepository {
         cost_usd: t.ciRuns.costUsd,
         github_url: t.ciRuns.githubUrl,
         source: t.ciRuns.source,
-        agent: t.agents.name,
+        agent: sql<string | null>`coalesce(${t.agents.name}, ${t.ciRuns.workflowName})`,
+        repo: t.repos.fullName,
       })
       .from(t.ciRuns)
-      .innerJoin(t.ciInstallations, eq(t.ciRuns.ciInstallationId, t.ciInstallations.id))
-      .innerJoin(t.agents, eq(t.ciInstallations.agentId, t.agents.id))
-      .where(eq(t.agents.workspaceId, workspaceId))
-      .orderBy(desc(t.ciRuns.ranAt));
+      .leftJoin(t.ciInstallations, eq(t.ciRuns.ciInstallationId, t.ciInstallations.id))
+      .leftJoin(t.agents, eq(t.ciInstallations.agentId, t.agents.id))
+      .leftJoin(t.repos, eq(t.ciRuns.repoId, t.repos.id))
+      .where(or(eq(t.agents.workspaceId, workspaceId), eq(t.repos.workspaceId, workspaceId)))
+      .orderBy(desc(t.ciRuns.ranAt))
+      .limit(200);
   }
+
+  /**
+   * The workspace's repositories — what `syncWorkflowRuns` iterates.
+   *
+   * Read here rather than through another module's repository: the container
+   * exposes no repos repository, and importing one module's internals from
+   * another is exactly what `no-cross-module-internals` forbids. A table read
+   * is data access, which is this layer's job.
+   */
+  async listRepos(workspaceId: string): Promise<{ id: string; owner: string; name: string; fullName: string }[]> {
+    return this.db
+      .select({
+        id: t.repos.id,
+        owner: t.repos.owner,
+        name: t.repos.name,
+        fullName: t.repos.fullName,
+      })
+      .from(t.repos)
+      .where(eq(t.repos.workspaceId, workspaceId));
+  }
+
+  /**
+   * Insert the Actions runs this repo has not stored yet.
+   *
+   * Idempotent on `(repo_id, external_id)`: re-syncing the same window inserts
+   * nothing. There is no unique index behind that — the column was added to an
+   * existing table — so the check is a read-then-filter, which is honest about
+   * being last-writer-wins under two concurrent syncs of the same repo.
+   */
+  async ingestWorkflowRuns(
+    repoId: string,
+    runs: {
+      externalId: string;
+      workflowName: string;
+      status: string | null;
+      prNumber: number | null;
+      htmlUrl: string;
+      ranAt: Date | null;
+    }[],
+  ): Promise<number> {
+    if (runs.length === 0) return 0;
+
+    const existing = await this.db
+      .select({ externalId: t.ciRuns.externalId })
+      .from(t.ciRuns)
+      .where(eq(t.ciRuns.repoId, repoId));
+    const seen = new Set(existing.map((r) => r.externalId).filter(Boolean));
+
+    const fresh = runs.filter((r) => !seen.has(r.externalId));
+    if (fresh.length === 0) return 0;
+
+    await this.db.insert(t.ciRuns).values(
+      fresh.map((r) => ({
+        repoId,
+        externalId: r.externalId,
+        workflowName: r.workflowName,
+        status: r.status,
+        prNumber: r.prNumber,
+        githubUrl: r.htmlUrl,
+        ranAt: r.ranAt,
+        source: 'github_actions',
+      })),
+    );
+    return fresh.length;
+  }
+
 }

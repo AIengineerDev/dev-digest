@@ -18,17 +18,27 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { EmptyState, ErrorState, Skeleton, Icon, Badge } from "@devdigest/ui";
+import { EmptyState, ErrorState, Skeleton, Icon, Badge, Button } from "@devdigest/ui";
 import type { CiRun } from "@devdigest/shared";
 import { AppShell } from "../../../../components/app-shell";
-import { useCiRuns } from "../../../../lib/hooks/ci";
+import { useCiRuns, useSyncCiRuns } from "../../../../lib/hooks/ci";
 import { s } from "./styles";
 
+/* Two vocabularies land in this column and both are real. A DevDigest agent
+   reporting back writes `succeeded`/`failed`/`no_findings`; an ingested Actions
+   run carries GitHub's own `success`/`failure`/`cancelled`/`in_progress`. They
+   are mapped, not normalised on the way in — rewriting a provider's status on
+   ingest loses what it actually said. */
 const STATUS: Record<string, { color: string; key: string }> = {
   succeeded: { color: "var(--ok)", key: "succeeded" },
+  success: { color: "var(--ok)", key: "succeeded" },
   no_findings: { color: "var(--text-secondary)", key: "noFindings" },
   failed: { color: "var(--crit)", key: "failed" },
+  failure: { color: "var(--crit)", key: "failed" },
+  cancelled: { color: "var(--text-muted)", key: "cancelled" },
   running: { color: "var(--warn)", key: "running" },
+  in_progress: { color: "var(--warn)", key: "running" },
+  queued: { color: "var(--text-muted)", key: "queued" },
 };
 
 function when(iso: string | null) {
@@ -40,6 +50,7 @@ function when(iso: string | null) {
 export function CiRunsView() {
   const t = useTranslations("ci");
   const { data, isLoading, isError, refetch } = useCiRuns();
+  const sync = useSyncCiRuns();
 
   if (isLoading) {
     return (
@@ -85,6 +96,8 @@ export function CiRunsView() {
             icon="Workflow"
             title={t("ciRuns.empty")}
             body={t("ciRuns.emptyBody")}
+            cta={sync.isPending ? t("ciRuns.syncing") : t("ciRuns.sync")}
+            onCta={() => sync.mutate()}
           />
         </div>
       </AppShell>
@@ -95,6 +108,7 @@ export function CiRunsView() {
     t("ciRuns.col.timestamp"),
     t("ciRuns.col.pullRequest"),
     t("ciRuns.col.agent"),
+    t("ciRuns.col.repo"),
     t("ciRuns.col.source"),
     t("ciRuns.col.findings"),
     t("ciRuns.col.cost"),
@@ -113,6 +127,15 @@ export function CiRunsView() {
             <span style={s.dot} />
             {t("ciRuns.autoRefresh")}
           </span>
+          <Button
+            kind="secondary"
+            size="sm"
+            icon="RefreshCw"
+            disabled={sync.isPending}
+            onClick={() => sync.mutate()}
+          >
+            {sync.isPending ? t("ciRuns.syncing") : t("ciRuns.sync")}
+          </Button>
         </div>
       </div>
 
@@ -153,6 +176,9 @@ export function CiRunsView() {
               <span style={s.agent}>
                 <Icon.Cpu size={13} style={{ color: "var(--text-muted)" }} />
                 {r.agent ?? "—"}
+              </span>
+              <span className="mono" style={s.num}>
+                {r.repo ?? "—"}
               </span>
               <span style={s.num}>{r.source ?? "—"}</span>
               <span className="tnum" style={s.num}>
