@@ -50,6 +50,7 @@ export const NAV: NavGroup[] = [
     items: [
       { key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/repos/:repoId/multi-agent" },
       { key: "agent-performance", label: "Agent Performance", icon: "Activity", href: "/agent-performance", gKey: "f" },
+      { key: "ci-runs", label: "CI Runs", icon: "Workflow", href: "/ci-runs" },
     ],
   },
 ];

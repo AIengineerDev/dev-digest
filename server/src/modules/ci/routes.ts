@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { CiExportInput, type CiExport, type CiInstallation } from '@devdigest/shared';
+import { CiExportInput, type CiExport, type CiInstallation, type CiRun } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
 import { CiService } from './service.js';
@@ -45,4 +45,10 @@ export default async function ciRoutes(appBase: FastifyInstance) {
       return service.listInstallations(workspaceId, req.params.id);
     },
   );
+
+  /** Workspace-wide: every review an exported agent ran inside CI. */
+  app.get('/ci-runs', async (req): Promise<CiRun[]> => {
+    const { workspaceId } = await getContext(app.container, req);
+    return service.listRuns(workspaceId);
+  });
 }

@@ -9,7 +9,7 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { AgentManifest, CiExport, CiExportInput, CiFile } from '@devdigest/shared';
+import type { AgentManifest, CiExport, CiExportInput, CiFile, CiRun } from '@devdigest/shared';
 import type { Container } from '../../platform/container.js';
 import { NotFoundError, ValidationError } from '../../platform/errors.js';
 import type { AgentRow } from '../../db/rows.js';
@@ -182,6 +182,20 @@ export class CiService {
       target_type: r.targetType,
       installed_at: r.installedAt.toISOString(),
     }));
+  }
+
+  /**
+   * Every CI run in the workspace, newest first — what the `CI Runs` screen
+   * reads.
+   *
+   * Unlike `listInstallations` there is no agent to resolve first: the
+   * repository carries the workspace predicate through its
+   * installation → agent join, so an empty list here means "none have run",
+   * never "not yours".
+   */
+  async listRuns(workspaceId: string): Promise<CiRun[]> {
+    const rows = await this.repo.listRuns(workspaceId);
+    return rows.map((r) => ({ ...r, ran_at: r.ran_at ? r.ran_at.toISOString() : null }));
   }
 }
 

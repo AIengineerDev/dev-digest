@@ -120,5 +120,29 @@
   },
   "page": {
     "crumb": "CI Runs"
+  },
+  "ciRuns": {
+    "title": "CI Runs",
+    "subtitle": "Agent reviews executed inside CI · not local runs",
+    "autoRefresh": "auto-refresh on",
+    "empty": "No CI runs yet",
+    "emptyBody": "Once you export an agent to CI, every automated review it runs shows up here.",
+    "loadError": "Could not load CI runs",
+    "loadErrorBody": "The list could not be fetched. Retry, or check the API is running.",
+    "col": {
+      "timestamp": "Timestamp",
+      "pullRequest": "Pull request",
+      "agent": "Agent",
+      "source": "Source",
+      "findings": "Findings",
+      "cost": "Cost",
+      "status": "Status"
+    },
+    "status": {
+      "succeeded": "Succeeded",
+      "noFindings": "No findings",
+      "failed": "Failed",
+      "running": "Running"
+    }
   }
 }

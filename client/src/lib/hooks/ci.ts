@@ -6,7 +6,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { CiExport, CiExportInputBody, CiFile, CiInstallation } from "@devdigest/shared";
+import type { CiExport, CiExportInputBody, CiFile, CiInstallation, CiRun } from "@devdigest/shared";
 
 /** This agent's `ci_installations` rows — the CI tab's list (R1). */
 export function useCiInstallations(agentId?: string | null) {
@@ -48,5 +48,21 @@ export function useInstallCi() {
     onSuccess: (_d, { agentId }) => {
       qc.invalidateQueries({ queryKey: ["ci-installations", agentId] });
     },
+  });
+}
+
+/**
+ * Every CI run in the workspace, newest first — the `CI Runs` screen.
+ *
+ * Polled rather than pushed: these rows are written by a runner reporting back
+ * from someone else's CI, so there is no local run to subscribe to and no
+ * event to wait for. Thirty seconds is slow enough to be free and fast enough
+ * that a run finishing while the screen is open appears without a reload.
+ */
+export function useCiRuns() {
+  return useQuery({
+    queryKey: ["ci-runs"],
+    queryFn: () => api.get<CiRun[]>("/ci-runs"),
+    refetchInterval: 30_000,
   });
 }
