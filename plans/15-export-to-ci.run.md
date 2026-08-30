@@ -5,13 +5,14 @@
 **Spec:** specs/15-export-to-ci.md
 **Mode:** single implementer
 **Worktree:** /Users/alexlavre/Documents/my-dev-digest/devdigest-ci (`feat/export-to-ci`)
-**PR topology:** A = phases 1–2 (`agent-runner`), merges first — **open as #22, based on `w8`**. C = phases 3–7.
+**PR topology:** A = phases 1–2 (`agent-runner`) — **#22, based on `w8`**, merges first.
+C = phases 3–7 — branch `feat/export-to-ci-product`, **stacked on A**.
 
 | Stage | State | Artifact / note |
 | --- | --- | --- |
-| build | done (PR A) | Phases 1–2 landed: `agent-runner/` package, ncc bundle 952kB. Phases 3–7 resume after A merges |
-| verify | done (PR A) | 25 met · 1 partly met · 0 not met · 2 not checkable |
-| review | done, round 1 closed | architecture: no findings. security: 3 candidates, all below cutoff, 0 survived |
+| build | done (A and C) | A: phases 1–2. C: phases 3–7 — `ci` module, CI tab, export wizard, delete-cascade warning |
+| verify | done (A) · pending (C) | A: 25 met · 1 partly · 0 not met · 2 not checkable |
+| review | done (A) · pending (C) | A: architecture clean; security 3 candidates, 0 survived |
 | accept | pending | |
 | ship | pending | |
 
@@ -56,3 +57,22 @@ Two items deliberately carried forward rather than fixed in PR A:
   so the product PRs stay readable. The plan already encodes this at
   `plans/15-export-to-ci.plan.md:97-120`.
 - **2026-08-29** — Branch rebased onto `w8` (`a63d895`).
+
+## PR C — what the takeover found
+
+Two implementers were killed by a 600s no-output watchdog partway through
+phases 3–7; a third finished from their uncommitted work. What it inherited was
+sound but incomplete, and the gap was larger than the stall point suggested:
+
+- Phases 3 and 4 (`ci` module: generate, install) were **complete and correct**.
+- Phase 5 (CI tab) was complete but called two i18n keys that did not exist —
+  `ci.loadFailed` and `ci.ciTab.activeCount` — which would have rendered
+  next-intl fallback text rather than failing a gate.
+- **Phase 6 (the export wizard) did not exist at all.** `CiTab.tsx` carried
+  `{wizardOpen && null /* Export wizard modal — Phase 6 */}`. Built from scratch.
+- **Phase 7 (delete-cascade warning, R15) had not started.** `AgentCard.tsx` was
+  untouched, still on a hardcoded English `window.confirm`.
+
+Three stalls cost roughly 40 minutes of wall clock. All three followed long
+silent command chains; the run that succeeded was told to run gates one at a
+time and to print a progress line before each.
