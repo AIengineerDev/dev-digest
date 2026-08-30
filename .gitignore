@@ -52,3 +52,6 @@ Dev Digest*.zip
 _site/
 # The design bundle's zip, which otherwise sits untracked in the working tree.
 Dev Digest*.zip
+
+# macOS Finder droppings — never wanted, in any directory.
+.DS_Store

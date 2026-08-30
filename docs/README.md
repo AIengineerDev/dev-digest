@@ -6,6 +6,8 @@ one package. Human-first prose and diagrams; agents read it on demand via the
 
 | Path             | What                                                         |
 | ---------------- | ------------------------------------------------------------ |
+| `sdd-chain.md`   | Spec → shipped: every agent in the chain, the two commands, the rules that bite |
+| `adopting-the-chain.md` | Installing this chain in another repository — what transfers, what must be rewritten |
 | `agent-prompts/` | System prompts for the built-in reviewers + model choice notes |
 | `retro/`         | Running ledger of what we learned about the agent system itself |
 | `retro/*-session-log.md` | Raw per-session material for a later `/workflow-retro` — evidence, not findings |

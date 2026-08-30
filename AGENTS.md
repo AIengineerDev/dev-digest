@@ -170,6 +170,9 @@ gap as a warning, and a skill that never gets one keeps that warning forever.
   `plan-verifier`.
 - Read `docs/` for how the system works today across packages, before changing
   anything that already runs.
+- Read `docs/sdd-chain.md` for the spec → shipped chain itself — which agent owns
+  which stage, the `/spec` and `/ship` commands, and the four points where it stops
+  for a human.
 - Read `design-mocks/INDEX.md` when the work has a design — 28 extracted screen
   and component modules. **Never** open `DevDigest Design (standalone).html` at
   the repo root; it is a 1.8 MB base64 bundle and reading it wastes the context
