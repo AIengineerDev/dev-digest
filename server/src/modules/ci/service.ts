@@ -170,8 +170,11 @@ export class CiService {
     };
   }
 
-  async listInstallations(agentId: string): Promise<CiExport['installation'][]> {
-    const rows = await this.repo.listByAgent(agentId);
+  async listInstallations(workspaceId: string, agentId: string): Promise<CiExport['installation'][]> {
+    const agent = await this.container.agentsRepo.getById(workspaceId, agentId);
+    if (!agent) throw new NotFoundError(`Agent ${agentId} not found`);
+
+    const rows = await this.repo.listByAgent(agent.id);
     return rows.map((r) => ({
       id: r.id,
       agent_id: r.agentId,

@@ -35,11 +35,21 @@ export function slugify(name: string): string {
  * Assign one slug per name, in the given order, with `-2`/`-3` suffixes on
  * collision. Throws `ValidationError` naming the offending skill when a name
  * slugifies to the empty string (C7) — never silently drops it or emits a
- * path that could escape `.devdigest/skills/`.
+ * path that could escape `.devdigest/skills/`. Also rejects a raw name that
+ * contains a path separator or a `..` segment (e.g. `../etc`) by name rather
+ * than silently slugifying it into something else (C7) — `slugify` cannot
+ * actually escape `.devdigest/skills/`, so this is about failing loudly on a
+ * name the author did not choose, not a live traversal risk.
  */
 export function uniqueSlugs(names: string[]): string[] {
   const counts = new Map<string, number>();
   return names.map((name) => {
+    if (/[/\\]/.test(name) || name.includes('..')) {
+      throw new ValidationError(
+        `Skill "${name}" has an unsafe name (path separators or ".." are not allowed) — rename it before exporting.`,
+        { skill: name },
+      );
+    }
     const base = slugify(name);
     if (base === '') {
       throw new ValidationError(

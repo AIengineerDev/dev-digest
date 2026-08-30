@@ -23,7 +23,7 @@ export const SECRET_KEY_BY_PROVIDER: Record<Provider, SecretKey> = {
  * SHA corresponds to, so a future bump is a deliberate, reviewable edit.
  */
 export const CHECKOUT_ACTION_SHA = 'b4ffde65f46336ab88eb53be808477a3936bae11'; // actions/checkout@v4.1.1
-export const SETUP_NODE_ACTION_SHA = '60edb5dd545a775178f52524783378180af0d1f'; // actions/setup-node@v4.0.2
+export const SETUP_NODE_ACTION_SHA = '60edb5dd545a775178f52524783378180af0d1f8'; // actions/setup-node@v4.0.2
 
 /** Node version pinned for the setup-node step. */
 export const NODE_VERSION = '20';

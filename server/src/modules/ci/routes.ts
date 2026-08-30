@@ -41,8 +41,8 @@ export default async function ciRoutes(appBase: FastifyInstance) {
     '/agents/:id/ci-installations',
     { schema: { params: IdParams } },
     async (req): Promise<CiInstallation[]> => {
-      await getContext(app.container, req);
-      return service.listInstallations(req.params.id);
+      const { workspaceId } = await getContext(app.container, req);
+      return service.listInstallations(workspaceId, req.params.id);
     },
   );
 }

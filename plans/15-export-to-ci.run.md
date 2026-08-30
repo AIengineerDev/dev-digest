@@ -11,8 +11,8 @@ C = phases 3–7 — branch `feat/export-to-ci-product`, **stacked on A**.
 | Stage | State | Artifact / note |
 | --- | --- | --- |
 | build | done (A and C) | A: phases 1–2. C: phases 3–7 — `ci` module, CI tab, export wizard, delete-cascade warning |
-| verify | done (A) · pending (C) | A: 25 met · 1 partly · 0 not met · 2 not checkable |
-| review | done (A) · pending (C) | A: architecture clean; security 3 candidates, 0 survived |
+| verify | done (A and C) | A: 25 met · 0 not met. C: 23 met · **2 not met**, both fixed |
+| review | A done · C architecture only | A: arch clean, security 0 survived. C: 2 low findings, recorded not fixed. **C security review not run** |
 | accept | pending | |
 | ship | pending | |
 
@@ -76,3 +76,32 @@ sound but incomplete, and the gap was larger than the stall point suggested:
 Three stalls cost roughly 40 minutes of wall clock. All three followed long
 silent command chains; the run that succeeded was told to run gates one at a
 time and to print a progress line before each.
+
+## PR C — verification found two defects no gate could catch
+
+1. **`SETUP_NODE_ACTION_SHA` was 39 hex characters** (`server/src/modules/ci/constants.ts:26`).
+   A git SHA is always 40. Every exported workflow would have referenced an
+   `actions/setup-node@<ref>` that cannot resolve, killing the job at the setup
+   step. It typechecked, linted, built and passed every test — nothing renders the
+   generated YAML, so it would only have failed on a real runner. The true
+   `v4.0.2` SHA was confirmed against GitHub's API: the constant had lost its
+   trailing character. **Fixed.**
+2. **A skill named `../etc` was silently renamed to `etc`**, not rejected as C7
+   requires. Not a live traversal risk — the slug cannot escape
+   `.devdigest/skills/` — but it exported a file under a name the author never
+   chose. **Fixed**, and verified by running `uniqueSlugs` directly.
+3. **`GET /agents/:id/ci-installations` was authenticated but not workspace-scoped**
+   — found outside the plan's checklist. A valid session could read another
+   workspace's export history. **Fixed** by resolving the agent through the
+   workspace-scoped `agentsRepo.getById` first.
+
+## Not run for PR C, and deliberately so
+
+- **Security review.** Cut for time. Given that plan verification found a tenancy
+  gap here on its own, this is the most valuable thing left undone in this session.
+- **The `accept` stage** for both features — verification against `specs/14` and
+  `specs/15` rather than against the plans. It is the only pass that catches a
+  requirement the *planner* dropped, and plan 14 already proved planners drop
+  things: its contract section omitted two response shapes.
+- Two architecture findings on PR C, recorded and not fixed: a third copy of
+  `SECRET_KEY_BY_PROVIDER`, and `AgentCard` firing `useCiInstallations` per card.
