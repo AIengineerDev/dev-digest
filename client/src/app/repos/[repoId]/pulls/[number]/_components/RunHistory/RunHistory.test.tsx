@@ -4,7 +4,7 @@
  * a settled run is colored/labelled by its denormalized blocker/finding counts,
  * and shows the review score ring.
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import type { RunSummary } from "@devdigest/shared";
@@ -12,6 +12,11 @@ import messages from "../../../../../../../../messages/en/prReview.json";
 // RunCostBadge on each settled row reads the `runs` namespace.
 import runsMessages from "../../../../../../../../messages/en/runs.json";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+vi.mock("next/navigation", () => ({
+  useParams: () => ({ repoId: "repo1", number: "42" }),
+}));
+
 import { RunHistory } from "./RunHistory";
 import { severityCountsByRun, type SeverityCounts } from "./helpers";
 
@@ -36,6 +41,7 @@ function run(o: Partial<RunSummary>): RunSummary {
     score: null,
     blockers: null,
     head_sha: null,
+    multi_agent_run_id: null,
     ...o,
   };
 }
@@ -149,5 +155,25 @@ describe("severityCountsByRun", () => {
     expect(severityCountsByRun([review("r1", ["CRITICAL"]), review("r1", ["CRITICAL", "SUGGESTION"])])).toEqual({
       r1: { CRITICAL: 2, WARNING: 0, SUGGESTION: 1 },
     });
+  });
+});
+
+describe("RunHistory — multi-agent group header (R11)", () => {
+  it("runs sharing a multi_agent_run_id get one group header with a working link, other runs stay ungrouped", () => {
+    renderRuns([
+      run({ run_id: "r1", agent_name: "A", multi_agent_run_id: "group-1", ran_at: "2026-06-11T18:44:34.000Z" }),
+      run({ run_id: "r2", agent_name: "B", multi_agent_run_id: "group-1", ran_at: "2026-06-11T18:44:30.000Z" }),
+      run({ run_id: "r3", agent_name: "C", multi_agent_run_id: "group-1", ran_at: "2026-06-11T18:44:20.000Z" }),
+      run({ run_id: "r4", agent_name: "Solo", multi_agent_run_id: null, ran_at: "2026-06-11T18:44:10.000Z" }),
+    ]);
+
+    expect(screen.getByText("3 agents")).toBeInTheDocument();
+    expect(screen.getByText(runsMessages.group.compare)).toBeInTheDocument();
+    expect(screen.getAllByText(runsMessages.group.compare)).toHaveLength(1);
+  });
+
+  it("a PR with only single runs shows no group header at all", () => {
+    renderRuns([run({ run_id: "r1", agent_name: "Solo", multi_agent_run_id: null })]);
+    expect(screen.queryByText(runsMessages.group.compare)).not.toBeInTheDocument();
   });
 });

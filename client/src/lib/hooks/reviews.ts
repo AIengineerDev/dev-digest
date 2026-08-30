@@ -7,8 +7,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, API_BASE } from "../api";
 import { notify } from "../toast";
 import type {
+  AgentEstimate,
   BriefRecord,
   FindingActionKind,
+  LatestMultiAgentRun,
+  MultiAgentRunView,
   PrIntentRecord,
   PrReviewComment,
   ReviewRecord,
@@ -46,6 +49,39 @@ export function usePrRuns(prId: string | null | undefined) {
     enabled: !!prId,
     refetchInterval: (query) =>
       (query.state.data ?? []).some((r) => r.status === "running") ? 4000 : false,
+  });
+}
+
+// ---- A multi-agent run's results: member runs + server-grouped findings ----
+/** Backs the results screen (R5/R6). Polls while any member is still running,
+   mirroring `usePrRuns` above. */
+export function useMultiAgentRun(prId: string | null | undefined, id: string | null | undefined) {
+  return useQuery({
+    queryKey: ["multi-agent-run", prId, id],
+    queryFn: () => api.get<MultiAgentRunView>(`/pulls/${prId}/multi-agent-runs/${id}`),
+    enabled: !!prId && !!id,
+    refetchInterval: (query) =>
+      (query.state.data?.runs ?? []).some((r) => r.status === "running") ? 4000 : false,
+  });
+}
+
+/** The repo's most recent multi-agent run, or null — R8's landing screen
+   resolves this to know what to open on before rendering a form. */
+export function useLatestMultiAgentRun(repoId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["latest-multi-agent-run", repoId],
+    queryFn: () => api.get<LatestMultiAgentRun | null>(`/repos/${repoId}/multi-agent-runs/latest`),
+    enabled: !!repoId,
+  });
+}
+
+/** Per-agent median duration/cost over recent runs (R9). An agent absent from
+   the result has no run history — the caller renders `no estimate yet`, never
+   `~0s · $0.00` (a zero and an absence are different claims). */
+export function useAgentEstimates() {
+  return useQuery({
+    queryKey: ["agent-estimates"],
+    queryFn: () => api.get<AgentEstimate[]>("/agents/estimates"),
   });
 }
 
@@ -116,20 +152,23 @@ export function useCreatePrComment(prId: string | null | undefined) {
   });
 }
 
-// ---- Run a review (all enabled agents or a specific agent) ----
+// ---- Run a review (all enabled agents, a specific agent, or a subset) ----
 export interface RunReviewInput {
   prId: string;
   agentId?: string;
   all?: boolean;
+  /** Multi-agent subset (C1). Takes precedence over `agentId`/`all` server-side. */
+  agentIds?: string[];
 }
 
 export function useRunReview() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ prId, agentId, all }: RunReviewInput) =>
+    mutationFn: ({ prId, agentId, all, agentIds }: RunReviewInput) =>
       api.post<ReviewRunResponse>(`/pulls/${prId}/review`, {
         ...(agentId ? { agentId } : {}),
         ...(all ? { all } : {}),
+        ...(agentIds?.length ? { agentIds } : {}),
       }),
     onSuccess: (_d, { prId }) => {
       qc.invalidateQueries({ queryKey: ["reviews", prId] });

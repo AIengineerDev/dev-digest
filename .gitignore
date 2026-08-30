@@ -50,3 +50,5 @@ Dev Digest*.zip
 # in CI; never committed, because a checked-in copy of the prototype would be a
 # second source of truth that nothing keeps in sync.
 _site/
+# The design bundle's zip, which otherwise sits untracked in the working tree.
+Dev Digest*.zip

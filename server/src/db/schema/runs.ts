@@ -41,6 +41,14 @@ export const agentRuns = pgTable('agent_runs', {
    * written before this column, and on runs with no PR.
    */
   headSha: text('head_sha'),
+  /**
+   * Shared group id when this run was part of a multi-agent fan-out. Nullable,
+   * `on delete set null`, and never backfilled — every run written before this
+   * feature is a legitimate single run, and a single-agent run also stays null.
+   */
+  multiAgentRunId: uuid('multi_agent_run_id').references(() => multiAgentRuns.id, {
+    onDelete: 'set null',
+  }),
 });
 
 /** Whole trace of one run as a SINGLE jsonb document. */

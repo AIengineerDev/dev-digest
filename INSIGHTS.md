@@ -39,6 +39,13 @@ marketplace actually ships it is unimplementable, and offering it would have
 produced a script that silently no-ops on the common case.
 `scripts/rollback.sh:1-32`
 
+**Moved 2026-08-29.** The decision still holds; the code no longer lives here.
+The marketplace was extracted to `AIengineerDev/dev-digest-ai-marketplace`, and
+`plugins/`, `.claude-plugin/` and the release scripts went with it. This
+repository is now a consumer: it installs the plugins rather than publishing
+them. Kept because the reasoning is what a future maintainer needs, and it is
+not obvious from either repository alone.
+
 ### 2026-08-18 — The build chain buys judgement only where it changes a verdict
 
 **What:** the agent set is now mixed-model on purpose, not uniformly `opus`.
@@ -406,6 +413,24 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## Tool & Library Notes
 
+- **2026-08-29** — A package that reaches `@devdigest/reviewer-core` through a
+  `tsconfig.json` path alias (consumed as TypeScript source, same arrangement
+  as `@devdigest/shared`) pulls **reviewer-core's own runtime dependencies**
+  into its type-check too — `tsc` follows the aliased `.ts` files and their
+  imports, so `agent-runner`'s `npm run typecheck` failed with
+  `Cannot find module 'openai'` until `reviewer-core/node_modules` existed,
+  even though `agent-runner` itself never imports `openai`. `npm install` in
+  the sibling package is a real prerequisite, not an optional nicety — and
+  running it there touches that package's own `package-lock.json` with a
+  trivial `"peer": true` normalization npm adds on an existing lockfile;
+  revert that diff (`git checkout -- reviewer-core/package-lock.json`) rather
+  than let an unrelated task's typecheck fixup ship as a change to a
+  different package. Separately, `@vercel/ncc build` resolved both the
+  `@devdigest/shared` and `@devdigest/reviewer-core` path aliases without any
+  ncc-specific alias config or build-time copy — the risk flagged in
+  `plans/15-export-to-ci.plan.md` ("Risks and unknowns") did not materialize;
+  the bundled output was confirmed to contain zero `vendor/shared` path
+  strings. `agent-runner/tsconfig.json:16-24`
 - **2026-08-29** — Two `@anthropic-ai/claude-agent-sdk` session options do not
   do what their names suggest, and both were measured, not read.
   **`allowedTools` does not restrain anything.** A session configured with only

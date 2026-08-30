@@ -1,0 +1,26 @@
+{
+  "name": "@devdigest/agent-runner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "description": "devdigest-agent-runner — the CI half of an exported agent. Runs inside .github/workflows/devdigest-review.yml on a TARGET repo (not this one): loads .devdigest/agents/<slug>.yaml and its skills from the checkout, computes its own diff, calls reviewer-core, posts the review via its own octokit client, and exits non-zero when countBlockers(findings, ci_fail_on) > 0. Never calls the studio.",
+  "scripts": {
+    "build": "ncc build src/index.ts -o dist --minify",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.0.2",
+    "yaml": "^2.6.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vercel/ncc": "^0.38.3",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

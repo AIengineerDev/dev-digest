@@ -1,0 +1,14 @@
+{
+  "pull_request": {
+    "number": 7,
+    "title": "Drive-by contribution",
+    "head": {
+      "ref": "patch-1",
+      "repo": { "full_name": "someoutsider/widgets" }
+    },
+    "base": {
+      "ref": "main",
+      "repo": { "full_name": "acme/widgets" }
+    }
+  }
+}

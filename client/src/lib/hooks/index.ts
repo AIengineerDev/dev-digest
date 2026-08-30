@@ -88,3 +88,5 @@ export {
   useEvalDashboard,
 } from "./evals";
 export type { CreateEvalCaseInput, CreateEvalCaseResponse } from "./evals";
+
+export { useCiInstallations, useGenerateCiFiles, useInstallCi } from "./ci";

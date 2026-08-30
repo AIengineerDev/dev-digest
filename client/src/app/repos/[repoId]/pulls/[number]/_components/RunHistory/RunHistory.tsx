@@ -1,12 +1,14 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Badge, Icon, CircularScore, type IconName } from "@devdigest/ui";
 import type { RunSummary, PrCommit } from "@devdigest/shared";
 import { RunCostBadge } from "@/components/run-cost-badge";
 import { FindingsCount } from "../../../_components/FindingsCount";
-import { hasSeverities, type SeverityCounts } from "./helpers";
+import { hasSeverities, groupHeaderIds, type SeverityCounts } from "./helpers";
 import { isStaleRun, shortSha } from "../staleness";
 
 /**
@@ -117,6 +119,8 @@ export function RunHistory({
   onDelete?: (runId: string) => void;
 }) {
   const t = useTranslations("prReview");
+  const tRuns = useTranslations("runs");
+  const params = useParams<{ repoId: string; number: string }>();
   if (runs.length === 0 && commits.length === 0) return null;
 
   const items: TimelineItem[] = [
@@ -127,6 +131,11 @@ export function RunHistory({
       commit,
     })),
   ].sort((a, b) => b.ts - a.ts);
+
+  // R11 — runs sharing a multi_agent_run_id get one group header, at the
+  // first member in DISPLAY order (this list's own sort, never reordered to
+  // bring group members together). Runs without a group id are untouched.
+  const groupHeaders = groupHeaderIds(items.filter((i) => i.kind === "run").map((i) => i.run));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -167,9 +176,31 @@ export function RunHistory({
         const o = outcomeOf(r);
         const settled = r.status === "done";
         const stale = isStaleRun(r.head_sha, currentHeadSha);
+        const groupSize = groupHeaders.get(r.run_id);
         return (
+          <React.Fragment key={`run:${r.run_id}`}>
+            {groupSize != null && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "4px 14px 0",
+                  fontSize: 11.5,
+                  color: "var(--text-muted)",
+                }}
+              >
+                <Icon.Users size={12} />
+                <span>{tRuns("group.header", { count: groupSize })}</span>
+                <Link
+                  href={`/repos/${params?.repoId}/pulls/${params?.number}/multi-agent/${r.multi_agent_run_id}`}
+                  style={{ color: "var(--accent-text)", fontWeight: 600, textDecoration: "none" }}
+                >
+                  {tRuns("group.compare")}
+                </Link>
+              </div>
+            )}
           <div
-            key={`run:${r.run_id}`}
             style={stale ? { ...rowStyle, opacity: 0.62 } : rowStyle}
             title={
               stale
@@ -266,6 +297,7 @@ export function RunHistory({
               </span>
             )}
           </div>
+          </React.Fragment>
         );
       })}
     </div>

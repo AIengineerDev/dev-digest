@@ -1,0 +1,14 @@
+# A valid AgentManifest — parses cleanly via parseManifest(). Two skills, so
+# a hand run through Phase 3's generator (once it exists) is expected to
+# resolve both slugs to `.devdigest/skills/<slug>.md`.
+name: PR Reviewer
+provider: openrouter
+model: deepseek/deepseek-v3.2
+system_prompt: |
+  You are a careful, terse code reviewer. Flag correctness bugs and security
+  issues; do not nitpick style.
+skills:
+  - security-basics
+  - no-secrets-in-logs
+strategy: auto
+ci_fail_on: critical

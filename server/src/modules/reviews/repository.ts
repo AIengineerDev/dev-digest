@@ -87,6 +87,39 @@ export class ReviewRepository {
     return runRepo.listRunsForPull(this.db, workspaceId, prId);
   }
 
+  /** The group row's id + pr_id, workspace-scoped. */
+  getMultiAgentRun(
+    workspaceId: string,
+    id: string,
+  ): Promise<{ id: string; prId: string } | undefined> {
+    return runRepo.getMultiAgentRun(this.db, workspaceId, id);
+  }
+
+  /** Every member run of a group, workspace-scoped. */
+  listRunsForMultiAgentRun(workspaceId: string, id: string): Promise<RunSummary[]> {
+    return runRepo.listRunsForMultiAgentRun(this.db, workspaceId, id);
+  }
+
+  /** The repo's most recently started multi-agent run, or undefined (R8). */
+  latestMultiAgentRunForRepo(
+    workspaceId: string,
+    repoId: string,
+  ): Promise<{ id: string; prId: string; prNumber: number } | undefined> {
+    return runRepo.latestMultiAgentRunForRepo(this.db, workspaceId, repoId);
+  }
+
+  /** Per-agent median duration/cost over recent runs; null with no history (R9). */
+  agentEstimates(
+    workspaceId: string,
+  ): Promise<{ agent_id: string; median_duration_ms: number | null; median_cost_usd: number | null }[]> {
+    return runRepo.agentEstimates(this.db, workspaceId);
+  }
+
+  /** Reviews (+ findings) for a set of run ids (Phase 5's multi-agent view). */
+  reviewsForRunIds(runIds: string[]): Promise<{ review: ReviewRow; findings: FindingRow[] }[]> {
+    return reviewRepo.reviewsForRunIds(this.db, runIds);
+  }
+
   /** Delete one agent run (+ its trace via FK cascade). Workspace-scoped. */
   deleteAgentRun(workspaceId: string, runId: string): Promise<boolean> {
     return runRepo.deleteAgentRun(this.db, workspaceId, runId);
@@ -150,8 +183,15 @@ export class ReviewRepository {
     provider: string | null;
     model: string | null;
     headSha: string | null;
+    multiAgentRunId?: string | null;
   }): Promise<string> {
     return runRepo.createAgentRun(this.db, values);
+  }
+
+  /** Create the group row for a multi-agent fan-out (R2), before queueing any
+   *  member run. Returns its id, to be stamped onto each member. */
+  createMultiAgentRun(values: { workspaceId: string; prId: string }): Promise<string> {
+    return runRepo.createMultiAgentRun(this.db, values);
   }
 
   completeAgentRun(

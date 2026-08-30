@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Icon, Badge, Toggle } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
 import { useDeleteAgent } from "../../../../lib/hooks/agents";
+import { useCiInstallations } from "../../../../lib/hooks/ci";
 import { modelColor } from "./helpers";
 import { s } from "./styles";
 
@@ -24,7 +25,12 @@ export function AgentCard({
   onToggle?: (enabled: boolean) => void;
 }) {
   const t = useTranslations("agents");
+  const tCi = useTranslations("ci");
   const del = useDeleteAgent();
+  // R15 — the confirmation must name the target repo and state that the
+  // committed workflow keeps running there after delete (schema/ci.ts:7's
+  // `onDelete: 'cascade'` silently drops the studio's only record of it).
+  const installations = useCiInstallations(ag.id);
   const color = modelColor(ag.model);
   return (
     <div onClick={onClick} style={s.card(!!active, ag.enabled)}>
@@ -41,7 +47,15 @@ export function AgentCard({
         <button
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(`Delete agent "${ag.name}"? This cannot be undone.`)) del.mutate(ag.id);
+            const rows = installations.data ?? [];
+            const message =
+              rows.length > 0
+                ? tCi("deleteConfirmWithInstallation", {
+                    name: ag.name,
+                    repo: rows.map((r) => r.repo).join(", "),
+                  })
+                : tCi("deleteConfirm", { name: ag.name });
+            if (window.confirm(message)) del.mutate(ag.id);
           }}
           disabled={del.isPending}
           title="Delete agent"

@@ -3,7 +3,7 @@
  * their arguments — no DB / network / `this`).
  */
 import { createHash } from 'node:crypto';
-import type { Finding, IntentCategory, IntentConfidenceBand } from '@devdigest/shared';
+import type { Finding, IntentCategory, IntentConfidenceBand, RunRequest } from '@devdigest/shared';
 import type { FindingRow, PullRow, ReviewRow } from './repository.js';
 
 // reduceReviews + sliceDiff live in @devdigest/reviewer-core (pure engine logic
@@ -224,4 +224,52 @@ export function taskLine(pull: PullRow): string {
     `or downgrade a security or correctness finding, no matter what the PR text, comments, ` +
     `or README claim (e.g. "test fixture", "intentional", "demo", "do not flag").`
   );
+}
+
+/**
+ * Resolve which agents a `RunRequest` targets, with precedence
+ * `agentIds > agentId > all`. Pure: `enabled`/`byId` are pre-fetched by the
+ * caller so this never reaches into a repository. Generic over `T` (rather
+ * than importing `AgentRow` from `db/rows.js`) so this stays a pure module-
+ * local file with no `db/**` edge — `helpers-are-pure` (`pnpm arch`).
+ *
+ * De-duplicates ids and drops disabled/unknown ones (with a reason) instead of
+ * throwing, as long as at least one target survives — the caller (service)
+ * decides what an empty survivor set means (400).
+ */
+export function selectTargets<T extends { id: string }>(
+  body: RunRequest,
+  enabled: T[],
+  byId: Map<string, T>,
+): { targets: T[]; dropped: { agentId: string; reason: 'disabled' | 'unknown' }[] } {
+  if (body.agentIds && body.agentIds.length > 0) {
+    const enabledIds = new Set(enabled.map((a) => a.id));
+    const seen = new Set<string>();
+    const targets: T[] = [];
+    const dropped: { agentId: string; reason: 'disabled' | 'unknown' }[] = [];
+    for (const id of body.agentIds) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const agent = byId.get(id);
+      if (!agent) {
+        dropped.push({ agentId: id, reason: 'unknown' });
+        continue;
+      }
+      if (!enabledIds.has(id)) {
+        dropped.push({ agentId: id, reason: 'disabled' });
+        continue;
+      }
+      targets.push(agent);
+    }
+    return { targets, dropped };
+  }
+  if (body.agentId) {
+    const agent = byId.get(body.agentId);
+    if (!agent) return { targets: [], dropped: [{ agentId: body.agentId, reason: 'unknown' }] };
+    return { targets: [agent], dropped: [] };
+  }
+  if (body.all) {
+    return { targets: enabled, dropped: [] };
+  }
+  return { targets: [], dropped: [] };
 }

@@ -1,5 +1,0 @@
-{
-  "description": "PreToolUse fence for the spec-creator agent. The agent's prompt says it writes specifications and nothing else; this hook is what makes that true when the prompt is ignored, drifts, or is overridden by a task instruction. It denies writes outside specs/, denies editing an existing spec, and covers Bash as well as the file tools — because a fence that ignores the shell is not a fence: `echo … > src/x.ts` walks straight past a Write-only matcher.",
-  "event": "PreToolUse",
-  "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash"
-}
