@@ -1,32 +1,67 @@
 {
   "title": "Agent Performance",
-  "subtitle": "Accept-rate is the headline quality signal · cost shown as a breakdown",
+  "subtitle": "Which agents earn their keep — accept rate is the quality signal",
   "loadError": "Could not load agent performance.",
+  "loadErrorBody": "Nothing is shown rather than zeros: an unknown number and a measured zero are different claims.",
+  "retry": "Retry",
+  "period": {
+    "day": "1 day",
+    "month": "30 days",
+    "custom": "Custom range",
+    "from": "From",
+    "to": "To",
+    "apply": "Apply",
+    "note": "Runs are counted by when they ran, not by when someone triaged their findings."
+  },
   "summary": {
     "totalRuns": "Total runs",
-    "avgAcceptRate": "Avg accept-rate",
     "totalCost": "Total cost",
-    "mostActive": "Most active"
+    "avgAcceptRate": "Avg accept rate",
+    "mostActive": "Most-active agent",
+    "runsIn": "{n} runs in this period",
+    "decisions": "over {n} decisions",
+    "noDecisions": "no decisions yet",
+    "noRuns": "no runs in this period"
   },
-  "costByAgent": "Cost by agent",
-  "costByModel": "Cost by model",
-  "noCost": "No cost recorded yet.",
-  "sort": {
-    "acceptRate": "accept-rate",
-    "runs": "runs",
-    "cost": "cost"
+  "costBasis": {
+    "estimated": "Estimated",
+    "reconciled": "Reconciled",
+    "mixed": "Mixed",
+    "estimatedHint": "Computed by DevDigest from token counts and a price table. Not reconciled against a provider invoice.",
+    "reconciledHint": "Matched against provider billing data.",
+    "mixedHint": "Some runs are reconciled against billing, others are DevDigest estimates."
   },
+  "costByAgent": "By agent",
+  "costByModel": "By model",
+  "costBreakdown": "Cost breakdown",
+  "noCost": "No cost recorded for this period.",
+  "excluded": "{failed} failed and {noCost} with no recorded cost are excluded from cost and duration.",
+  "sortedBy": "Sorted by {field}",
   "table": {
     "agent": "Agent",
-    "accept": "Accept",
     "runs": "Runs",
-    "findings": "Findings",
-    "cost": "Cost",
-    "trend": "Trend"
+    "avgCost": "Avg cost",
+    "avgDuration": "Avg dur.",
+    "accept": "Accept",
+    "lastRun": "Last run",
+    "view": "View"
+  },
+  "row": {
+    "acceptOf": "{accepted}/{decided} decided",
+    "noDecisions": "—",
+    "noDecisionsHint": "No finding from this agent has been accepted or dismissed yet, so its accept rate is unknown — not zero.",
+    "smallSample": "small sample",
+    "smallSampleHint": "Fewer than {n} decisions. Shown, but not ranked against well-sampled agents.",
+    "deleted": "deleted",
+    "deletedHint": "This agent no longer exists. Its runs are kept so the totals still explain the cost.",
+    "never": "never"
   },
   "empty": {
     "title": "No agent runs yet",
-    "body": "Run a review (manually) to populate per-agent performance."
+    "body": "Nothing has run in this workspace. Run a review to populate this screen."
   },
-  "perAgent": "Per-agent"
+  "emptyPeriod": {
+    "title": "No runs in this period",
+    "body": "There are runs in this workspace, but none inside the selected range. Widen the period."
+  }
 }
