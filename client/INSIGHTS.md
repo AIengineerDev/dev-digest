@@ -103,6 +103,19 @@ to display data already sitting in memory.
 
 ## Codebase Patterns
 
+- **2026-08-29** — `Modal` (`src/vendor/ui/kit/Modal.tsx`) has **no** built-in
+  Escape-to-close or focus-management: it renders a backdrop that closes on
+  click, but nothing calls `.focus()` on open and nothing listens for
+  `Escape`. Any modal that needs those (the four-step Export CI wizard did, per
+  spec NFR Accessibility) has to add a `keydown` listener and a focused ref
+  itself, inside `children`/`footer` — never inside `Modal`, which is vendored
+  and off-limits. Separately, `Button` (`src/vendor/ui/primitives/Button.tsx`)
+  does not `forwardRef`, so "return focus to the button that opened this modal"
+  cannot use a ref either; give the trigger button a plain `id` prop (it passes
+  through `...rest` to the underlying `<button>`) and restore focus with
+  `document.getElementById(id)?.focus()` on close.
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/CiTab/_components/ExportWizard/ExportWizard.tsx:1`
+
 - **2026-08-28** — There is **no page-frame convention** in `client/src/app`, and
   the names that look like one are lying. Measured on `w8`: horizontal page
   padding is `28px` on the Eval dashboard, Conventions and Project Context but

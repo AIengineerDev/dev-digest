@@ -1,4 +1,7 @@
 {
+  "loadFailed": "Couldn't load CI installations",
+  "deleteConfirm": "Delete agent \"{name}\"? This cannot be undone.",
+  "deleteConfirmWithInstallation": "Delete agent \"{name}\"? This cannot be undone. It removes this agent's CI records for {repo}, but the workflow already committed there keeps running until you delete .github/workflows/devdigest-review.yml in that repository.",
   "runs": {
     "emptyTitle": "No CI runs yet",
     "emptyBody": "Once you export an agent to CI, every automated review shows up here.",
@@ -51,7 +54,8 @@
       "ghaDesc": "Runs on pull_request events",
       "circleDesc": "config.yml job",
       "jenkinsDesc": "Pipeline stage",
-      "cliDesc": "devdigest review --pr"
+      "cliDesc": "devdigest review --pr",
+      "comingSoon": "coming soon"
     },
     "recommended": "recommended",
     "repoLabel": "Target repository",
@@ -69,10 +73,23 @@
     },
     "blockMergeTitle": "Block merge on findings",
     "blockMergeDesc": "Requires a GitHub App — not available with PAT in local mode",
+    "mergeInfoBody": "To block merges: set \"Fail CI on\" (CI tab) so the run exits non-zero, then add a required status check in the repo's GitHub branch protection. No GitHub App needed.",
     "installCardTitle": "Open a PR with these files",
     "installCardBody": "DevDigest opens a PR in {repo} titled “Add DevDigest CI review” with the {count} generated files.",
     "ownerRepo": "owner/repo",
-    "secretNote": "Add {key} to the repo's Actions secrets before the workflow runs."
+    "secretsLabel": "Secrets",
+    "secretNote": "Add {key} to the repo's Actions secrets before the workflow runs.",
+    "githubTokenNote": "GITHUB_TOKEN is provided automatically by GitHub Actions.",
+    "secretConfigured": "Configured",
+    "secretNotSet": "Not set",
+    "readOnly": "read-only",
+    "genFailedTitle": "Couldn't generate the CI files",
+    "retry": "Retry",
+    "codeownersTitle": "Protect .devdigest/ with CODEOWNERS",
+    "codeownersBody": "Requiring this check in branch protection is not enough on its own: anyone who can edit {path} inside the pull request under review can lower Fail CI on for that very PR. Add a CODEOWNERS rule for .devdigest/** in the target repo so changes to it need a separate approval.",
+    "installFailedTitle": "Couldn't open the pull request",
+    "openPr": "View pull request",
+    "installedTitle": "Installed"
   },
   "ciTab": {
     "heading": "Continuous Integration",
@@ -82,7 +99,8 @@
     "update": "Update CI",
     "noRepo": "Connect a repository first",
     "empty": "Not deployed to CI yet. Use “Publish to CI” to open a PR that adds the workflow + agent config.",
-    "installed": "installed {date}"
+    "installed": "installed {date}",
+    "activeCount": "{count, plural, one {# repo} other {# repos}}"
   },
   "publishDialog": {
     "title": "Publish to CI",
