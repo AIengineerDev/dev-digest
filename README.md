@@ -59,17 +59,17 @@ every review, lives inside the server at
 **The review loop** — everything here runs on your machine.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 60, "rankSpacing": 60, "padding": 14}}}%%
-flowchart TB
-  GH["GitHub"] -->|"PRs · diffs"| API["server"]
-  API --> IDX["repo-intel"]
-  IDX -->|"repo map"| ENG["reviewer-core"]
-  API -->|"diff"| ENG
-  ENG <-->|"prompt"| LLM["LLM"]
-  ENG --> GATE{"grounding<br/>gate"}
-  GATE -->|"real"| DB[("Postgres")]
-  GATE -->|"invented"| DROP["dropped<br/>+ counted"]
-  DB --> WEB["studio"]
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 45, "rankSpacing": 70, "padding": 12}}}%%
+flowchart LR
+  GH["GitHub<br/>PRs · diffs"] --> API["server<br/>Fastify :3001"]
+  API --> IDX["repo-intel<br/>symbols + imports"]
+  IDX -->|"repo map"| ENG
+  API -->|"diff"| ENG["reviewer-core<br/>prompt assembly"]
+  ENG <--> LLM["Anthropic<br/>OpenAI · OpenRouter"]
+  ENG --> GATE{"grounding gate<br/>does the file exist?"}
+  GATE -->|"real"| DB[("Postgres<br/>pgvector")]
+  GATE -->|"invented"| DROP["dropped<br/>and counted"]
+  DB --> WEB["studio<br/>Next.js :3000"]
   WEB -->|"accept · dismiss"| API
 ```
 
