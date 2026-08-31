@@ -1,171 +1,190 @@
-# DevDigest — starter
+# DevDigest
 
-Local-first AI pull-request review. This is the **course starter template**: a
-minimal-but-working tool that does exactly one thing end to end — **import a PR
-and run an agent review on it**. Every later course lesson adds one feature back
-(see [_What you build in the course_](#what-you-build-in-the-course)).
+Local-first AI pull-request review. Import a repository, index it, point one or
+several agent reviewers at a PR, and get grounded findings back — with the diff, the
+prompt and the cost of every run visible.
 
-Several standalone packages (no monorepo workspace — each has its own
-`package.json` and lockfile; cross-package code is shared through tsconfig path
-aliases, not published modules):
+Everything runs on your machine. Only Postgres is containerised; the API, the web
+app and every reviewer run in your own process against your own API keys.
 
-| Folder                     | Package                    | What it is                                         | Port |
-| -------------------------- | -------------------------- | -------------------------------------------------- | ---- |
-| `server/`                  | `@devdigest/api`           | Fastify API + Drizzle/Postgres (pgvector)          | 3001 |
-| `client/`                  | `@devdigest/web`           | Next.js 15 web app (the studio)                    | 3000 |
-| `reviewer-core/`           | `@devdigest/reviewer-core` | Pure review engine: diff → prompt → LLM → findings | —    |
-| `e2e/`                     | `@devdigest/e2e`           | Deterministic browser e2e (agent-browser)          | —    |
-| `server/src/vendor/shared` | `@devdigest/shared`        | Zod contracts shared across every package          | —    |
+## What it does
 
-`repo-intel` (the codebase indexer that powers the **Indexed** badge and feeds
-project context into reviews) lives inside the server at
-[`server/src/modules/repo-intel`](server/src/modules/repo-intel). Only
-**Postgres** runs in Docker; the API and web app run on the host via `pnpm dev`.
+| Surface | What it is |
+| --- | --- |
+| **Pull Requests** | Import PRs, read the diff, run a review, accept or dismiss findings |
+| **Agents** | A reviewer = provider + model + system prompt + linked skills. Create your own |
+| **Skills** | Reusable review instructions an agent can be given |
+| **Conventions** | House rules extracted from your code, each with evidence that checked out |
+| **Project Context** | What the repo is for, fed into every review |
+| **Onboarding Tour** | A generated walkthrough of an unfamiliar codebase |
+| **Multi-Agent Review** | Fan several agents at one PR, compare findings side by side, see where they disagree |
+| **Export to CI** | Ship an agent into a repo's GitHub Actions so it reviews every PR |
+| **CI Runs** | Every review that ran in CI, plus the repo's own Actions history |
+| **Agent Performance** | Cost, latency and accept-rate per agent over stored runs |
+| **Eval Dashboard** | Cases and scores for the agents and skills themselves |
+| **Memory** | The RAG store — what has been learned and recalled into reviews |
+
+## The parts
+
+Seven standalone packages. **Not a monorepo workspace** — each has its own
+`package.json` and its own lockfile, and cross-package code is shared through
+tsconfig path aliases rather than published modules.
+
+| Folder | Package | What it is | Runs on | PM |
+| --- | --- | --- | --- | --- |
+| `server/` | `@devdigest/api` | Fastify API + Drizzle/Postgres (pgvector) | :3001 | pnpm |
+| `client/` | `@devdigest/web` | Next.js 15 studio, App Router | :3000 | pnpm |
+| `reviewer-core/` | `@devdigest/reviewer-core` | Pure engine: diff + repo map → prompt → LLM → findings | — | npm |
+| `agent-runner/` | `devdigest-agent-runner` | The CI half of an exported agent — an ncc bundle for GitHub Actions | — | npm |
+| `mcp/` | `devdigest-mcp` | The reviewers as MCP tools over stdio | — | npm |
+| `e2e/` | `@devdigest/e2e` | Deterministic browser flows, no LLM | — | npm |
+| `evals/` | `@devdigest/evals` | Two harnesses for the agents and skills themselves | — | npm |
+| `server/src/vendor/shared` | `@devdigest/shared` | Zod contracts every package validates against | — | — |
+
+Two things follow from that layout and are easy to get wrong:
+
+- **`reviewer-core` and `mcp` never emit JavaScript.** They are consumed as
+  TypeScript source, so their `build` is a typecheck. A package that path-aliases
+  into `server/src/vendor/shared` *cannot* emit — tsc pulls those sources into the
+  program and would write them under its own `dist/`.
+- **Run the right package manager.** `server/` and `client/` are pnpm; everything
+  else is npm.
+
+`repo-intel`, the indexer behind the **Indexed** badge and the repo map that grounds
+every review, lives inside the server at
+[`server/src/modules/repo-intel`](server/src/modules/repo-intel).
 
 ## Architecture
 
 ```mermaid
-flowchart LR
-  subgraph Studio["Local studio (your machine)"]
-    WEB["client/<br/>Next.js · :3000"]
-    API["server/<br/>Fastify · :3001"]
-    PG[("Postgres<br/>pgvector")]
-    WEB -->|"REST /repos /pulls /agents /runs …"| API
+flowchart TB
+  subgraph Local["Your machine"]
+    WEB["client/ — Next.js :3000"]
+    API["server/ — Fastify :3001"]
+    PG[("Postgres + pgvector<br/>Docker")]
+    WEB -->|"REST"| API
     API --> PG
   end
 
-  CLONE["git clone (add repo)"] --> INDEX["repo-intel<br/>index symbols + import graph<br/>→ repo map"]
-  API --> CLONE
-  INDEX -->|"repo map = review context"| ENGINE
+  GH["GitHub"] -->|"clone · PRs · diffs"| API
+  API --> IDX["repo-intel<br/>symbols + import graph"]
+  IDX -->|"repo map"| ENG
+  API --> ENG["reviewer-core<br/>prompt → LLM → findings"]
+  ENG -->|"grounding gate"| API
+  ENG --> LLM["Anthropic · OpenAI · OpenRouter"]
 
-  ENGINE["reviewer-core/<br/>diff + repo map → prompt → LLM<br/>→ structured findings → grounding gate"]
-  LLM["LLM<br/>OpenAI · Anthropic · OpenRouter"]
-  API -->|"run review"| ENGINE
-  ENGINE --> LLM
+  API -->|"export an agent"| RUN["agent-runner<br/>ncc bundle"]
+  RUN -->|"committed to .devdigest/"| ACT["GitHub Actions<br/>reviews every PR"]
+  ACT -->|"exit non-zero on blockers"| GH
 
-  SHARED["@devdigest/shared<br/>Zod contracts"]
-  SHARED -.->|"one schema, every package"| WEB
-  SHARED -.-> API
-  SHARED -.-> ENGINE
+  MCP["mcp/ — reviewers as MCP tools"] --> ENG
+
+  style ENG fill:#dcebe6,stroke:#12614f,color:#15191a
+  style PG fill:#eaece8,stroke:#677274,color:#15191a
 ```
 
-The review flow end to end: **add a repo** → server clones it and `repo-intel`
-indexes it (the **Indexed** badge) → **import PRs** from GitHub → open a PR and
-**Review** → `reviewer-core` assembles a prompt from the diff + the repo map,
-calls the LLM, validates every finding against the diff (the **grounding gate**
-drops hallucinated line references), and persists structured findings with a
-severity and score. All local; the only outbound calls are to GitHub (PR data)
-and the LLM (via OpenRouter).
+**The grounding gate is the load-bearing part.** A finding whose file or line the
+model invented is dropped before it reaches you, and the count of dropped references
+is on the run's record. That is what makes the findings worth reading.
 
-Each package has its own README with deeper diagrams:
-[`client`](client/README.md) (UI route map) ·
-[`server`](server/README.md) (API map) ·
-[`reviewer-core`](reviewer-core/README.md) (review pipeline) ·
-[`e2e`](e2e/README.md).
+## Quick start
 
-Alongside each README, every package carries a small set of curated files for
-working with an AI agent: **`AGENTS.md`** (commands, conventions, gotchas,
-do-not-touch zones), **`docs/`** (how it works today), **`specs/`** (what we
-intend to build) and **`INSIGHTS.md`** (decisions and dead ends). The READMEs
-stay the source of truth — `AGENTS.md` only points at them. Start at the root
-[`AGENTS.md`](AGENTS.md). Each package's `CLAUDE.md` is a symlink to its
-`AGENTS.md`, so Claude Code and every other agent read the same file — edit
-`AGENTS.md`.
-
-## What works on day 1
-
-- **Local launch** — one command brings up Postgres (Docker) + API + web.
-- **Settings** — store your LLM API key (OpenAI / Anthropic) and GitHub token.
-- **Add repository** — paste a repo URL; the server clones and indexes it.
-- **Import pull requests** — pull open PRs and their diff, commits, body, and linked issue.
-- **View diff** — GitHub-like diff in the browser.
-- **Agents** — two built-in reviewers (General + Security); create/edit your own (model + system prompt).
-- **Run a review** — single-pass analysis returning structured findings (severity + score), with the grounding gate and repo-map context working from the start.
-
-## What you build in the course
-
-These are intentionally **not** in the starter — each lesson adds one back:
-
-| Lesson | You build                                                                       |
-| ------ | ------------------------------------------------------------------------------- |
-| L01    | Run cost badge · severity filter on findings                                    |
-| L02    | Skills in the product · Conventions extractor                                   |
-| L03    | Intent layer · Smart Diff                                                       |
-| L04    | `devdigest-mcp` server ([`mcp/`](mcp/), shipped) · Blast Radius (reads `repo-intel`) |
-| L05    | Project Context Folder · Onboarding generator · PR Brief card                   |
-| L06    | Eval pipeline · Secret/Phantom gates · Plan Verifier · Export to CI             |
-| L07    | Multi-agent review · Run Trace / Live Log · Persistent memory · per-agent stats |
-| L08    | Plugin export/import · Agent performance dashboard · weekly digest              |
-
-## Prerequisites
-
-- **Node** ≥ 22 · **pnpm** ≥ 10 (`npm i -g pnpm`) · **Docker** (for Postgres)
-
-## Quick start (from zero)
+Node ≥ 22 · pnpm ≥ 10 · Docker.
 
 ```sh
 ./scripts/dev.sh
 ```
 
-This script:
+Starts Postgres, creates `.env` files from their examples, installs what is missing,
+applies migrations, seeds demo data, and launches both servers. Open
+**http://localhost:3000**.
 
-1. starts Postgres (`docker compose up -d`) and waits until it's healthy,
-2. creates `server/.env` and `client/.env` from `.env.example` if missing,
-3. installs deps in `server/` and `client/` (only when `node_modules` is absent),
-4. applies DB migrations and seeds demo data,
-5. launches the API (`:3001`) and the web app (`:3000`).
+Flags: `--no-seed` · `--no-client` · `--db-only` · `--help`. Ctrl-C stops the dev
+servers; Postgres keeps running.
 
-Open **http://localhost:3000**. Press **Ctrl-C** o stop the dev servers —
-Postgres keeps running (`docker compose down` to stop it).
+Add your keys in `server/.env` (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` /
+`OPENROUTER_API_KEY`, `GITHUB_TOKEN`) or through Settings at runtime. Secrets can
+also live in `~/.devdigest/secrets.json` (mode 0600) — never in git, never in the
+database.
 
-Flags: `--no-seed` · `--no-client` · `--db-only` · `--help`.
+## Commands
 
-> Add your keys in `server/.env` (`OPENAI_API_KEY` / `ANTHROPIC_API_KEY`,
-> `GITHUB_TOKEN`) or via the Settings UI at runtime.
+| Task | Command |
+| --- | --- |
+| Everything | `./scripts/dev.sh` |
+| Server | `cd server && pnpm dev \| build \| typecheck \| test \| arch` |
+| Migrations | `cd server && pnpm db:generate` then `pnpm db:migrate` |
+| Client | `cd client && pnpm dev \| build \| typecheck \| test \| lint` |
+| Engine | `cd reviewer-core && npm test \| npm run typecheck` |
+| CI runner | `cd agent-runner && npm run build` (produces the bundle Export to CI ships) |
+| MCP | `cd mcp && npm test \| npm run typecheck` |
+| E2E | `cd e2e && npm run e2e:hermetic` |
+| Evals | `cd evals && pnpm eval:quality` (free) · `eval:skills \| eval:agents \| eval:workflow` (spend) |
 
-## Manual steps (what the script does)
+Six workflows under `.github/workflows/` are **path-filtered** — a change outside
+every filter is checked by nothing but the local gates.
 
-```sh
-docker compose up -d                                   # Postgres + pgvector
+## Conventions you cannot infer from the code
 
-cd server && pnpm install
-pnpm db:migrate          # apply migrations (NOT run automatically on boot)
-pnpm db:seed             # idempotent demo data (optional)
-pnpm dev                 # API on :3001
+- **`AGENTS.md` is the real file; `CLAUDE.md` is a symlink to it** in every package.
+  Edit `AGENTS.md`; never replace the symlink with a copy or the two will drift.
+- **Contracts change in `@devdigest/shared` first**, then in consumers. The same Zod
+  schema drives request validation and response serialization. `./scripts/check-shared.sh`
+  proves the two copies are identical; `--fix` mirrors **with `--delete`**, so two
+  people editing a contract in parallel means one edit disappears silently.
+- **Server tests split by filename.** `*.it.test.ts` are DB-backed (testcontainers
+  Postgres); everything else must stay hermetic.
+- **Two gates are baselined.** `server pnpm arch` ignores a known-violations file and
+  `client pnpm lint` exits 0 with pre-existing warnings. Green means *nothing new*,
+  not *clean*. Never regenerate the baseline and never `lint --fix` it as part of a
+  feature — and measure the counts rather than trusting a doc, they drift.
 
-cd ../client && pnpm install && pnpm dev               # web on :3000
-```
+## Do not touch
 
-## Useful scripts
+- `server/clones/**` — cloned user repos, including a full copy of this repo.
+  **Always exclude it from grep and glob** or you will read and edit the wrong file.
+- `**/src/vendor/**` — vendored. `vendor/shared` changes only as a deliberate
+  contract change.
+- `server/src/db/migrations/**` — generated. To change the schema, edit the table in
+  `server/src/db/schema/<area>.ts` and run `pnpm db:generate`. Never hand-write one.
+- Lockfiles, `node_modules`.
 
-`server/`: `dev` · `build` · `db:migrate` · `db:seed` · `db:generate` · `test` · `typecheck`
-(unit/integration split: `pnpm exec vitest run --exclude '**/*.it.test.ts'` / `pnpm exec vitest run .it.test`)
-`client/`: `dev` · `build` · `start` · `test` · `typecheck`
+## Gotchas
 
-## Testing & CI
+- **Migrations do not run on boot.** `relation … does not exist` means you skipped
+  `pnpm db:migrate`.
+- **Never `docker compose down -v`** to "reset". The `-v` destroys the
+  `devdigest_pgdata` volume and every imported repo and review with it.
+- **The app needs Docker running.** An empty repo list is almost always a stopped
+  container or a wrong `NEXT_PUBLIC_API_BASE`, not lost data.
+- **Do not run `pnpm build` while `next dev` is live** — it clobbers the dev server's
+  chunk cache.
+- A run stuck in `running` is usually a crashed process; the server reaps orphans on
+  boot.
 
-One test suite per package, each gated by its own GitHub Actions workflow with a
-path filter — full strategy in **[`TESTING.md`](TESTING.md)**.
+## How work gets done here
 
-| Suite                               | Workflow                 | Needs Docker |
-| ----------------------------------- | ------------------------ | ------------ |
-| client (vitest + jsdom)             | `client.yml`             | no           |
-| server unit (hermetic)              | `server-unit.yml`        | no           |
-| server integration (real Postgres)  | `server-integration.yml` | yes          |
-| reviewer-core (engine)              | `reviewer-core.yml`      | no           |
-| web e2e (agent-browser, real stack) | `e2e-web.yml`            | yes          |
+Features are built by a chain of specialised agents — write the spec, plan it
+against the real repository, build it phase by phase, verify every stated
+requirement, review it independently, then document what shipped.
 
-Server tests split by filename: `*.it.test.ts` are DB-backed (testcontainers
-Postgres); everything else is hermetic. The browser e2e flows live in
-[`e2e/`](e2e/README.md) and run deterministically (no LLM).
+Start at **[`docs/sdd-chain.md`](docs/sdd-chain.md)**. To use the same chain in
+another repository, read
+**[`docs/adopting-the-chain.md`](docs/adopting-the-chain.md)** — it says plainly
+which parts transfer and which describe only this repo.
 
-## Troubleshooting
+The agents are **installed, not checked in**. They come from
+[`AIengineerDev/dev-digest-ai-marketplace`](https://github.com/AIengineerDev/dev-digest-ai-marketplace)
+and are enabled through `.claude/settings.json`.
 
-- **`relation ... does not exist` / API errors on first run** — migrations weren't
-  applied. The server does **not** migrate on boot: run `cd server && pnpm db:migrate`.
-- **Port 5432 already in use** — another Postgres is running. Stop it, or change the
-  host port in `docker-compose.yml`.
-- **`vector` type errors** — the pgvector extension is enabled by migration `0000`;
-  make sure migrations ran against the Dockerized DB, not a different one.
-- **Reset everything** — `docker compose down -v` drops the volume, then re-run
-  `./scripts/dev.sh`.
+## Where to read next
+
+| Path | What |
+| --- | --- |
+| `AGENTS.md` | The operating manual — routing, conventions, what to read when |
+| `specs/` | Intent: numbered requirements and acceptance criteria |
+| `plans/` | How an agreed spec gets built, with the gate commands that prove it |
+| `docs/` | How the system works today, across packages |
+| `INSIGHTS.md` | What was tried and rejected — root, and one per package |
+| `design-mocks/INDEX.md` | 28 extracted screen modules. **Never** open the 1.8 MB bundle at the repo root |
+| `TESTING.md` | Adding a test, or touching CI |
