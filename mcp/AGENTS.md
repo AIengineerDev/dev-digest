@@ -12,6 +12,7 @@ Claude Desktop, …) over stdio. It is a **thin client of the HTTP API on `:3001
 ```sh
 npm test           # vitest — drives the real server through an in-memory MCP client
 npm run typecheck  # tsc --noEmit — this IS the build; the package emits no JS
+npm run bundle     # ncc → dist/ — a PUBLISHING step, not a build step (see below)
 npm run dev        # tsx src/index.ts — stdio, for piping JSON-RPC by hand
 ```
 
@@ -153,3 +154,29 @@ before the user types a word. Input schemas are 60–80% of that cost.
   `engineering-insights` skill at the end of a task here.
 - Read `../server/README.md` before adding a tool: every tool is an existing
   endpoint, and a tool that needs a new one is a server change first.
+
+## Publishing
+
+The package is published to npm as **`devdigest-mcp`** (unscoped — no npm org
+required, and it matches the `bin` name).
+
+It ships as an **ncc bundle**, and it has to. `@devdigest/shared` is reached
+through a tsconfig path alias into `../server/src/vendor/shared`, which is
+outside this directory and therefore outside anything npm packs — a source-only
+package would resolve nothing at runtime. `prepublishOnly` runs the typecheck
+and then the bundle, so `dist/` cannot be stale in a published version.
+
+`bin/devdigest-mcp.mjs` takes whichever path exists: the bundle when installed
+from npm, tsx over `src/` when working inside this repository. That is why
+`npm run build` is still just the typecheck — bundling is not part of the build,
+and the rule that this package emits no JS still holds for everything except a
+publish.
+
+```
+npm login
+npm publish            # runs prepublishOnly: typecheck + bundle
+```
+
+Bump `version` first. npm forbids republishing a version, and unpublishing is
+restricted after 72 hours.
+

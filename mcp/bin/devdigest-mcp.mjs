@@ -2,14 +2,28 @@
 /**
  * The `devdigest-mcp` executable.
  *
- * This package emits no JS — like `reviewer-core`, it is consumed as TypeScript
- * source (../AGENTS.md). Emitting is not an option here: `@devdigest/shared` is
- * reached through a tsconfig path alias into `server/src/vendor/shared`, so tsc
- * pulls those sources into the program and writes them under `dist/` too,
- * shifting every output path. Registering tsx's ESM loader in-process costs one
- * hop at startup and keeps the source the only copy.
+ * Two ways in, because this package lives in two places.
+ *
+ * **Published to npm** — `dist/index.js` is present: an ncc bundle produced by
+ * `prepublishOnly`. It has to be a bundle. `@devdigest/shared` is reached
+ * through a tsconfig path alias into `../server/src/vendor/shared`, which is
+ * outside this directory and therefore outside anything npm would pack, so a
+ * source-only package would resolve nothing at runtime. Bundling inlines it.
+ *
+ * **Inside this repository** — no `dist/`: register tsx's ESM loader and run
+ * the TypeScript directly. That keeps the source the only copy while working
+ * on it, and matches `AGENTS.md`'s rule that this package emits no JS as part
+ * of its normal build. `npm run bundle` is a publishing step, not a build step.
  */
-import { register } from 'tsx/esm/api';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-register();
-await import('../src/index.ts');
+const bundle = new URL('../dist/index.js', import.meta.url);
+
+if (existsSync(fileURLToPath(bundle))) {
+  await import(bundle.href);
+} else {
+  const { register } = await import('tsx/esm/api');
+  register();
+  await import('../src/index.ts');
+}

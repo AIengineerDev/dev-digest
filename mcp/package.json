@@ -1,10 +1,11 @@
 {
-  "name": "@devdigest/mcp",
+  "name": "devdigest-mcp",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
-  "description": "devdigest-mcp — MCP server exposing DevDigest's reviewers over stdio. A thin HTTP client of the API on :3001; holds no state and no business logic of its own.",
+  "engines": {
+    "node": ">=22"
+  },
+  "description": "devdigest-mcp \u2014 MCP server exposing DevDigest's reviewers over stdio. A thin HTTP client of the API on :3001; holds no state and no business logic of its own.",
   "bin": {
     "devdigest-mcp": "./bin/devdigest-mcp.mjs"
   },
@@ -12,17 +13,43 @@
     "build": "tsc --noEmit -p tsconfig.json",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "bundle": "ncc build src/index.ts -o dist --minify",
+    "prepublishOnly": "npm run typecheck && npm run bundle"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
-    "tsx": "^4.19.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^22.10.0",
+    "@vercel/ncc": "^0.38.3",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
-  }
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AIengineerDev/dev-digest.git",
+    "directory": "mcp"
+  },
+  "homepage": "https://github.com/AIengineerDev/dev-digest/tree/main/mcp",
+  "bugs": {
+    "url": "https://github.com/AIengineerDev/dev-digest/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "code-review",
+    "claude",
+    "pull-request",
+    "llm"
+  ],
+  "files": [
+    "dist/",
+    "bin/",
+    "README.md"
+  ]
 }
