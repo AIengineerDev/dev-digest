@@ -56,32 +56,47 @@ every review, lives inside the server at
 
 ## Architecture
 
+**The review loop** — everything here runs on your machine.
+
 ```mermaid
 flowchart TB
-  subgraph Local["Your machine"]
-    WEB["client/ — Next.js :3000"]
-    API["server/ — Fastify :3001"]
-    PG[("Postgres + pgvector<br/>Docker")]
-    WEB -->|"REST"| API
-    API --> PG
-  end
+  GH["GitHub"]
+  API["server/ · Fastify"]
+  IDX["repo-intel<br/>symbols + import graph"]
+  ENG["reviewer-core<br/>prompt → LLM → findings"]
+  LLM["Anthropic · OpenAI<br/>OpenRouter"]
+  GATE{"grounding gate<br/>is the file real?"}
+  WEB["client/ · the studio"]
+  PG[("Postgres<br/>pgvector")]
 
-  GH["GitHub"] -->|"clone · PRs · diffs"| API
-  API --> IDX["repo-intel<br/>symbols + import graph"]
-  IDX -->|"repo map"| ENG
-  API --> ENG["reviewer-core<br/>prompt → LLM → findings"]
-  ENG -->|"grounding gate"| API
-  ENG --> LLM["Anthropic · OpenAI · OpenRouter"]
-
-  API -->|"export an agent"| RUN["agent-runner<br/>ncc bundle"]
-  RUN -->|"committed to .devdigest/"| ACT["GitHub Actions<br/>reviews every PR"]
-  ACT -->|"exit non-zero on blockers"| GH
-
-  MCP["mcp/ — reviewers as MCP tools"] --> ENG
-
-  style ENG fill:#dcebe6,stroke:#12614f,color:#15191a
-  style PG fill:#eaece8,stroke:#677274,color:#15191a
+  GH -- "clone · PRs · diffs" --> API
+  API --> IDX
+  IDX -- "repo map" --> ENG
+  API -- "diff" --> ENG
+  ENG <--> LLM
+  ENG --> GATE
+  GATE -- "kept" --> PG
+  GATE -- "invented → dropped" --> X(["counted on the run record"])
+  PG --> WEB
+  WEB -- "accept · dismiss" --> API
 ```
+
+Every finding passes the gate before it is stored, and the number dropped is on the
+run's record. That is what makes the output worth reading.
+
+**The CI path** — how an agent leaves your machine and reviews PRs on its own.
+
+```mermaid
+flowchart LR
+  A["an agent<br/>in the studio"] -- "Export to CI" --> W["generated files<br/>manifest · skills · workflow"]
+  W -- "opened as a PR" --> R["your repository"]
+  R --> ACT["GitHub Actions<br/>runs agent-runner"]
+  ACT -- "blockers > 0<br/>→ exit 1" --> CHK["the check fails"]
+  ACT -- "results" --> CI["CI Runs<br/>in the studio"]
+```
+
+`agent-runner` is a self-contained bundle committed into the target repo. It never
+calls back to the studio, and fork PRs are skipped rather than handed secrets.
 
 **The grounding gate is the load-bearing part.** A finding whose file or line the
 model invented is dropped before it reaches you, and the count of dropped references
