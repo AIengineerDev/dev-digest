@@ -60,25 +60,16 @@ every review, lives inside the server at
 
 ```mermaid
 flowchart TB
-  GH["GitHub"]
-  API["server/ · Fastify"]
-  IDX["repo-intel<br/>symbols + import graph"]
-  ENG["reviewer-core<br/>prompt → LLM → findings"]
-  LLM["Anthropic · OpenAI<br/>OpenRouter"]
-  GATE{"grounding gate<br/>is the file real?"}
-  WEB["client/ · the studio"]
-  PG[("Postgres<br/>pgvector")]
-
-  GH -- "clone · PRs · diffs" --> API
-  API --> IDX
-  IDX -- "repo map" --> ENG
-  API -- "diff" --> ENG
-  ENG <--> LLM
-  ENG --> GATE
-  GATE -- "kept" --> PG
-  GATE -- "invented → dropped" --> X(["counted on the run record"])
-  PG --> WEB
-  WEB -- "accept · dismiss" --> API
+  GH["GitHub"] -->|"PRs · diffs"| API["server"]
+  API --> IDX["repo-intel"]
+  IDX -->|"repo map"| ENG["reviewer-core"]
+  API -->|"diff"| ENG
+  ENG <-->|"prompt"| LLM["LLM"]
+  ENG --> GATE{"grounding<br/>gate"}
+  GATE -->|"real"| DB[("Postgres")]
+  GATE -->|"invented"| DROP["dropped<br/>+ counted"]
+  DB --> WEB["studio"]
+  WEB -->|"accept · dismiss"| API
 ```
 
 Every finding passes the gate before it is stored, and the number dropped is on the
@@ -88,11 +79,11 @@ run's record. That is what makes the output worth reading.
 
 ```mermaid
 flowchart LR
-  A["an agent<br/>in the studio"] -- "Export to CI" --> W["generated files<br/>manifest · skills · workflow"]
-  W -- "opened as a PR" --> R["your repository"]
-  R --> ACT["GitHub Actions<br/>runs agent-runner"]
-  ACT -- "blockers > 0<br/>→ exit 1" --> CHK["the check fails"]
-  ACT -- "results" --> CI["CI Runs<br/>in the studio"]
+  A["agent"] -->|"Export to CI"| F["manifest<br/>skills<br/>workflow"]
+  F -->|"as a PR"| R["your repo"]
+  R --> ACT["Actions runs<br/>agent-runner"]
+  ACT -->|"blockers → exit 1"| CHK["check fails"]
+  ACT -->|"results"| CI["CI Runs"]
 ```
 
 `agent-runner` is a self-contained bundle committed into the target repo. It never
