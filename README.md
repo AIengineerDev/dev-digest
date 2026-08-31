@@ -59,6 +59,7 @@ every review, lives inside the server at
 **The review loop** — everything here runs on your machine.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 60, "rankSpacing": 60, "padding": 14}}}%%
 flowchart TB
   GH["GitHub"] -->|"PRs · diffs"| API["server"]
   API --> IDX["repo-intel"]
@@ -78,6 +79,7 @@ run's record. That is what makes the output worth reading.
 **The CI path** — how an agent leaves your machine and reviews PRs on its own.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 55, "rankSpacing": 70, "padding": 14}}}%%
 flowchart LR
   A["agent"] -->|"Export to CI"| F["manifest<br/>skills<br/>workflow"]
   F -->|"as a PR"| R["your repo"]
