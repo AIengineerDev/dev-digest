@@ -103,6 +103,48 @@ to display data already sitting in memory.
 
 ## Codebase Patterns
 
+- **2026-08-29** — `Modal` (`src/vendor/ui/kit/Modal.tsx`) has **no** built-in
+  Escape-to-close or focus-management: it renders a backdrop that closes on
+  click, but nothing calls `.focus()` on open and nothing listens for
+  `Escape`. Any modal that needs those (the four-step Export CI wizard did, per
+  spec NFR Accessibility) has to add a `keydown` listener and a focused ref
+  itself, inside `children`/`footer` — never inside `Modal`, which is vendored
+  and off-limits. Separately, `Button` (`src/vendor/ui/primitives/Button.tsx`)
+  does not `forwardRef`, so "return focus to the button that opened this modal"
+  cannot use a ref either; give the trigger button a plain `id` prop (it passes
+  through `...rest` to the underlying `<button>`) and restore focus with
+  `document.getElementById(id)?.focus()` on close.
+  `client/src/app/agents/[id]/_components/AgentEditor/_components/CiTab/_components/ExportWizard/ExportWizard.tsx:1`
+
+- **2026-08-28** — There is **no page-frame convention** in `client/src/app`, and
+  the names that look like one are lying. Measured on `w8`: horizontal page
+  padding is `28px` on the Eval dashboard, Conventions and Project Context but
+  `32px` on the Agents list and `PageContainer`; the max width is 880, 1080,
+  1100, 1180, 1200 or 1280 depending on the screen; and **`CONTENT_MAX_WIDTH` is
+  declared three times with three different values** — 1280
+  (`app/repos/[repoId]/context/_components/ProjectContextView/constants.ts:5`),
+  880 (`.../conventions/_components/ConventionsView/constants.ts:12`), 1080
+  (`.../tour/_components/TourView/constants.ts:5`). Two files reading
+  `maxWidth: CONTENT_MAX_WIDTH` are not agreeing about anything. `PageContainer`
+  (`components/page-shell/styles.ts:5`) is the only shared helper and has
+  exactly **one** consumer (`app/page.tsx`), so it is not the convention either
+  — it is a helper nobody adopted. For a new screen, write the literal
+  `{ padding: "24px 32px 44px", maxWidth: 1200, margin: "0 auto" }` rather than
+  importing one of the three constants, and do not copy a mock's `28px`: the
+  mocks were drawn in a fixed-width frame and none of them has a `maxWidth` or a
+  `margin: 0 auto` at all. Also verified in passing: the Eval dashboard was the
+  one screen with **no** `margin: "0 auto"`, so it hugged the left edge on a wide
+  monitor while every sibling centred — fixed the same day.
+
+- **2026-08-28** — `pnpm lint`'s documented baseline is **stale**: `CLAUDE.md`
+  says 43 warnings, the tree reports **49** (0 errors) on `w8`, verified by
+  stashing a one-line change and re-running. This matters more than the six
+  warnings do — the whole point of a baselined gate is "green means nothing
+  new", and that only works if the number in the doc is the number on disk. When
+  a gate's count disagrees with the doc, measure before assuming you caused it:
+  `git stash push -- <your file> && pnpm lint` costs seconds and is the
+  difference between a real regression and a doc that drifted.
+
 - **2026-08-26** — `activeKeyFor`'s substring chain (`components/app-shell/helpers.ts`)
   is **order-dependent**, and this is not hypothetical: it already bit R20's tour
   route (`if (pathname.includes("/onboarding")) return "onboarding-tour"` fired
@@ -371,6 +413,33 @@ to display data already sitting in memory.
   `messages/en/skills.json` (`editor.count`, `editor.overLimit`)
 
 ## Recurring Errors & Fixes
+
+- **2026-08-29** — `EvalRunGroup.complete` is `rows >= the agent's CURRENT case
+  count`, so **adding one case retroactively marks every run in the history
+  partial**. Three screens read `find(g => g.complete) ?? null` and rendered that
+  as never-run: the agent dashboard printed "This agent has never been evaluated"
+  directly under its own subtitle counting 19 runs, and the Skills tab showed
+  "never run" on a set that had just finished. The rule is right — a partial
+  group's metrics are means over a subset and must not be a headline or a trend
+  point — but "no complete run" and "never evaluated" are different claims and
+  only one of them may use the empty state. Reserve never-run for
+  `groups.length === 0` and show coverage ("covers 7 of 8") otherwise.
+  `client/src/app/evals/[agentId]/_components/AgentEvalView/AgentEvalView.tsx` ·
+  `.../SkillEditor/_components/EvalsTab/AgentGroup.tsx` ·
+  `server/src/modules/eval/service.ts:434`
+
+- **2026-08-29** — The eval case list is read under **two different React Query
+  keys**, and mutating under one leaves the other stale: agent screens use
+  `["eval-cases", agentId]`, the Skills tab uses `["skill-eval-cases", skillId]`
+  because `GET /skills/:id/eval-cases` returns the sets of every agent linking
+  that skill (spec 13, R14). `useCreateManualEvalCase` invalidated both; delete,
+  update and the two run mutations invalidated only the first. The delete case is
+  the one that hurts: the row stayed on screen, the next click asked the server
+  to delete a row already gone, and the honest `404 eval case not found` made a
+  **successful destructive action report as a failure** — so the natural response
+  is to try again, after the run history is already deleted. When one resource has
+  two cache keys, every mutation invalidates both.
+  `client/src/lib/hooks/evals.ts` (`useDeleteEvalCase`, `useRunEvals`)
 
 - **2026-08-26** — A test for a **fallback branch** whose fixture value is a key
   of the very map it claims to fall back from is unfalsifiable: it exercises the

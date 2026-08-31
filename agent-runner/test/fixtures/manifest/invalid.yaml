@@ -1,0 +1,7 @@
+# Invalid AgentManifest — `model` is missing (required, min length 1) and
+# `provider` names a provider AgentManifest does not accept. Used to prove
+# `loadManifest` prints a Zod path + message per issue and exits non-zero,
+# rather than downgrading either problem to a warning (C4).
+name: Broken Reviewer
+provider: not-a-real-provider
+system_prompt: "You are a reviewer."

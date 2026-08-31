@@ -177,5 +177,8 @@ export const RunSummary = z.object({
    * column.
    */
   head_sha: z.string().nullable(),
+  /** Shared id when this run was part of a multi-agent fan-out; null on a
+   *  single-agent run and on rows written before this feature (never backfilled). */
+  multi_agent_run_id: z.string().nullable(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;

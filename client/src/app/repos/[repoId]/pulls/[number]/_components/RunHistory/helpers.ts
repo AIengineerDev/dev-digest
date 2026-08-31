@@ -1,4 +1,4 @@
-import type { ReviewRecord } from "@devdigest/shared";
+import type { ReviewRecord, RunSummary } from "@devdigest/shared";
 import { countBySeverity } from "../FindingsPanel/helpers";
 
 export type SeverityCounts = ReturnType<typeof countBySeverity>;
@@ -32,4 +32,29 @@ export function severityCountsByRun(reviews: ReviewRecord[]): Record<string, Sev
 /** True when at least one severity has a finding — otherwise the row keeps its text. */
 export function hasSeverities(counts: SeverityCounts | undefined): boolean {
   return !!counts && Object.values(counts).some((n) => n > 0);
+}
+
+/**
+ * R11 — which run_ids are the FIRST member of their multi-agent group, in the
+ * order the timeline already renders (no reordering: a group's members render
+ * wherever they already sort, only the first gets a header above it). Runs
+ * with a null `multi_agent_run_id` never get one. `size` is the group's total
+ * member count from the run list — not necessarily contiguous in the sorted
+ * list.
+ */
+export function groupHeaderIds(sortedRuns: RunSummary[]): Map<string, number> {
+  const sizeById = new Map<string, number>();
+  for (const r of sortedRuns) {
+    if (!r.multi_agent_run_id) continue;
+    sizeById.set(r.multi_agent_run_id, (sizeById.get(r.multi_agent_run_id) ?? 0) + 1);
+  }
+  const headers = new Map<string, number>();
+  const seen = new Set<string>();
+  for (const r of sortedRuns) {
+    const gid = r.multi_agent_run_id;
+    if (!gid || seen.has(gid)) continue;
+    seen.add(gid);
+    headers.set(r.run_id, sizeById.get(gid)!);
+  }
+  return headers;
 }

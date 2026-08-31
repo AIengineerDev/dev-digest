@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { RunRequest, PrIntentRecord } from '@devdigest/shared';
+import { RunRequest, PrIntentRecord, LatestMultiAgentRun, AgentEstimate, MultiAgentRunView } from '@devdigest/shared';
 import type { RunEvent } from '@devdigest/shared';
 import { getContext } from '../_shared/context.js';
 import { IdParams } from '../_shared/schemas.js';
@@ -16,12 +16,16 @@ import { IntentService } from './intent-service.js';
  *   GET    /runs/:id/events                            → SSE stream of RunEvent (replay-first)
  *   GET    /runs/:id/trace                             → the single-document RunTrace
  *   GET    /pulls/:id/reviews                          → persisted reviews + findings for a PR
+ *   GET    /pulls/:id/multi-agent-runs/:multiAgentRunId → a group's runs + FindingGroup[] (R2/R3)
+ *   GET    /repos/:id/multi-agent-runs/latest           → the repo's most recent group, or null (R8)
+ *   GET    /agents/estimates                             → per-agent median duration/cost (R9)
  *   GET    /pulls/:id/intent                            → derived intent (null if not yet derived)
  *   POST   /pulls/:id/intent                            → (re-)derive intent
  *   POST   /findings/:id/(accept|dismiss)              → finding actions
  */
 const FINDING_ACTIONS = ['accept', 'dismiss'] as const;
 const DeriveIntentBody = z.object({ force: z.boolean().optional() });
+const MultiAgentRunParams = z.object({ id: z.string().uuid(), multiAgentRunId: z.string().uuid() });
 export default async function reviewsRoutes(appBase: FastifyInstance) {
   const app = appBase.withTypeProvider<ZodTypeProvider>();
   const { container } = app;
@@ -40,14 +44,15 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
     const targets = await service.resolveTargets(workspaceId, {
       ...(body.agentId !== undefined ? { agentId: body.agentId } : {}),
       ...(body.all !== undefined ? { all: body.all } : {}),
+      ...(body.agentIds !== undefined ? { agentIds: body.agentIds } : {}),
     });
-    const { runs, reviews } = await service.runReview(
+    const { runs, reviews, multiAgentRunId } = await service.runReview(
       workspaceId,
       req.params.id,
       targets,
       req.log,
     );
-    return { pr_id: req.params.id, runs, reviews };
+    return { pr_id: req.params.id, runs, reviews, multi_agent_run_id: multiAgentRunId };
   });
 
   // ---- SSE: live run events (replay buffer first, then live; ends on done) -
@@ -108,6 +113,32 @@ export default async function reviewsRoutes(appBase: FastifyInstance) {
   app.get('/pulls/:id/runs', { schema: { params: IdParams } }, async (req) => {
     const { workspaceId } = await getContext(container, req);
     return service.listRuns(workspaceId, req.params.id);
+  });
+
+  // ---- A multi-agent run's results: member runs + grouped findings --------
+  app.get(
+    '/pulls/:id/multi-agent-runs/:multiAgentRunId',
+    { schema: { params: MultiAgentRunParams, response: { 200: MultiAgentRunView } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.multiAgentRun(workspaceId, req.params.id, req.params.multiAgentRunId);
+    },
+  );
+
+  // ---- The repo's most recent multi-agent run (R8's landing screen) -------
+  app.get(
+    '/repos/:id/multi-agent-runs/latest',
+    { schema: { params: IdParams, response: { 200: LatestMultiAgentRun.nullable() } } },
+    async (req) => {
+      const { workspaceId } = await getContext(container, req);
+      return service.latestMultiAgentRunForRepo(workspaceId, req.params.id);
+    },
+  );
+
+  // ---- Per-agent median duration/cost, for the picker's estimate (R9) -----
+  app.get('/agents/estimates', { schema: { response: { 200: z.array(AgentEstimate) } } }, async (req) => {
+    const { workspaceId } = await getContext(container, req);
+    return service.agentEstimates(workspaceId);
   });
 
   // ---- Delete one run from the history (+ its trace) ----------------------

@@ -43,6 +43,17 @@ export const NAV: NavGroup[] = [
       { key: "eval", label: "Eval Dashboard", icon: "BarChart", href: "/evals", gKey: "e" },
     ],
   },
+  // GLOBAL — surfaces that read across every repo and agent rather than the
+  // active one. Same rule as above: only routes that exist are listed.
+  {
+    section: "GLOBAL",
+    items: [
+      { key: "memory", label: "Memory", icon: "Database", href: "/memory" },
+      { key: "multi-agent", label: "Multi-Agent Review", icon: "Users", href: "/repos/:repoId/multi-agent" },
+      { key: "agent-performance", label: "Agent Performance", icon: "Activity", href: "/agent-performance", gKey: "f" },
+      { key: "ci-runs", label: "CI Runs", icon: "Workflow", href: "/ci-runs" },
+    ],
+  },
 ];
 
 export const SETTINGS_ITEM: NavItemDef = {

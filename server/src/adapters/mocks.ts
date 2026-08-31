@@ -31,6 +31,7 @@ import type {
   AuthWorkspace,
   SecretsProvider,
   SecretKey,
+  WorkflowRun,
 } from '@devdigest/shared';
 import { parseUnifiedDiff } from './git/diff-parser.js';
 
@@ -237,6 +238,10 @@ export class MockGitHubClient implements GitHubClient {
   async currentLogin(): Promise<string> {
     return this.opts.login ?? 'mock-user';
   }
+  async listWorkflowRuns(): Promise<WorkflowRun[]> {
+    return [];
+  }
+
 }
 
 // ---------- Mock Git ----------

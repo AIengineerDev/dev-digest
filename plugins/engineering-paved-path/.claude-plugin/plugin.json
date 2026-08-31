@@ -1,8 +1,0 @@
-{
-  "name": "engineering-paved-path",
-  "displayName": "Engineering Paved Path",
-  "version": "1.0.0",
-  "description": "The paved path: where backend and frontend code belongs, which repository conventions no linter catches, how to audit dependencies, and how a team keeps a durable record of what it already tried.",
-  "author": { "name": "Alex Lavrenin" },
-  "keywords": ["architecture", "conventions", "dependencies", "insights"]
-}

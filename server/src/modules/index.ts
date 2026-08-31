@@ -15,6 +15,8 @@ import brief from './brief/routes.js';
 import projectContext from './project-context/routes.js';
 import tour from './tour/routes.js';
 import evals from './eval/routes.js';
+import ci from './ci/routes.js';
+import memory from './memory/routes.js';
 
 /**
  * Module registry. Each feature module is a Fastify plugin in
@@ -46,4 +48,6 @@ export const modules: Record<string, FastifyPluginAsync> = {
   projectContext,
   tour,
   evals,
+  ci,
+  memory,
 };

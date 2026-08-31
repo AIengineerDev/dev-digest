@@ -39,6 +39,13 @@ marketplace actually ships it is unimplementable, and offering it would have
 produced a script that silently no-ops on the common case.
 `scripts/rollback.sh:1-32`
 
+**Moved 2026-08-29.** The decision still holds; the code no longer lives here.
+The marketplace was extracted to `AIengineerDev/dev-digest-ai-marketplace`, and
+`plugins/`, `.claude-plugin/` and the release scripts went with it. This
+repository is now a consumer: it installs the plugins rather than publishing
+them. Kept because the reasoning is what a future maintainer needs, and it is
+not obvious from either repository alone.
+
 ### 2026-08-18 — The build chain buys judgement only where it changes a verdict
 
 **What:** the agent set is now mixed-model on purpose, not uniformly `opus`.
@@ -180,6 +187,30 @@ input but left responses unchecked, so contract drift surfaced in the browser.
 
 ## What Doesn't Work
 
+- **2026-08-29** — An eval case asked **inside a fixture that demonstrates the
+  answer** measures the fixture, not the skill. The `new-port` case ("where does
+  a new external dependency go?") scored **3/3 in both arms** on
+  `claude-sonnet-5` — with the `onion-architecture` skill and without it —
+  because the fixture ships a `src/platform/container.ts` showing the pattern,
+  and a model that reads it answers correctly with nothing attached. The
+  discriminator has to be a rule the skill states that the tree does **not**
+  exhibit: rewritten to ask whether a pure, credential-free diff parser should
+  become a port (the skill says no; "wrap it for testability" is the reflex
+  answer without it). Before trusting a case, run the control — an expectation
+  both arms pass is decoration.
+  `evals/skills/onion-architecture/onion-architecture.cases.ts`
+
+- **2026-08-29** — Do not fix a long-running activation eval by telling the
+  prompt not to do the thing the skill exists to do. The `activation-positive`
+  case activates `engineering-insights`, then burns a ten-minute wall trying to
+  write `INSIGHTS.md` with `Write` blocked, and dies on the timeout. Adding "you
+  have no write access, quote the entry instead" dropped `insights-activated`
+  from **1/1 to 0/1** and the session aborted anyway — forbidding the write
+  suppressed the activation being measured, so the case stopped measuring
+  anything and stayed red. An activation case is answered in its first turns and
+  wants a **short per-case deadline with a verdict on the evidence collected
+  before it**, not a prompt edit. `evals/workflow/workflow.cases.ts`
+
 - **2026-08-29** — A build step that reads `design-mocks/` passes locally and
   fails in **every** CI checkout: the directory is gitignored (`.gitignore:22`,
   rationale at `:17-21` — it is unpacked from a 1.7 MB base64 bundle that does
@@ -250,6 +281,56 @@ input but left responses unchecked, so contract drift surfaced in the browser.
   `.claude/skills/onion-architecture/evals/README.md`
 
 ## Codebase Patterns
+
+- **2026-08-28** — `design-mocks/` is a **stale artefact, not a source of
+  truth**, and at least one screen asserts a capability is unavailable when it
+  is the product's headline capability. Verified in
+  `design-mocks/src/20-screen_export.jsx`: `Block merge on findings` is drawn as
+  a permanently disabled toggle captioned "Requires a GitHub App — not
+  available with PAT in local mode" (`:89-93`) — untrue here, because
+  `agents.ci_fail_on` (`server/src/db/schema/agents.ts:25`) plus
+  `countBlockers` (`server/src/modules/reviews/run-executor.ts:359`) already
+  decide the block, and a non-zero exit plus a required status check delivers it
+  with a plain PAT. Two more in the same file: the workflow references
+  `secrets.OPENAI_API_KEY` (`:30`) when the provider→key map defaults to
+  `openrouter` (`server/src/modules/settings/constants.ts:9-11`), and
+  `uses: devdigest/review-action@v1` (`:29`) names an action nobody published,
+  so a repo receiving that workflow fails on its first PR. Before specifying
+  from a mock, check each claim it makes against the code and record the
+  divergence as a deliberate decision — building one faithfully ships a dead
+  control that teaches the user the feature does not exist.
+
+- **2026-08-28** — Before specifying a feature this repo has "not built yet",
+  grep for its contracts and its i18n keys — several unbuilt features are
+  **pre-seeded end to end and imported by nobody**, and reading the schema or
+  the string catalogue makes them look half-finished. Verified this session for
+  the two L07 features: every Export-to-CI contract exists
+  (`AgentManifest`, `CiExportInput`, `CiExport`, `CiRun`, `CiResultArtifact`,
+  `contracts/eval-ci.ts:284-390`), `ci_installations` / `ci_runs` are in the
+  schema barrel, `client/messages/en/ci.json` holds the complete wizard + CI
+  Runs string set, and `ExportWizardSteps` / `AutoTriggerStatus` are vendored —
+  yet `grep -rn 'CiService\|export-ci\|CiExport' server/src client/src` returns
+  only the schema-barrel import. Same for Multi-Agent Review: the whole
+  `runs.json` page/conflicts/column string set exists and
+  `grep -rn 'useTranslations("runs")'` matches only the trace drawer and the
+  cost badge. Two consequences: the contract is a **spec input, not a
+  constraint you may quietly restate**, and where a seeded string contradicts
+  the new requirement it changes with the feature — `runs.json:127` says
+  `Run all agents` and `fan-out via p-queue`, which is right about the
+  mechanism (`platform/jobs.ts:42`) and wrong about the picker.
+  `server/src/vendor/shared/contracts/eval-ci.ts:284` · `client/messages/en/ci.json:1`
+
+- **2026-08-28** — Two branches that each change the DB schema **cannot both
+  merge without one of them regenerating its migration**, and the conflict is
+  in files this repo forbids hand-editing. `pnpm db:generate` writes
+  `src/db/migrations/NNNN_*.sql` plus an entry in `meta/_journal.json` and a
+  `meta/NNNN_snapshot.json` (latest on `w8`: `0017_amusing_chimera.sql`), so two
+  parallel worktrees both produce `0018_*` and collide in the journal and the
+  snapshot — which `AGENTS.md` says must never be hand-written or edited. The
+  resolution is procedural, not textual: merge one branch, then on the second
+  **delete its generated migration, re-run `pnpm db:generate` to land as
+  `0019`, and `pnpm db:migrate`**. Plan the merge order around this before the
+  branches start, not at the merge. `server/src/db/migrations/meta/_journal.json`
 
 - **2026-08-11** — "The latest review" is **one agent's opinion, not the PR's
   review.** One trigger of "run all agents" writes one `reviews` row per agent,
@@ -331,6 +412,38 @@ input but left responses unchecked, so contract drift surfaced in the browser.
   request. `reviewer-core/src/review/run.ts:216`
 
 ## Tool & Library Notes
+
+- **2026-08-29** — A package that reaches `@devdigest/reviewer-core` through a
+  `tsconfig.json` path alias (consumed as TypeScript source, same arrangement
+  as `@devdigest/shared`) pulls **reviewer-core's own runtime dependencies**
+  into its type-check too — `tsc` follows the aliased `.ts` files and their
+  imports, so `agent-runner`'s `npm run typecheck` failed with
+  `Cannot find module 'openai'` until `reviewer-core/node_modules` existed,
+  even though `agent-runner` itself never imports `openai`. `npm install` in
+  the sibling package is a real prerequisite, not an optional nicety — and
+  running it there touches that package's own `package-lock.json` with a
+  trivial `"peer": true` normalization npm adds on an existing lockfile;
+  revert that diff (`git checkout -- reviewer-core/package-lock.json`) rather
+  than let an unrelated task's typecheck fixup ship as a change to a
+  different package. Separately, `@vercel/ncc build` resolved both the
+  `@devdigest/shared` and `@devdigest/reviewer-core` path aliases without any
+  ncc-specific alias config or build-time copy — the risk flagged in
+  `plans/15-export-to-ci.plan.md` ("Risks and unknowns") did not materialize;
+  the bundled output was confirmed to contain zero `vendor/shared` path
+  strings. `agent-runner/tsconfig.json:16-24`
+- **2026-08-29** — Two `@anthropic-ai/claude-agent-sdk` session options do not
+  do what their names suggest, and both were measured, not read.
+  **`allowedTools` does not restrain anything.** A session configured with only
+  `['Read','Grep','Glob']` still called `Bash` and `Agent`, spent all 24 turns
+  shelling around the fixture and ended in `error_max_turns` with nothing
+  graded — a sandbox failure that reads as a failure of the thing under test.
+  `disallowedTools` is the half that blocks; set both.
+  **Omitting `systemPrompt` is not "the default prompt", it is a different
+  prompt** — the Claude Code preset applies only when you pass
+  `{type:'preset',preset:'claude_code'}`. A control arm that omits it while the
+  treatment appends a skill body to the preset differs in *two* variables, and
+  the delta stops being about the skill. Always send the preset on both sides;
+  put the body in `append`. `evals/src/session.ts` (`runSession`)
 
 - **2026-08-17** — A subagent's write access **can** be fenced to a path
   mechanically, and `.claude/agents/README.md` recorded the opposite as an open
@@ -442,6 +555,17 @@ input but left responses unchecked, so contract drift surfaced in the browser.
   before debugging either side. `server/src/vendor/shared/adapters.ts:48`
 
 ## Recurring Errors & Fixes
+
+- **2026-08-29** — A grader that hard-codes a tool **name** produces a false
+  negative that reads as a bug in the thing under test. The `dispatch` workflow
+  case scored 0 while its own trajectory showed an `Agent` call as the session's
+  first act: the recorder pulled `subagent_type` off a tool named `Task`, and
+  this harness emits **`Agent`**. The report said "the harness did not dispatch",
+  which points the fix at `AGENTS.md` instead of at the grader. Record the whole
+  tool input and match by pattern for any tool whose name or argument key is not
+  pinned by the SDK's public types — `Task`/`Agent` and `Skill` are all in that
+  class. Rule of thumb: when a case fails, read the trajectory before believing
+  the verdict. `evals/src/session.ts` (`record`) · `evals/src/grade.ts`
 
 - **2026-08-27** — An eval scorecard that matches each expectation against the
   findings **independently** lies in both directions, and it lies quietly. Score

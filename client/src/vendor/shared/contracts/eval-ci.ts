@@ -369,6 +369,8 @@ export const CiRun = z.object({
   source: z.string().nullable(),
   agent: z.string().nullish(),
   duration_s: z.number().nullish(),
+  /** `owner/name` of the repository an ingested Actions run belongs to. */
+  repo: z.string().nullish(),
 });
 export type CiRun = z.infer<typeof CiRun>;
 
@@ -424,3 +426,29 @@ export const HookScanResult = z.object({
   findings: z.array(Finding),
 });
 export type HookScanResult = z.infer<typeof HookScanResult>;
+
+// ===========================================================================
+// Memory — the RAG store (`memory`)
+// ===========================================================================
+
+/**
+ * One thing DevDigest has learned about a workspace's code.
+ *
+ * The embedding is deliberately absent: 1536 floats per row that no reader can
+ * use, and similarity search belongs in Postgres, not in a browser.
+ */
+export const MemoryEntry = z.object({
+  id: z.string(),
+  /** `repo` · `global` · `team` */
+  scope: z.string(),
+  /** `decision` · `convention` · `preference` · `fact` · `learning` */
+  kind: z.string(),
+  content: z.string(),
+  confidence: z.number().nullable(),
+  created_at: z.string(),
+  /** When this last informed a review — null if it never has. */
+  last_used_at: z.string().nullable(),
+  /** `owner/name` for a repo-scoped memory; null for a global or team one. */
+  repo: z.string().nullable(),
+});
+export type MemoryEntry = z.infer<typeof MemoryEntry>;

@@ -5,7 +5,7 @@ const GRID = "1fr 90px 90px 100px 100px 90px 180px 20px";
 const RUN_GRID = "200px 100px 110px 110px 110px 90px";
 
 export const s = {
-  page: { padding: "28px 28px 48px", maxWidth: 1180 } satisfies CSSProperties,
+  page: { padding: "28px 28px 48px", maxWidth: 1180, margin: "0 auto" } satisfies CSSProperties,
   header: { marginBottom: 20 } satisfies CSSProperties,
   h1: { fontSize: 20, fontWeight: 700, margin: 0 } satisfies CSSProperties,
   subtitle: {
