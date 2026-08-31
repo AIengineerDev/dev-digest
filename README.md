@@ -58,20 +58,10 @@ every review, lives inside the server at
 
 **The review loop** — everything here runs on your machine.
 
-```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 45, "rankSpacing": 70, "padding": 12}}}%%
-flowchart LR
-  GH["GitHub<br/>PRs · diffs"] --> API["server<br/>Fastify :3001"]
-  API --> IDX["repo-intel<br/>symbols + imports"]
-  IDX -->|"repo map"| ENG
-  API -->|"diff"| ENG["reviewer-core<br/>prompt assembly"]
-  ENG <--> LLM["Anthropic<br/>OpenAI · OpenRouter"]
-  ENG --> GATE{"grounding gate<br/>does the file exist?"}
-  GATE -->|"real"| DB[("Postgres<br/>pgvector")]
-  GATE -->|"invented"| DROP["dropped<br/>and counted"]
-  DB --> WEB["studio<br/>Next.js :3000"]
-  WEB -->|"accept · dismiss"| API
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-dark.svg">
+  <img src="docs/img/architecture.svg" alt="GitHub feeds PRs and diffs to the server; repo-intel indexes the repo into a map; reviewer-core assembles a prompt and calls the model; every finding passes a grounding gate, which keeps real file references and drops invented ones; kept findings go to Postgres and on to the studio, where accepting or dismissing goes back to the server." width="100%">
+</picture>
 
 Every finding passes the gate before it is stored, and the number dropped is on the
 run's record. That is what makes the output worth reading.
