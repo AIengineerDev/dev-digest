@@ -56,15 +56,17 @@ every review, lives inside the server at
 
 ## Architecture
 
-**The review loop** — everything here runs on your machine.
+**The review loop**, end to end — all of it on your machine:
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/img/architecture-dark.svg">
-  <img src="docs/img/architecture.svg" alt="GitHub feeds PRs and diffs to the server; repo-intel indexes the repo into a map; reviewer-core assembles a prompt and calls the model; every finding passes a grounding gate, which keeps real file references and drops invented ones; kept findings go to Postgres and on to the studio, where accepting or dismissing goes back to the server." width="100%">
-</picture>
+`GitHub` → the **server** clones the repo and imports PRs → **repo-intel** indexes it
+into a repo map → **reviewer-core** assembles a prompt from that map plus the diff →
+the **model** answers → the **grounding gate** checks every finding against the real
+files → what survives is stored and shown in the **studio**, where accepting or
+dismissing feeds back to the server.
 
-Every finding passes the gate before it is stored, and the number dropped is on the
-run's record. That is what makes the output worth reading.
+**The grounding gate is the load-bearing part.** A finding whose file or line the
+model invented is dropped before it reaches you, and the count of dropped references
+is on the run's record. That is what makes the findings worth reading.
 
 **The CI path** — how an agent leaves your machine and reviews PRs on its own.
 
@@ -80,10 +82,6 @@ flowchart LR
 
 `agent-runner` is a self-contained bundle committed into the target repo. It never
 calls back to the studio, and fork PRs are skipped rather than handed secrets.
-
-**The grounding gate is the load-bearing part.** A finding whose file or line the
-model invented is dropped before it reaches you, and the count of dropped references
-is on the run's record. That is what makes the findings worth reading.
 
 ## Quick start
 
